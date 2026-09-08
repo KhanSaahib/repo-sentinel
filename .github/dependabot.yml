@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # Actions are SHA-pinned, so Dependabot is how pins get updated deliberately
+  # rather than drifting silently behind a tag.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
