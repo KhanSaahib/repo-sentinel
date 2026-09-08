@@ -9,7 +9,7 @@ outcome than a feature nobody wanted.
 
 ## Detection quality
 
-- [ ] Allowlist documented public example credentials (`AKIAIOSFODNN7EXAMPLE`,
+- [x] Allowlist documented public example credentials (`AKIAIOSFODNN7EXAMPLE`,
       RFC test JWTs) so the scanner stops flagging documentation
 - [ ] Respect `.gitignore` when walking a repository
 - [ ] File-level and block-level suppression, not just per-line

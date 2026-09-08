@@ -5,6 +5,7 @@ import os
 import tempfile
 import unittest
 
+import fixtures
 from repo_sentinel import cli
 from repo_sentinel.discovery import iter_files
 from repo_sentinel.findings import Severity
@@ -16,11 +17,11 @@ def sample_repo():
         os.makedirs(os.path.join(root, ".github", "workflows"))
         os.makedirs(os.path.join(root, "node_modules"))
         with open(os.path.join(root, "app.py"), "w", encoding="utf-8") as handle:
-            handle.write('AWS_KEY = "AKIAIOSFODNN7EXAMPLE"\n')
+            handle.write(f'AWS_KEY = "{fixtures.REALISTIC_AWS_KEY_ID}"\n')
         with open(os.path.join(root, ".github", "workflows", "ci.yml"), "w", encoding="utf-8") as handle:
             handle.write("jobs:\n  build:\n    steps:\n      - uses: actions/checkout@v4\n")
         with open(os.path.join(root, "node_modules", "leak.py"), "w", encoding="utf-8") as handle:
-            handle.write('KEY = "AKIAIOSFODNN7EXAMPLE"\n')
+            handle.write(f'KEY = "{fixtures.REALISTIC_AWS_KEY_ID}"\n')
         with open(os.path.join(root, "logo.png"), "wb") as handle:
             handle.write(b"\x89PNG\x00\x00binary")
         yield root
@@ -91,6 +92,25 @@ class TestCli(unittest.TestCase):
             code, output = run(["scan", root])
         self.assertEqual(code, cli.EXIT_OK)
         self.assertIn("No findings", output)
+
+    def test_documentation_credentials_do_not_fail_the_build(self):
+        with tempfile.TemporaryDirectory() as root:
+            with open(os.path.join(root, "README.md"), "w", encoding="utf-8") as handle:
+                handle.write('    aws_access_key_id = "AKIAIOSFODNN7EXAMPLE"\n')
+            code, output = run(["scan", root])
+        self.assertEqual(code, cli.EXIT_OK)
+        self.assertIn("No findings", output)
+
+    def test_no_example_allowlist_reports_them_again(self):
+        with tempfile.TemporaryDirectory() as root:
+            with open(os.path.join(root, "README.md"), "w", encoding="utf-8") as handle:
+                handle.write('    aws_access_key_id = "AKIAIOSFODNN7EXAMPLE"\n')
+            code, output = run(
+                ["scan", root, "--format", "json", "--no-example-allowlist"]
+            )
+        self.assertEqual(code, cli.EXIT_FINDINGS)
+        rules = {finding["rule_id"] for finding in json.loads(output)["findings"]}
+        self.assertIn("SEC001", rules)
 
     def test_extra_excludes_are_honoured(self):
         with sample_repo() as root:

@@ -8,6 +8,11 @@ Two complementary strategies:
 2. **Entropy on assignment.** A variable literally named ``password`` or
    ``api_key`` assigned a long, random-looking string. Lower confidence, so it
    is gated behind a Shannon-entropy floor and a placeholder filter.
+
+Both strategies are filtered through :mod:`.allowlist`, which drops credentials
+that vendors and RFCs publish as examples. Structure alone cannot distinguish a
+tutorial's AWS key from a live one, and a scanner that flags every README is a
+scanner people learn to ignore.
 """
 
 from __future__ import annotations
@@ -17,6 +22,7 @@ import re
 from collections.abc import Iterable, Iterator
 
 from ..findings import Finding, Severity, redact
+from . import allowlist
 
 #: Skip a line entirely when it carries this marker.
 IGNORE_MARKER = "repo-sentinel: ignore"
@@ -145,8 +151,15 @@ def looks_like_placeholder(value: str) -> bool:
     return len(set(stripped)) <= 2
 
 
-def scan_line(path: str, line_number: int, line: str) -> Iterator[Finding]:
-    """Yield every finding in a single line of text."""
+def scan_line(
+    path: str, line_number: int, line: str, *, allow_examples: bool = True
+) -> Iterator[Finding]:
+    """Yield every finding in a single line of text.
+
+    Set ``allow_examples`` to False to report documented example credentials
+    too. That is rarely what you want day to day, but an auditor reviewing the
+    scanner's own blind spots needs to see what it chose not to say.
+    """
     if IGNORE_MARKER in line:
         return
 
@@ -154,7 +167,11 @@ def scan_line(path: str, line_number: int, line: str) -> Iterator[Finding]:
 
     for rule_id, title, severity, pattern, remediation in _PROVIDER_RULES:
         for match in pattern.finditer(line):
+            # Record the span before deciding whether to report: a suppressed
+            # example must not resurface under the entropy rule below.
             matched_spans.append(match.span())
+            if allow_examples and allowlist.is_known_example(match.group(0)):
+                continue
             yield Finding(
                 rule_id=rule_id,
                 severity=severity,
@@ -173,6 +190,8 @@ def scan_line(path: str, line_number: int, line: str) -> Iterator[Finding]:
             continue
         if looks_like_placeholder(value):
             continue
+        if allow_examples and allowlist.is_known_example(value):
+            continue
         if shannon_entropy(value) < ENTROPY_FLOOR:
             continue
         yield Finding(
@@ -189,15 +208,21 @@ def scan_line(path: str, line_number: int, line: str) -> Iterator[Finding]:
         )
 
 
-def scan_text(path: str, text: str) -> list[Finding]:
+def scan_text(path: str, text: str, *, allow_examples: bool = True) -> list[Finding]:
     """Scan an entire file's contents."""
     return [
         finding
         for number, line in enumerate(text.splitlines(), start=1)
-        for finding in scan_line(path, number, line)
+        for finding in scan_line(path, number, line, allow_examples=allow_examples)
     ]
 
 
-def scan_files(files: Iterable[tuple[str, str]]) -> list[Finding]:
+def scan_files(
+    files: Iterable[tuple[str, str]], *, allow_examples: bool = True
+) -> list[Finding]:
     """Scan ``(path, text)`` pairs."""
-    return [finding for path, text in files for finding in scan_text(path, text)]
+    return [
+        finding
+        for path, text in files
+        for finding in scan_text(path, text, allow_examples=allow_examples)
+    ]

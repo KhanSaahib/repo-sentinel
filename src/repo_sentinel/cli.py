@@ -25,10 +25,16 @@ _COLOURS = {
 _RESET = "\033[0m"
 
 
-def scan_path(path: str, excludes: tuple[str, ...] = DEFAULT_EXCLUDES) -> list[Finding]:
+def scan_path(
+    path: str,
+    excludes: tuple[str, ...] = DEFAULT_EXCLUDES,
+    *,
+    allow_examples: bool = True,
+) -> list[Finding]:
     """Run every scanner over ``path`` and return findings worst-first."""
     files = list(iter_files(path, excludes=excludes))
-    found = secrets.scan_files(files) + workflows.scan_files(files)
+    found = secrets.scan_files(files, allow_examples=allow_examples)
+    found += workflows.scan_files(files)
     return sorted(found, key=lambda finding: finding.sort_key)
 
 
@@ -101,6 +107,11 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="GLOB",
         help="extra file or directory glob to skip (repeatable)",
     )
+    scan.add_argument(
+        "--no-example-allowlist",
+        action="store_true",
+        help="also report credentials published as vendor or RFC examples",
+    )
     scan.add_argument("--no-color", action="store_true", help="disable coloured output")
     return parser
 
@@ -118,7 +129,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     findings = [
         finding
-        for finding in scan_path(args.path, DEFAULT_EXCLUDES + tuple(args.exclude))
+        for finding in scan_path(
+            args.path,
+            DEFAULT_EXCLUDES + tuple(args.exclude),
+            allow_examples=not args.no_example_allowlist,
+        )
         if finding.severity >= min_severity
     ]
 

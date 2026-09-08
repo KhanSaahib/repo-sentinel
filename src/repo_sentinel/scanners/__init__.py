@@ -1,5 +1,5 @@
 """Individual scanners. Each exposes ``scan_files(files) -> list[Finding]``."""
 
-from . import secrets, workflows
+from . import allowlist, secrets, workflows
 
-__all__ = ["secrets", "workflows"]
+__all__ = ["allowlist", "secrets", "workflows"]

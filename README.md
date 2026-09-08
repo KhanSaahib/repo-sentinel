@@ -30,6 +30,7 @@ repo-sentinel scan . --format json            # machine-readable output
 repo-sentinel scan . --min-severity high      # only show what matters most
 repo-sentinel scan . --fail-on critical       # relax the CI gate
 repo-sentinel scan . --exclude 'fixtures'     # skip a directory (repeatable)
+repo-sentinel scan . --no-example-allowlist   # include documented example keys
 ```
 
 Exit codes: `0` clean, `1` findings at or above `--fail-on` (default `medium`),
@@ -44,7 +45,7 @@ Sample output:
 ```
 CRITICAL SEC001  terraform/main.tf:14
     AWS access key id
-    evidence: AKIA************MPLE
+    evidence: AKIA************LM3D
     fix: Deactivate the key in IAM, then rotate it. Deleting the commit is not enough.
 
 MEDIUM WF001  .github/workflows/release.yml:22
@@ -83,6 +84,27 @@ does not look like a placeholder. `your-password-here`, `${DB_PASSWORD}`,
 Every reported value is redacted to its first and last four characters. Findings
 end up in CI logs and issue threads, so the scanner must never be the thing that
 leaks the credential it just found.
+
+#### Documented example credentials
+
+A README that quotes an AWS tutorial contains a string shaped exactly like a
+live access key id, and structure alone cannot tell the two apart. Rather than
+make every project bury its documentation under ignore markers, the scanner
+stays quiet about credentials that are public by design:
+
+| Mechanism | Example |
+| --- | --- |
+| Values published verbatim by a vendor or RFC | `AKIAIOSFODNN7EXAMPLE`, the AWS docs secret key, the jwt.io default token |
+| AWS's reserved `EXAMPLE` suffix | any `AKIA…EXAMPLE` / `ASIA…EXAMPLE` identifier, any 40-character `…EXAMPLEKEY` secret |
+| RFC 2606 reserved domains in JWT claims | the RFC 7519 sample tokens, which issue against `http://example.com/is_root` |
+
+Only the third mechanism inspects content: a JWT's header and payload are
+base64url-decoded (never signature-verified) and checked for `example.com` and
+its siblings, which exist so documentation can name a host that cannot resolve.
+A token that fails to decode is reported, not allowlisted.
+
+Pass `--no-example-allowlist` to see these findings anyway — useful when
+auditing what the scanner chose not to tell you.
 
 ### GitHub Actions workflows
 

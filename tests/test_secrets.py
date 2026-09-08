@@ -1,5 +1,6 @@
 import unittest
 
+import fixtures
 from repo_sentinel.findings import Severity, redact
 from repo_sentinel.scanners import secrets
 
@@ -16,7 +17,7 @@ class TestRedaction(unittest.TestCase):
         self.assertEqual(redact("abcdefgh"), "*" * 8)
 
     def test_findings_never_echo_the_raw_secret(self):
-        raw = "AKIAIOSFODNN7EXAMPLE"
+        raw = fixtures.REALISTIC_AWS_KEY_ID
         findings = secrets.scan_text("app.py", f'key = "{raw}"')
         self.assertTrue(findings)
         for finding in findings:
@@ -43,7 +44,9 @@ class TestEntropy(unittest.TestCase):
 
 class TestProviderPatterns(unittest.TestCase):
     def test_detects_aws_access_key_id(self):
-        findings = secrets.scan_text("cfg.tf", 'access_key = "AKIAIOSFODNN7EXAMPLE"')
+        findings = secrets.scan_text(
+            "cfg.tf", f'access_key = "{fixtures.REALISTIC_AWS_KEY_ID}"'
+        )
         self.assertIn("SEC001", rule_ids(findings))
         self.assertEqual(findings[0].severity, Severity.CRITICAL)
 
@@ -61,7 +64,9 @@ class TestProviderPatterns(unittest.TestCase):
         self.assertGreater(live.severity, test.severity)
 
     def test_reports_correct_line_number(self):
-        text = "\n".join(["import os", "", 'KEY = "AKIAIOSFODNN7EXAMPLE"'])
+        text = "\n".join(
+            ["import os", "", f'KEY = "{fixtures.REALISTIC_AWS_KEY_ID}"']
+        )
         self.assertEqual(secrets.scan_text("a.py", text)[0].line, 3)
 
 
@@ -98,7 +103,7 @@ class TestEntropyAssignments(unittest.TestCase):
 
 class TestIgnoreMarker(unittest.TestCase):
     def test_marker_suppresses_the_line(self):
-        line = 'key = "AKIAIOSFODNN7EXAMPLE"  # repo-sentinel: ignore'
+        line = f'key = "{fixtures.REALISTIC_AWS_KEY_ID}"  # repo-sentinel: ignore'
         self.assertEqual(secrets.scan_text("a.py", line), [])
 
 
@@ -106,7 +111,7 @@ class TestScanFiles(unittest.TestCase):
     def test_aggregates_across_files(self):
         findings = secrets.scan_files(
             [
-                ("a.py", 'k = "AKIAIOSFODNN7EXAMPLE"'),
+                ("a.py", f'k = "{fixtures.REALISTIC_AWS_KEY_ID}"'),
                 ("b.py", "nothing to see here"),
                 ("c.py", "-----BEGIN RSA PRIVATE KEY-----"),
             ]
