@@ -30,6 +30,7 @@ repo-sentinel scan . --format json            # machine-readable output
 repo-sentinel scan . --min-severity high      # only show what matters most
 repo-sentinel scan . --fail-on critical       # relax the CI gate
 repo-sentinel scan . --exclude 'fixtures'     # skip a directory (repeatable)
+repo-sentinel scan . --no-gitignore           # also scan git-ignored files
 repo-sentinel scan . --no-example-allowlist   # include documented example keys
 ```
 
@@ -54,6 +55,29 @@ MEDIUM WF001  .github/workflows/release.yml:22
     fix: Tags can be moved to point at new code. Pin to a full commit SHA and let Dependabot propose upgrades.
 
 2 finding(s): 1 critical, 1 medium
+```
+
+## What gets scanned
+
+The walk skips binaries, files over 2 MB, and a built-in list of generated or
+vendored directories (`.git`, `node_modules`, `.venv`, `dist`, `target`, …).
+
+It also honours `.gitignore`, including nested ones, which each govern their own
+subtree. The rules implemented are negation with `!`, anchoring with a leading or
+embedded `/`, directory-only patterns ending in `/`, the `*`, `?` and `[...]`
+wildcards, and `**` for arbitrary depth; across the ignore files in scope, the
+last matching pattern wins. Not implemented: `.git/info/exclude`, the global
+`core.excludesFile`, and git's rule that an already-tracked file stays tracked
+however it is ignored — all three would mean shelling out to git.
+
+This is a deliberate narrowing of scope, and it cuts both ways. A secret in an
+ignored file was never committed, so reporting it is a false positive, and the
+noise from a local `.env` is what makes people stop reading the output. But an
+ignore rule is also the easiest way to hide something from this tool, whether by
+accident or on purpose. Audit what the scanner was told not to look at:
+
+```bash
+repo-sentinel scan . --no-gitignore
 ```
 
 ## What it checks

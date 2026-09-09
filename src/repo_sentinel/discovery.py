@@ -6,6 +6,8 @@ import fnmatch
 import os
 from collections.abc import Iterator
 
+from .gitignore import GitIgnoreFile, GitIgnoreStack
+
 #: Directories that hold generated or third-party code. Scanning them produces
 #: noise nobody will act on, and vendored trees can be enormous.
 DEFAULT_EXCLUDES: tuple[str, ...] = (
@@ -54,12 +56,19 @@ def iter_files(
     root: str,
     excludes: tuple[str, ...] = DEFAULT_EXCLUDES,
     max_bytes: int = MAX_FILE_BYTES,
+    *,
+    use_gitignore: bool = True,
 ) -> Iterator[tuple[str, str]]:
     """Yield ``(relative_path, text)`` for every scannable file under ``root``.
 
     Paths are yielded with forward slashes so reports read the same on every
     platform. Unreadable files are skipped rather than raising: a scanner that
     dies on one permission error is useless in CI.
+
+    With ``use_gitignore`` the walk honours every ``.gitignore`` in the tree,
+    each governing its own subtree. Set it to ``False`` to audit what git was
+    told to hide - useful when you suspect an ignore rule was added to silence
+    this scanner rather than to keep a build artifact out of history.
     """
     root = os.path.abspath(root)
 
@@ -69,23 +78,54 @@ def iter_files(
             yield os.path.basename(root), text
         return
 
+    # Each directory inherits the stack of its parent, so rules are consulted
+    # outermost first and an entry is dropped as soon as its parent is visited.
+    stacks: dict[str, GitIgnoreStack] = {root: GitIgnoreStack()}
+
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(
-            name
-            for name in dirnames
-            if not any(fnmatch.fnmatch(name, pattern) for pattern in excludes)
-        )
+        stack = stacks.pop(dirpath, GitIgnoreStack())
+        prefix = _relative_dir(dirpath, root)
+
+        if use_gitignore and ".gitignore" in filenames:
+            rules = GitIgnoreFile.load(os.path.join(dirpath, ".gitignore"), prefix)
+            if rules is not None:
+                stack = stack.push(rules)
+
+        kept: list[str] = []
+        for name in sorted(dirnames):
+            if any(fnmatch.fnmatch(name, pattern) for pattern in excludes):
+                continue
+            # An empty stack short-circuits, which also covers use_gitignore=False:
+            # nothing is ever pushed in that case, so no path is ever tested.
+            if stack and stack.is_ignored(f"{prefix}{name}", True):
+                continue
+            kept.append(name)
+            stacks[os.path.join(dirpath, name)] = stack
+        dirnames[:] = kept
+
         for filename in sorted(filenames):
             absolute = os.path.join(dirpath, filename)
             if os.path.splitext(filename)[1].lower() in BINARY_SUFFIXES:
                 continue
             if any(fnmatch.fnmatch(filename, pattern) for pattern in excludes):
                 continue
+            relative = f"{prefix}{filename}"
+            if stack and stack.is_ignored(relative, False):
+                continue
             text = _read_text(absolute, max_bytes)
             if text is None:
                 continue
-            relative = os.path.relpath(absolute, root).replace(os.sep, "/")
             yield relative, text
+
+
+def _relative_dir(dirpath: str, root: str) -> str:
+    """Slash-separated path of ``dirpath`` under ``root``, with a trailing slash.
+
+    Empty for the root itself, so callers can build a child path by concatenation.
+    """
+    if os.path.normpath(dirpath) == os.path.normpath(root):
+        return ""
+    return os.path.relpath(dirpath, root).replace(os.sep, "/") + "/"
 
 
 def _read_text(path: str, max_bytes: int) -> str | None:

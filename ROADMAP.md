@@ -11,7 +11,8 @@ outcome than a feature nobody wanted.
 
 - [x] Allowlist documented public example credentials (`AKIAIOSFODNN7EXAMPLE`,
       RFC test JWTs) so the scanner stops flagging documentation
-- [ ] Respect `.gitignore` when walking a repository
+- [x] Respect `.gitignore` when walking a repository, nested files included,
+      with `--no-gitignore` to audit what was hidden
 - [ ] File-level and block-level suppression, not just per-line
       (`# repo-sentinel: ignore-file`, `ignore-start` / `ignore-end`)
 - [ ] Baseline file: record accepted findings so CI only fails on new ones

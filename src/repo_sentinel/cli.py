@@ -30,9 +30,10 @@ def scan_path(
     excludes: tuple[str, ...] = DEFAULT_EXCLUDES,
     *,
     allow_examples: bool = True,
+    use_gitignore: bool = True,
 ) -> list[Finding]:
     """Run every scanner over ``path`` and return findings worst-first."""
-    files = list(iter_files(path, excludes=excludes))
+    files = list(iter_files(path, excludes=excludes, use_gitignore=use_gitignore))
     found = secrets.scan_files(files, allow_examples=allow_examples)
     found += workflows.scan_files(files)
     return sorted(found, key=lambda finding: finding.sort_key)
@@ -108,6 +109,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="extra file or directory glob to skip (repeatable)",
     )
     scan.add_argument(
+        "--no-gitignore",
+        action="store_true",
+        help="also scan files git was told to ignore",
+    )
+    scan.add_argument(
         "--no-example-allowlist",
         action="store_true",
         help="also report credentials published as vendor or RFC examples",
@@ -133,6 +139,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.path,
             DEFAULT_EXCLUDES + tuple(args.exclude),
             allow_examples=not args.no_example_allowlist,
+            use_gitignore=not args.no_gitignore,
         )
         if finding.severity >= min_severity
     ]
