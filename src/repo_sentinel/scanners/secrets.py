@@ -21,11 +21,13 @@ import math
 import re
 from collections.abc import Iterable, Iterator
 
+from .. import suppression
 from ..findings import Finding, Severity, redact
 from . import allowlist
 
-#: Skip a line entirely when it carries this marker.
-IGNORE_MARKER = "repo-sentinel: ignore"
+#: The one-line form of the suppression marker. :mod:`..suppression` owns the
+#: file-level and block-level forms, which need the whole file to interpret.
+IGNORE_MARKER = suppression.LINE_MARKER
 
 _PROVIDER_RULES: tuple[tuple[str, str, Severity, re.Pattern[str], str], ...] = (
     (
@@ -160,7 +162,7 @@ def scan_line(
     too. That is rarely what you want day to day, but an auditor reviewing the
     scanner's own blind spots needs to see what it chose not to say.
     """
-    if IGNORE_MARKER in line:
+    if suppression.marker_scope(line) is not None:
         return
 
     matched_spans: list[tuple[int, int]] = []
@@ -209,12 +211,31 @@ def scan_line(
 
 
 def scan_text(path: str, text: str, *, allow_examples: bool = True) -> list[Finding]:
-    """Scan an entire file's contents."""
-    return [
+    """Scan an entire file's contents, honouring its suppression directives.
+
+    This is where file-level and block-level markers are resolved, because
+    neither can be understood from a single line. The unterminated-block
+    warning is raised here rather than in the workflow scanner so that it is
+    reported once per file, whatever the file happens to be.
+    """
+    marks = suppression.parse(text)
+    if marks.whole_file:
+        return []
+
+    findings = [
         finding
         for number, line in enumerate(text.splitlines(), start=1)
+        if not marks.suppresses(number)
         for finding in scan_line(path, number, line, allow_examples=allow_examples)
     ]
+
+    # Appended after the filter on purpose: the warning sits on a suppressed
+    # line by definition, and suppressing the report of a runaway suppression
+    # is how a file goes quiet without anyone noticing.
+    warning = suppression.unterminated_finding(path, marks)
+    if warning is not None:
+        findings.append(warning)
+    return findings
 
 
 def scan_files(

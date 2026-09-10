@@ -97,6 +97,10 @@ repo-sentinel scan . --no-gitignore
 | SEC009 | JSON Web Token | medium |
 | SEC010 | Stripe test key | low |
 | SEC100 | High-entropy value assigned to a secret-shaped variable name | high |
+| SEC900 | Suppression block opened and never closed | medium |
+
+SEC900 is not a class of secret; it reports a suppression block that was opened
+and never closed. See [Suppressing a false positive](#suppressing-a-false-positive).
 
 SEC001–SEC010 match on documented token structure, so they are high confidence.
 SEC100 is the heuristic one: it fires only when a variable named like a
@@ -154,11 +158,35 @@ treat a clean report as encouraging, not as proof.
 
 ## Suppressing a false positive
 
-Put the marker on the offending line:
+Three scopes, in increasing blast radius. All three work in any file the scanner
+reads, workflows included, and none of them cares what the comment syntax is.
+
+One line:
 
 ```python
 sample_token = "Xk92mQp7Lz4TvB8nRw1Y"  # repo-sentinel: ignore
 ```
+
+A block, for a generated section or a fixture full of invented keys. Both
+markers are themselves suppressed, along with everything between them:
+
+```python
+# repo-sentinel: ignore-start
+FAKE_KEYS = {"aws": "...", "stripe": "..."}
+# repo-sentinel: ignore-end
+```
+
+A whole file, with `repo-sentinel: ignore-file` — but **only in the first 20
+lines**. Below that it is just a mention, which is why this README still gets
+scanned despite the line you are reading. Without that rule, any file that
+described the directive would silently stop being scanned, and a scanner a
+sentence about it can switch off is worse than no scanner. Keeping the directive
+in the header also means you can see that a file is unscanned without reading to
+the bottom of it.
+
+A block that is opened and never closed silences everything after it, so it is
+reported as SEC900 rather than trusted. Close the block, or say `ignore-file` and
+mean it.
 
 ## Development
 

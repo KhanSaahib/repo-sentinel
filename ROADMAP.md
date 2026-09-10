@@ -13,8 +13,10 @@ outcome than a feature nobody wanted.
       RFC test JWTs) so the scanner stops flagging documentation
 - [x] Respect `.gitignore` when walking a repository, nested files included,
       with `--no-gitignore` to audit what was hidden
-- [ ] File-level and block-level suppression, not just per-line
-      (`# repo-sentinel: ignore-file`, `ignore-start` / `ignore-end`)
+- [x] File-level and block-level suppression, not just per-line
+      (`ignore-file`, `ignore-start` / `ignore-end`). The file-level marker is
+      only honoured in the first 20 lines, so a document that merely mentions
+      it does not go unscanned; an unterminated block is reported as SEC900
 - [ ] Baseline file: record accepted findings so CI only fails on new ones
 - [ ] Track the entropy floor separately per rule; 3.2 is too low for base64
       blobs and too high for short hex tokens

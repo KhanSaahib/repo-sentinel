@@ -13,6 +13,7 @@ import posixpath
 import re
 from collections.abc import Iterable, Iterator
 
+from .. import suppression
 from ..findings import Finding, Severity
 
 _WORKFLOW_DIR = ".github/workflows"
@@ -76,7 +77,17 @@ def _iter_run_lines(lines: list[str]) -> Iterator[tuple[int, str]]:
 
 
 def scan_workflow(path: str, text: str) -> list[Finding]:
-    """Run every workflow rule against one workflow file."""
+    """Run every workflow rule against one workflow file.
+
+    Suppression directives are honoured here too. A workflow is as entitled to
+    a documented exception as any other file, and a marker that worked in
+    application code but not in ``ci.yml`` would be the kind of inconsistency
+    people work around by disabling the whole check.
+    """
+    marks = suppression.parse(text)
+    if marks.whole_file:
+        return []
+
     lines = text.splitlines()
     findings: list[Finding] = []
 
@@ -170,7 +181,7 @@ def scan_workflow(path: str, text: str) -> list[Finding]:
                 )
                 break
 
-    return findings
+    return marks.filter_findings(findings)
 
 
 def scan_files(files: Iterable[tuple[str, str]]) -> list[Finding]:
