@@ -218,5 +218,111 @@ class TestScanFiles(unittest.TestCase):
         self.assertEqual(findings, [])
 
 
+def workflow_with_jobs(body):
+    return "name: ci\non:\n  push:\njobs:\n" + body
+
+
+class TestJobStructure(unittest.TestCase):
+    """Jobs and steps have to be split apart before most rules can be asked."""
+
+    def test_splits_jobs_at_their_own_indent(self):
+        text = workflow_with_jobs(
+            "  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: make\n"
+            "  deploy:\n    needs: build\n    steps:\n      - run: make deploy\n"
+        )
+        jobs = list(workflows.iter_jobs(text.splitlines()))
+        self.assertEqual([job.name for job in jobs], ["build", "deploy"])
+        self.assertEqual(len(jobs[0].body), 3)
+
+    def test_a_workflow_without_jobs_has_none(self):
+        self.assertEqual(list(workflows.iter_jobs(["name: ci", "on:", "  push:"])), [])
+
+    def test_stops_at_the_next_top_level_key(self):
+        text = workflow_with_jobs("  build:\n    steps: []\n") + "env:\n  A: 1\n"
+        self.assertEqual([job.name for job in workflows.iter_jobs(text.splitlines())], ["build"])
+
+
+class TestPerJobPermissions(unittest.TestCase):
+    def test_a_job_declaring_its_own_permissions_is_not_reported(self):
+        text = workflow_with_jobs(
+            "  build:\n    permissions:\n      contents: read\n    steps:\n      - run: make\n"
+        )
+        self.assertNotIn("WF002", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+    def test_each_job_without_permissions_is_reported_where_it_starts(self):
+        text = workflow_with_jobs(
+            "  build:\n    steps:\n      - run: make\n"
+            "  deploy:\n    permissions:\n      contents: read\n    steps:\n      - run: make deploy\n"
+        )
+        findings = [f for f in workflows.scan_workflow(".github/workflows/a.yml", text) if f.rule_id == "WF002"]
+        self.assertEqual(len(findings), 1)
+        self.assertIn("build", findings[0].evidence)
+
+    def test_write_all_is_its_own_finding(self):
+        text = workflow_with_jobs("  build:\n    permissions: write-all\n    steps: []\n")
+        findings = workflows.scan_workflow(".github/workflows/a.yml", text)
+        self.assertIn("WF005", rule_ids(findings))
+        self.assertEqual(next(f for f in findings if f.rule_id == "WF005").severity, Severity.HIGH)
+
+
+class TestRunners(unittest.TestCase):
+    def test_flags_a_self_hosted_runner(self):
+        text = workflow_with_jobs("  build:\n    runs-on: self-hosted\n    steps: []\n")
+        self.assertIn("WF006", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+    def test_flags_a_self_hosted_label_list(self):
+        text = workflow_with_jobs("  build:\n    runs-on: [self-hosted, linux, x64]\n    steps: []\n")
+        self.assertIn("WF006", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+    def test_hosted_runners_are_fine(self):
+        text = workflow_with_jobs("  build:\n    runs-on: ubuntu-latest\n    steps: []\n")
+        self.assertNotIn("WF006", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+
+class TestSecretHandoff(unittest.TestCase):
+    def test_flags_a_secret_given_to_a_third_party_action(self):
+        text = workflow_with_jobs(
+            "  build:\n    steps:\n"
+            "      - uses: some-vendor/deploy@v2\n"
+            "        with:\n          token: ${{ secrets.DEPLOY_TOKEN }}\n"
+        )
+        findings = workflows.scan_workflow(".github/workflows/a.yml", text)
+        handoff = next(f for f in findings if f.rule_id == "WF007")
+        self.assertIn("DEPLOY_TOKEN", handoff.title)
+
+    def test_first_party_actions_are_not_third_parties(self):
+        text = workflow_with_jobs(
+            "  build:\n    steps:\n"
+            "      - uses: actions/github-script@v7\n"
+            "        with:\n          github-token: ${{ secrets.GITHUB_TOKEN }}\n"
+        )
+        self.assertNotIn("WF007", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+    def test_a_secret_in_a_step_with_no_action_is_not_a_handoff(self):
+        text = workflow_with_jobs(
+            "  build:\n    steps:\n      - run: deploy.sh\n        env:\n          T: ${{ secrets.TOKEN }}\n"
+        )
+        self.assertNotIn("WF007", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+
+class TestWorkflowRunCheckout(unittest.TestCase):
+    def test_flags_checking_out_the_triggering_run(self):
+        text = (
+            "name: publish\non:\n  workflow_run:\n    workflows: [CI]\njobs:\n"
+            "  publish:\n    permissions:\n      contents: read\n    steps:\n"
+            "      - uses: actions/checkout@v4\n"
+            "        with:\n          ref: ${{ github.event.workflow_run.head_sha }}\n"
+        )
+        self.assertIn("WF008", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+    def test_a_plain_workflow_run_listener_is_fine(self):
+        text = (
+            "name: publish\non:\n  workflow_run:\n    workflows: [CI]\njobs:\n"
+            "  publish:\n    permissions:\n      contents: read\n    steps:\n"
+            "      - uses: actions/checkout@v4\n"
+        )
+        self.assertNotIn("WF008", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+
 if __name__ == "__main__":
     unittest.main()
