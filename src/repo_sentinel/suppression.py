@@ -64,6 +64,11 @@ def marker_scope(line: str) -> str | None:
 
     One of ``"line"``, ``"file"``, ``"start"`` or ``"end"``.
     """
+    # Every line of every file passes through here twice, and almost none of
+    # them carry a directive. A substring test is an order of magnitude cheaper
+    # than the pattern, and the pattern cannot match without it.
+    if "repo-sentinel" not in line:
+        return None
     match = _MARKER.search(line)
     if match is None:
         return None
