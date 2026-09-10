@@ -1,81 +1,26 @@
-"""Command line entry point."""
+"""Command line entry point: argument handling, and nothing else.
+
+Scanning lives in :mod:`.engine`, formatting in :mod:`.report`. What is left
+here is the part that has to decide what the user asked for and what the exit
+code should be -- which, for a tool whose whole job is to fail a build at the
+right moment, is worth keeping unmixed with anything else.
+"""
 
 from __future__ import annotations
 
 import argparse
-import json
+import os
 import sys
 from collections.abc import Sequence
 
-from . import __version__
-from .discovery import DEFAULT_EXCLUDES, iter_files
-from .findings import Finding, Severity
-from .scanners import secrets, workflows
+from . import __version__, baseline as baseline_module, report
+from .discovery import DEFAULT_EXCLUDES
+from .engine import scan, scan_path  # noqa: F401  (scan_path is public API)
+from .findings import Confidence, Finding, Severity
 
 EXIT_OK = 0
 EXIT_FINDINGS = 1
 EXIT_ERROR = 2
-
-_COLOURS = {
-    Severity.CRITICAL: "\033[1;31m",
-    Severity.HIGH: "\033[31m",
-    Severity.MEDIUM: "\033[33m",
-    Severity.LOW: "\033[36m",
-}
-_RESET = "\033[0m"
-
-
-def scan_path(
-    path: str,
-    excludes: tuple[str, ...] = DEFAULT_EXCLUDES,
-    *,
-    allow_examples: bool = True,
-    use_gitignore: bool = True,
-) -> list[Finding]:
-    """Run every scanner over ``path`` and return findings worst-first."""
-    files = list(iter_files(path, excludes=excludes, use_gitignore=use_gitignore))
-    found = secrets.scan_files(files, allow_examples=allow_examples)
-    found += workflows.scan_files(files)
-    return sorted(found, key=lambda finding: finding.sort_key)
-
-
-def format_text(findings: Sequence[Finding], *, colour: bool) -> str:
-    if not findings:
-        return "No findings. That is not proof of safety, but it is a good sign."
-
-    lines: list[str] = []
-    for finding in findings:
-        label = finding.severity.value.upper()
-        if colour:
-            label = f"{_COLOURS[finding.severity]}{label}{_RESET}"
-        lines.append(f"{label} {finding.rule_id}  {finding.path}:{finding.line}")
-        lines.append(f"    {finding.title}")
-        if finding.evidence:
-            lines.append(f"    evidence: {finding.evidence}")
-        if finding.remediation:
-            lines.append(f"    fix: {finding.remediation}")
-        lines.append("")
-
-    counts: dict[Severity, int] = {}
-    for finding in findings:
-        counts[finding.severity] = counts.get(finding.severity, 0) + 1
-    summary = ", ".join(
-        f"{counts[severity]} {severity.value}"
-        for severity in sorted(counts, key=lambda s: -s.rank)
-    )
-    lines.append(f"{len(findings)} finding(s): {summary}")
-    return "\n".join(lines)
-
-
-def format_json(findings: Sequence[Finding]) -> str:
-    return json.dumps(
-        {
-            "version": __version__,
-            "finding_count": len(findings),
-            "findings": [finding.to_dict() for finding in findings],
-        },
-        indent=2,
-    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -86,73 +31,173 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"repo-sentinel {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    scan = subparsers.add_parser("scan", help="scan a directory or file")
-    scan.add_argument("path", nargs="?", default=".", help="path to scan (default: .)")
-    scan.add_argument(
-        "--format", choices=("text", "json"), default="text", help="output format"
+    scan_parser = subparsers.add_parser("scan", help="scan a directory or file")
+    scan_parser.add_argument("path", nargs="?", default=".", help="path to scan (default: .)")
+    scan_parser.add_argument(
+        "--format", choices=("text", "json", "sarif"), default="text", help="output format"
     )
-    scan.add_argument(
+    scan_parser.add_argument(
+        "--output",
+        metavar="FILE",
+        help="write the report to FILE instead of stdout (SARIF uploads want a file)",
+    )
+    scan_parser.add_argument(
         "--min-severity",
         default="low",
         help="hide findings below this severity (low, medium, high, critical)",
     )
-    scan.add_argument(
+    scan_parser.add_argument(
+        "--min-confidence",
+        default="low",
+        help="hide findings below this confidence (low, medium, high)",
+    )
+    scan_parser.add_argument(
         "--fail-on",
         default="medium",
         help="exit non-zero when a finding reaches this severity (default: medium)",
     )
-    scan.add_argument(
+    scan_parser.add_argument(
         "--exclude",
         action="append",
         default=[],
         metavar="GLOB",
         help="extra file or directory glob to skip (repeatable)",
     )
-    scan.add_argument(
+    scan_parser.add_argument(
+        "--baseline",
+        nargs="?",
+        const=baseline_module.DEFAULT_PATH,
+        metavar="FILE",
+        help=(
+            "treat findings recorded in FILE as accepted and fail only on new ones "
+            f"(default file: {baseline_module.DEFAULT_PATH})"
+        ),
+    )
+    scan_parser.add_argument(
+        "--write-baseline",
+        nargs="?",
+        const=baseline_module.DEFAULT_PATH,
+        metavar="FILE",
+        help="record the current findings as accepted, then exit without failing",
+    )
+    scan_parser.add_argument(
         "--no-gitignore",
         action="store_true",
         help="also scan files git was told to ignore",
     )
-    scan.add_argument(
+    scan_parser.add_argument(
         "--no-example-allowlist",
         action="store_true",
         help="also report credentials published as vendor or RFC examples",
     )
-    scan.add_argument("--no-color", action="store_true", help="disable coloured output")
+    scan_parser.add_argument("--no-color", action="store_true", help="disable coloured output")
+
+    rules_parser = subparsers.add_parser("rules", help="list every rule the scanner knows")
+    rules_parser.add_argument("--format", choices=("text", "json"), default="text")
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
+def _emit(text: str, destination: "str | None") -> int:
+    """Print a report, or write it to a file. Returns an exit code."""
+    if destination is None:
+        print(text)
+        return EXIT_OK
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(destination)), exist_ok=True)
+        with open(destination, "w", encoding="utf-8") as handle:
+            handle.write(text if text.endswith("\n") else text + "\n")
+    except OSError as error:
+        print(f"repo-sentinel: could not write {destination!r}: {error}", file=sys.stderr)
+        return EXIT_ERROR
+    return EXIT_OK
 
+
+def _run_scan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     try:
         min_severity = Severity.parse(args.min_severity)
+        min_confidence = Confidence.parse(args.min_confidence)
         fail_on = Severity.parse(args.fail_on)
     except ValueError as error:
         parser.error(str(error))
         return EXIT_ERROR  # pragma: no cover - argparse exits first
 
-    findings = [
+    result = scan(
+        args.path,
+        DEFAULT_EXCLUDES + tuple(args.exclude),
+        allow_examples=not args.no_example_allowlist,
+        use_gitignore=not args.no_gitignore,
+    )
+    findings: "list[Finding]" = [
         finding
-        for finding in scan_path(
-            args.path,
-            DEFAULT_EXCLUDES + tuple(args.exclude),
-            allow_examples=not args.no_example_allowlist,
-            use_gitignore=not args.no_gitignore,
-        )
-        if finding.severity >= min_severity
+        for finding in result.findings
+        if finding.severity >= min_severity and finding.confidence >= min_confidence
     ]
 
-    if args.format == "json":
-        print(format_json(findings))
-    else:
-        colour = not args.no_color and sys.stdout.isatty()
-        print(format_text(findings, colour=colour))
+    if args.write_baseline:
+        return _write_baseline(args.write_baseline, findings)
 
+    notes: "list[str]" = []
+    if args.baseline:
+        try:
+            recorded = baseline_module.load(args.baseline)
+        except baseline_module.BaselineError as error:
+            print(f"repo-sentinel: {error}", file=sys.stderr)
+            return EXIT_ERROR
+        findings, accepted, stale = recorded.partition(findings)
+        if accepted:
+            notes.append(f"{len(accepted)} finding(s) accepted by {args.baseline}.")
+        if stale:
+            notes.append(
+                f"{len(stale)} baseline entr{'y' if len(stale) == 1 else 'ies'} "
+                "no longer match anything: prune with --write-baseline."
+            )
+
+    if args.format == "text":
+        notes.append(_scan_note(result))
+
+    exit_code = _emit(_render(args, findings, notes), args.output)
+    if exit_code != EXIT_OK:
+        return exit_code
     if any(finding.severity >= fail_on for finding in findings):
         return EXIT_FINDINGS
     return EXIT_OK
+
+
+def _render(
+    args: argparse.Namespace, findings: "list[Finding]", notes: "list[str]"
+) -> str:
+    if args.format == "json":
+        return report.format_json(findings, version=__version__, notes=notes)
+    if args.format == "sarif":
+        return report.format_sarif(findings, version=__version__)
+    colour = not args.no_color and args.output is None and sys.stdout.isatty()
+    return report.format_text(findings, colour=colour, notes=notes)
+
+
+def _scan_note(result) -> str:
+    if result.file_count == 0:
+        return "Scanned 0 files. Check the path, the excludes and your .gitignore."
+    return f"Scanned {result.file_count} file(s) in {result.duration:.2f}s."
+
+
+def _write_baseline(path: str, findings: "list[Finding]") -> int:
+    try:
+        count = baseline_module.write(path, findings, version=__version__)
+    except baseline_module.BaselineError as error:
+        print(f"repo-sentinel: {error}", file=sys.stderr)
+        return EXIT_ERROR
+    print(f"Recorded {count} finding(s) as accepted in {path}.")
+    print("Commit it, then fix them: a baseline is a list of debts, not exemptions.")
+    return EXIT_OK
+
+
+def main(argv: "Sequence[str] | None" = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    if args.command == "rules":
+        return _emit(report.format_rule_catalogue(as_json=args.format == "json"), None)
+    return _run_scan(args, parser)
 
 
 if __name__ == "__main__":  # pragma: no cover
