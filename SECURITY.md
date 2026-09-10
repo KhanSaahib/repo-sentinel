@@ -27,6 +27,11 @@ no code it finds, and has no runtime dependencies. The realistic risks are:
   YAML-aware, and secret detection cannot recognise a credential format it has
   never seen. A clean report means the known checks passed. It is not proof that
   a repository is safe.
+- **The baseline file.** `--baseline` records accepted findings in a file meant
+  to be committed. Entries hold a hash of already-redacted evidence plus the
+  rule id and path, never the value itself, so publishing one reveals nothing a
+  reader could turn back into a credential. It does disclose that a repository
+  has an accepted finding of a given class in a given file.
 - **Untrusted input.** Scanned files are attacker-controlled by definition —
   anyone can open a pull request. All matching is done with bounded regular
   expressions against text read as UTF-8 with replacement; no scanned content is
@@ -39,4 +44,8 @@ no code it finds, and has no runtime dependencies. The realistic risks are:
 - Workflows declare `permissions: contents: read` and check out with
   `persist-credentials: false`.
 - Dependabot proposes action updates weekly so pins are refreshed deliberately.
-- CI scans this repository with the tool itself on every push and pull request.
+- CI scans this repository with the tool itself on every push and pull request,
+  and publishes the result to the Security tab from a separate job that holds
+  `security-events: write` and nothing else.
+- The tool writes to disk only where explicitly told to: `--output` and
+  `--write-baseline`. Every other run is read-only.

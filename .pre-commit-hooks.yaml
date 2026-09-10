@@ -1,0 +1,19 @@
+# Usage, in a project's .pre-commit-config.yaml:
+#
+#   repos:
+#     - repo: https://github.com/KhanSaahib/repo-sentinel
+#       rev: v0.2.0
+#       hooks:
+#         - id: repo-sentinel
+#
+# The hook scans the whole tree rather than the staged files: a secret is just
+# as committed when it arrives in a file this commit did not touch, and the
+# walk is fast enough that the distinction costs nothing.
+- id: repo-sentinel
+  name: repo-sentinel
+  description: Audit the repository for leaked secrets and insecure configuration.
+  entry: repo-sentinel
+  args: [scan, ., --fail-on, high]
+  language: python
+  pass_filenames: false
+  require_serial: true
