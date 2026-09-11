@@ -50,10 +50,15 @@ _VERIFICATION_OFF = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
-#: The lifecycle scripts npm runs without being asked, which is what makes a
-#: download inside one different from a download inside "build".
+#: The lifecycle scripts a package manager runs without being asked, which is
+#: what makes a download inside one different from a download inside "build".
+#: npm's are first; Composer's are the ones after the blank line.
 _INSTALL_SCRIPTS = frozenset(
-    {"preinstall", "install", "postinstall", "prepare", "prepublish", "prepack"}
+    {
+        "preinstall", "install", "postinstall", "prepare", "prepublish", "prepack",
+        "pre-install-cmd", "post-install-cmd", "pre-update-cmd", "post-update-cmd",
+        "post-autoload-dump",
+    }
 )
 
 #: A dependency that is a place rather than a version.
@@ -72,6 +77,7 @@ _MANIFESTS = {
     "pip.ini": "pip",
     "gemfile": "bundler",
     "pom.xml": "maven",
+    "composer.json": "composer",
 }
 
 
@@ -169,10 +175,13 @@ def _check_verification(path: str, kind: str, text: str) -> "Iterator[Finding]":
 def _check_npm_scripts(path: str, text: str) -> "Iterator[Finding]":
     """SC002: an install-time script that downloads code and runs it.
 
-    npm runs these without being asked -- ``npm install`` is enough -- so a
-    download inside ``postinstall`` executes on every machine and every CI
-    runner that installs the package, which is a different proposition from
-    the same line inside ``build``.
+    npm and Composer run these without being asked -- ``npm install`` or
+    ``composer install`` is enough -- so a download inside ``postinstall``
+    executes on every machine and every CI runner that installs the package,
+    which is a different proposition from the same line inside ``build``.
+
+    Composer writes a script as either a string or a list of them, so both
+    shapes are read.
     """
     document = jsonish.parse(text)
     if document is None or not document.is_map:
@@ -181,25 +190,26 @@ def _check_npm_scripts(path: str, text: str) -> "Iterator[Finding]":
     if scripts is None or not scripts.is_map:
         return
     for name, node in scripts.items():
-        command = node.text
-        if name not in _INSTALL_SCRIPTS or not command:
+        if name not in _INSTALL_SCRIPTS:
             continue
-        if not _PIPE_TO_SHELL.search(command):
-            continue
-        yield Finding(
-            rule_id="SC002",
-            severity=Severity.HIGH,
-            title=f"The {name!r} script downloads a script and runs it",
-            path=path,
-            line=node.line,
-            evidence=command[:120],
-            remediation=(
-                "npm runs this on every install, on every machine, without "
-                "being asked. Whoever controls that URL runs code on all of "
-                "them. Vendor the artifact, or verify a checksum before "
-                "executing it."
-            ),
-        )
+        for step in node.entries() if node.is_list else (node,):
+            command = step.text
+            if not command or not _PIPE_TO_SHELL.search(command):
+                continue
+            yield Finding(
+                rule_id="SC002",
+                severity=Severity.HIGH,
+                title=f"The {name!r} script downloads a script and runs it",
+                path=path,
+                line=step.line,
+                evidence=command[:120],
+                remediation=(
+                    "This runs on every install, on every machine, without "
+                    "being asked. Whoever controls that URL runs code on all "
+                    "of them. Vendor the artifact, or verify a checksum "
+                    "before executing it."
+                ),
+            )
 
 
 def _check_npm_dependencies(path: str, text: str) -> "Iterator[Finding]":
@@ -207,7 +217,7 @@ def _check_npm_dependencies(path: str, text: str) -> "Iterator[Finding]":
     document = jsonish.parse(text)
     if document is None or not document.is_map:
         return
-    for section in ("dependencies", "devDependencies", "optionalDependencies"):
+    for section in ("dependencies", "devDependencies", "optionalDependencies", "require", "require-dev"):
         block = document.get(section)
         if block is None or not block.is_map:
             continue
@@ -277,7 +287,7 @@ def scan_manifest(path: str, text: str) -> "list[Finding]":
 
     findings = list(_check_plaintext_sources(path, kind, text))
     findings += _check_verification(path, kind, text)
-    if posixpath.basename(path.replace("\\", "/")).lower() == "package.json":
+    if posixpath.basename(path.replace("\\", "/")).lower() in ("package.json", "composer.json"):
         findings += _check_npm_scripts(path, text)
         findings += _check_npm_dependencies(path, text)
     elif kind == "pip" and "requirement" in posixpath.basename(path).lower():

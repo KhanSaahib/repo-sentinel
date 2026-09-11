@@ -61,6 +61,12 @@ repository the tool can read at all: it grew from two file formats to six.
   `package.json`, `.npmrc`, `requirements*.txt`, `pip.conf`, `Gemfile` and
   `pom.xml` -- the question of where the rest of the build comes from, which
   every other family leaves unasked.
+- **JSON is read wherever YAML is**: CloudFormation templates, Kubernetes
+  manifests, `package.json` and `composer.json`, through a small reader that
+  keeps line numbers and produces the same nodes as the YAML one. No rule
+  changed to gain this.
+- **Composer** joins the dependency manifests, with its own install-time
+  lifecycle scripts.
 - **Ansible** (AN001–AN003): certificate verification switched off, a
   world-writable file mode, a fetch over plain HTTP. Narrow on purpose, because
   Ansible's idioms make most "insecure" patterns ambiguous and these three are

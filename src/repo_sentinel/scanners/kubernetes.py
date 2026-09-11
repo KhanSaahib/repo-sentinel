@@ -25,12 +25,12 @@ import posixpath
 import re
 from collections.abc import Iterable, Iterator
 
-from .. import suppression, wellknown, yamlish
+from .. import jsonish, suppression, wellknown, yamlish
 from ..findings import Confidence, Finding, Severity, redact
 from ..heuristics import looks_generated
 from . import secrets
 
-_YAML_SUFFIXES = (".yaml", ".yml")
+_MANIFEST_SUFFIXES = (".yaml", ".yml", ".json")
 
 #: Namespaces shared with the node. Any of them dissolves a part of the
 #: isolation the container was supposed to provide.
@@ -56,8 +56,9 @@ _RBAC_BINDINGS = ("RoleBinding", "ClusterRoleBinding")
 _IMAGE_TAG = re.compile(r"^(?P<image>[^\s@]+?)(?::(?P<tag>[^:/@]+))?(?:@(?P<digest>sha256:\w+))?$")
 
 
-def is_yaml_path(path: str) -> bool:
-    return posixpath.basename(path.replace("\\", "/")).lower().endswith(_YAML_SUFFIXES)
+def is_manifest_path(path: str) -> bool:
+    """True for the extensions a manifest is written with, YAML or JSON."""
+    return posixpath.basename(path.replace("\\", "/")).lower().endswith(_MANIFEST_SUFFIXES)
 
 
 def is_manifest(document: "yamlish.Node") -> bool:
@@ -471,12 +472,18 @@ def scan_manifest(path: str, text: str) -> "list[Finding]":
     if marks.whole_file:
         return []
 
-    templated = yamlish.is_templated(text)
-    source = yamlish.strip_templates(text) if templated else text
-    active = _POSITIVE_RULES if templated else _RULES
+    if jsonish.looks_like_json(text):
+        # `kubectl get -o json` and anything that generates manifests. Same
+        # rules, same nodes, a different reader.
+        documents = jsonish.parse_documents(text)
+        active = _RULES
+    else:
+        templated = yamlish.is_templated(text)
+        documents = tuple(yamlish.parse(yamlish.strip_templates(text) if templated else text))
+        active = _POSITIVE_RULES if templated else _RULES
 
     findings: "list[Finding]" = []
-    for document in yamlish.parse(source):
+    for document in documents:
         if not is_manifest(document):
             continue
         for rule in active:
@@ -489,6 +496,6 @@ def scan_files(files: "Iterable[tuple[str, str]]") -> "list[Finding]":
     return [
         finding
         for path, text in files
-        if is_yaml_path(path)
+        if is_manifest_path(path)
         for finding in scan_manifest(path, text)
     ]

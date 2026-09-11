@@ -186,13 +186,14 @@ broken certificate, a dependency on a branch somebody can move, an install
 script that downloads code and runs it: four ordinary-looking lines that each
 hand the contents of your build to somebody else.
 
-SC002 is scoped to the lifecycle scripts npm runs without being asked --
-`preinstall`, `install`, `postinstall`, `prepare` -- because `npm install` is
-enough to execute them, on every machine and every CI runner. The same command
-inside `build` is a different proposition and is not reported.
+SC002 is scoped to the lifecycle scripts a package manager runs without being
+asked -- npm's `preinstall`, `install`, `postinstall`, `prepare`, and
+Composer's `post-install-cmd` and friends -- because `npm install` or `composer
+install` is enough to execute them, on every machine and every CI runner. The
+same command inside `build` is a different proposition and is not reported.
 
-Covered: `package.json`, `.npmrc`, `requirements*.txt`, `pip.conf`, `Gemfile`,
-`pom.xml`. The checks are shallow on purpose -- this is not a resolver, and it
+Covered: `package.json`, `composer.json`, `.npmrc`, `requirements*.txt`,
+`pip.conf`, `Gemfile`, `pom.xml`. The checks are shallow on purpose -- this is not a resolver, and it
 does not know what a version means -- because these four mistakes are visible
 in the text.
 
@@ -388,7 +389,7 @@ from it.
 | K8S010 | Binding grants to anonymous or all authenticated users | critical |
 
 Manifests are found by content, not by filename: a Kubernetes document is one
-with `apiVersion` and `kind` at its root. That beats guessing at `deploy/`,
+with `apiVersion` and `kind` at its root, in YAML or in JSON. That beats guessing at `deploy/`,
 `k8s/`, `manifests/` and `charts/templates/`, and it means a workflow file that
 happens to live in one of them is correctly ignored.
 

