@@ -347,7 +347,11 @@ def scan_line(
     ``value_position`` enables the bare-assignment rule, which only makes sense
     in the file formats :func:`has_value_positions` recognises.
     """
-    if suppression.marker_scope(line) is not None:
+    # A marker that names no rules silences the line outright, so there is
+    # nothing to look for. A marker that names rules leaves the rest of them
+    # in force, and the filtering happens once the findings exist.
+    directive = suppression.marker(line)
+    if directive is not None and not directive[1]:
         return
 
     matched_spans: list[tuple[int, int]] = []
@@ -570,7 +574,7 @@ def scan_text(path: str, text: str, *, allow_examples: bool = True) -> list[Find
         return []
 
     value_position = has_value_positions(path)
-    findings = [
+    findings = marks.filter_findings(
         finding
         for number, line in enumerate(text.splitlines(), start=1)
         if not marks.suppresses(number)
@@ -581,9 +585,9 @@ def scan_text(path: str, text: str, *, allow_examples: bool = True) -> list[Find
             allow_examples=allow_examples,
             value_position=value_position,
         )
-    ]
+    )
 
-    findings.extend(scan_document(path, text))
+    findings.extend(marks.filter_findings(scan_document(path, text)))
 
     # Appended after the filter on purpose: the warning sits on a suppressed
     # line by definition, and suppressing the report of a runaway suppression

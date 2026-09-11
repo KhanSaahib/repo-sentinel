@@ -88,6 +88,13 @@ vendor documents over a literal transcribed from memory. A convention that
 misses is silent; a wrong literal quietly claims coverage the scanner does not
 have.
 
+## Suppression and configuration
+
+Two places name rules -- a `disable` list in `.repo-sentinel.json` and a
+`# repo-sentinel: ignore[RULE]` marker in a file -- and they share
+`rules.matcher`, so the syntax is identical in both. Keep it that way: the
+answer to "what do I write here" should not depend on where here is.
+
 ## Tests
 
 ```bash

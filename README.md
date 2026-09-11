@@ -482,6 +482,18 @@ sentence about it can switch off is worse than no scanner. Keeping the directive
 in the header also means you can see that a file is unscanned without reading to
 the bottom of it.
 
+All three can name the rules they mean, in brackets:
+
+```yaml
+image: nginx:latest  # repo-sentinel: ignore[K8S008]
+```
+
+Prefer this to the blunt form. A line exempted from everything stays exempt when
+a later release adds a rule that would have caught something real there, and the
+comment no longer records why the exemption exists. Family prefixes work too
+(`ignore[K8S*]`), and so do lists (`ignore[SEC100, DK002]`); the syntax is the
+same one `disable` uses in the config file.
+
 A block that is opened and never closed silences everything after it, so it is
 reported as SEC900 rather than trusted. Close the block, or say `ignore-file` and
 mean it.

@@ -39,6 +39,10 @@ repository the tool can read at all: it grew from two file formats to six.
   `--disable` for doing it ad hoc. Disabled findings are counted in the output
   rather than silently dropped. Unknown settings are an error; unknown rule ids
   are reported, since that typo leaves the rule switched on.
+- **Rule-scoped suppression markers**: `# repo-sentinel: ignore[K8S008]`, on any
+  of the three scopes, with family prefixes and lists. An unqualified marker
+  stays exempt from rules that did not exist when it was written; a qualified
+  one keeps the exemption as narrow as its reason.
 - A **YAML subset reader** and an **HCL block reader**, both standard library
   only, both explicit about what they do not parse.
 

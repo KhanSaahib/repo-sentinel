@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import json
 import os
+
+from . import rules
 from collections.abc import Sequence
 
 #: Looked for beside the scanned tree when ``--config`` is not given.
@@ -92,17 +94,10 @@ def load(path: str) -> dict:
 
 
 def disabled_matcher(patterns: Sequence[str]):
-    """Build a predicate for rule ids a project has switched off.
+    """The predicate for rules a project has switched off.
 
-    Patterns are rule ids, or a family prefix ending in ``*`` -- ``K8S004``,
-    ``DC*``. Matching is case-insensitive because nobody remembers whether it
-    was ``k8s`` or ``K8S`` at the moment they are silencing something.
+    The syntax is :func:`repo_sentinel.rules.matcher`'s, shared with the
+    suppression markers, so that naming a rule means the same thing in a config
+    file and in a comment.
     """
-    exact = {pattern.upper() for pattern in patterns if not pattern.endswith("*")}
-    prefixes = tuple(pattern[:-1].upper() for pattern in patterns if pattern.endswith("*"))
-
-    def disabled(rule_id: str) -> bool:
-        upper = rule_id.upper()
-        return upper in exact or upper.startswith(prefixes) if prefixes else upper in exact
-
-    return disabled
+    return rules.matcher(patterns)

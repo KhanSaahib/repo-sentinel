@@ -50,28 +50,28 @@ class TestParse(unittest.TestCase):
     def test_a_file_without_markers_suppresses_nothing(self):
         marks = suppression.parse("one\ntwo\nthree\n")
         self.assertFalse(marks.whole_file)
-        self.assertEqual(marks.lines, frozenset())
+        self.assertEqual(marks.marked_lines, frozenset())
         self.assertIsNone(marks.unterminated_start)
 
     def test_a_block_covers_its_markers_and_everything_between(self):
         marks = suppression.parse("\n".join(["a", START, "b", "c", END, "d"]))
-        self.assertEqual(marks.lines, frozenset({2, 3, 4, 5}))
+        self.assertEqual(marks.marked_lines, frozenset({2, 3, 4, 5}))
         self.assertIsNone(marks.unterminated_start)
 
     def test_an_unterminated_block_runs_to_the_end_of_the_file(self):
         marks = suppression.parse("\n".join(["a", START, "b", "c"]))
-        self.assertEqual(marks.lines, frozenset({2, 3, 4}))
+        self.assertEqual(marks.marked_lines, frozenset({2, 3, 4}))
         self.assertEqual(marks.unterminated_start, 2)
 
     def test_a_second_start_is_not_a_nesting_level(self):
         # Counting starts would let a missing end hide behind a later pair.
         marks = suppression.parse("\n".join([START, "a", START, "b", END, "c"]))
-        self.assertEqual(marks.lines, frozenset({1, 2, 3, 4, 5}))
+        self.assertEqual(marks.marked_lines, frozenset({1, 2, 3, 4, 5}))
         self.assertIsNone(marks.unterminated_start)
 
     def test_a_stray_end_only_suppresses_its_own_line(self):
         marks = suppression.parse("\n".join(["a", END, "b"]))
-        self.assertEqual(marks.lines, frozenset({2}))
+        self.assertEqual(marks.marked_lines, frozenset({2}))
         self.assertIsNone(marks.unterminated_start)
 
     def test_file_marker_in_the_header_covers_everything(self):
@@ -147,6 +147,70 @@ class TestWorkflowsHonourSuppression(unittest.TestCase):
         text = "permissions:\n  contents: read\njobs:\n  b:\n    steps:\n      - uses: actions/checkout@v4\n"
         findings = workflows.scan_workflow(".github/workflows/ci.yml", text)
         self.assertEqual(rule_ids(findings), {"WF001"})
+
+
+class TestRuleScopedMarkers(unittest.TestCase):
+    """A marker that names its rules keeps the exemption as narrow as its reason."""
+
+    def test_a_named_rule_is_suppressed_and_others_are_not(self):
+        marks = suppression.parse("x = 1  # repo-sentinel: ignore[SEC100]\n")
+        self.assertTrue(marks.suppresses(1, "SEC100"))
+        self.assertFalse(marks.suppresses(1, "SEC001"))
+
+    def test_several_rules_can_be_named(self):
+        marks = suppression.parse("x = 1  # repo-sentinel: ignore[SEC100, DK002]\n")
+        self.assertTrue(marks.suppresses(1, "DK002"))
+        self.assertTrue(marks.suppresses(1, "SEC100"))
+        self.assertFalse(marks.suppresses(1, "WF001"))
+
+    def test_a_family_prefix_works(self):
+        marks = suppression.parse("x = 1  # repo-sentinel: ignore[K8S*]\n")
+        self.assertTrue(marks.suppresses(1, "K8S004"))
+        self.assertFalse(marks.suppresses(1, "SEC001"))
+
+    def test_an_unqualified_marker_still_silences_everything(self):
+        marks = suppression.parse("x = 1  # repo-sentinel: ignore\n")
+        self.assertTrue(marks.suppresses(1))
+        self.assertTrue(marks.suppresses(1, "SEC001"))
+
+    def test_a_qualified_marker_does_not_answer_an_unqualified_question(self):
+        # "Is this line exempt from everything?" cannot be answered yes by a
+        # marker that named one rule.
+        marks = suppression.parse("x = 1  # repo-sentinel: ignore[SEC100]\n")
+        self.assertFalse(marks.suppresses(1))
+
+    def test_a_scoped_block_covers_its_range_for_that_rule_only(self):
+        text = (
+            "# repo-sentinel: ignore-start[SEC100]\n"
+            "a = 1\n"
+            "# repo-sentinel: ignore-end\n"
+            "b = 2\n"
+        )
+        marks = suppression.parse(text)
+        self.assertTrue(marks.suppresses(2, "SEC100"))
+        self.assertFalse(marks.suppresses(2, "SEC001"))
+        self.assertFalse(marks.suppresses(4, "SEC100"))
+
+    def test_a_scoped_file_marker_covers_every_line_for_that_rule(self):
+        marks = suppression.parse("# repo-sentinel: ignore-file[DK002]\nFROM debian\n")
+        self.assertFalse(marks.whole_file)
+        self.assertTrue(marks.suppresses(99, "DK002"))
+        self.assertFalse(marks.suppresses(99, "DK001"))
+
+    def test_findings_are_filtered_by_rule(self):
+        from repo_sentinel.findings import Finding, Severity
+
+        marks = suppression.parse("x = 1  # repo-sentinel: ignore[SEC100]\n")
+        findings = [
+            Finding("SEC100", Severity.HIGH, "t", "a.py", 1),
+            Finding("SEC001", Severity.CRITICAL, "t", "a.py", 1),
+        ]
+        self.assertEqual(
+            [finding.rule_id for finding in marks.filter_findings(findings)], ["SEC001"]
+        )
+
+    def test_a_mistyped_scope_still_matches_nothing(self):
+        self.assertIsNone(suppression.marker("x = 1  # repo-sentinel: ignore-fil[SEC001]"))
 
 
 if __name__ == "__main__":

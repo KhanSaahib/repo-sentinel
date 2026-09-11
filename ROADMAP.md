@@ -86,6 +86,8 @@ outcome than a feature nobody wanted.
       same feature without the dependency on git's CLI being where we think
 - [x] A project config file (`.repo-sentinel.json`) for defaults, with
       per-rule and per-family disabling
+- [x] Rule-scoped suppression markers, so an exemption stays as narrow as the
+      reason for it and does not silently cover rules added later
 - [ ] Per-path rule configuration: "K8S004 is fine in examples/, not in
       deploy/". Needs a shape that does not turn into a policy language
 - [ ] Publish to PyPI so `pipx run repo-sentinel` works

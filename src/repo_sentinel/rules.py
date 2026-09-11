@@ -19,6 +19,7 @@ here, and every rule described here is one a scanner can emit.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Sequence
 
 from .findings import Severity
 
@@ -107,6 +108,30 @@ RULES: "dict[str, Rule]" = _rules(
     ("DC005", "port-on-every-interface", "Sensitive port published on every interface", Severity.HIGH),
     ("DC006", "floating-compose-image", "Service image tag can point elsewhere tomorrow", Severity.LOW),
 )
+
+
+def matcher(patterns: "Sequence[str]"):
+    """Build a predicate over rule ids, for the places a person names rules.
+
+    Patterns are rule ids or a family prefix ending in ``*`` -- ``K8S004``,
+    ``DC*``. Matching is case-insensitive because nobody remembers whether it
+    was ``k8s`` or ``K8S`` at the moment they are silencing something.
+
+    Both callers matter and are different: a project switching a rule off in
+    its config, and a line in a file saying which rule it means to suppress.
+    Sharing the syntax means the answer to "what do I write here" is the same
+    in both places.
+    """
+    exact = {pattern.strip().upper() for pattern in patterns if not pattern.strip().endswith("*")}
+    prefixes = tuple(
+        pattern.strip()[:-1].upper() for pattern in patterns if pattern.strip().endswith("*")
+    )
+
+    def matches(rule_id: str) -> bool:
+        upper = rule_id.upper()
+        return upper in exact or (bool(prefixes) and upper.startswith(prefixes))
+
+    return matches
 
 
 def get(rule_id: str) -> "Rule | None":
