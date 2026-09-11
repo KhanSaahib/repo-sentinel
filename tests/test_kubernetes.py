@@ -174,6 +174,58 @@ class TestSecretManifests(unittest.TestCase):
         self.assertEqual(scan(self.manifest("data", "password", "not!base64!")), [])
 
 
+class TestRbac(unittest.TestCase):
+    """Who may do what, which is where a cluster is usually given away."""
+
+    def role(self, kind, verbs, resources):
+        return (
+            f"apiVersion: rbac.authorization.k8s.io/v1\nkind: {kind}\n"
+            f"metadata:\n  name: r\nrules:\n  - apiGroups: [\"*\"]\n"
+            f"    resources: {resources}\n    verbs: {verbs}\n"
+        )
+
+    def binding(self, name, kind="ClusterRoleBinding"):
+        return (
+            f"apiVersion: rbac.authorization.k8s.io/v1\nkind: {kind}\n"
+            "metadata:\n  name: b\nroleRef:\n  kind: ClusterRole\n  name: cluster-admin\n"
+            f"subjects:\n  - kind: Group\n    name: {name}\n"
+        )
+
+    def test_a_wildcard_cluster_role_is_critical(self):
+        findings = scan(self.role("ClusterRole", '["*"]', '["*"]'))
+        self.assertEqual(findings[0].rule_id, "K8S009")
+        self.assertEqual(findings[0].severity, Severity.CRITICAL)
+
+    def test_a_namespaced_role_is_high_rather_than_critical(self):
+        findings = scan(self.role("Role", '["*"]', '["*"]'))
+        self.assertEqual(findings[0].severity, Severity.HIGH)
+
+    def test_scoped_verbs_are_not_a_finding(self):
+        self.assertEqual(scan(self.role("ClusterRole", '["get", "list"]', '["pods"]')), [])
+        self.assertEqual(scan(self.role("ClusterRole", '["*"]', '["pods"]')), [])
+
+    def test_block_style_lists_are_read_too(self):
+        text = (
+            "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\n"
+            "metadata:\n  name: r\nrules:\n  - resources:\n      - '*'\n"
+            "    verbs:\n      - '*'\n"
+        )
+        self.assertIn("K8S009", rule_ids(scan(text)))
+
+    def test_binding_to_everybody(self):
+        for name in ("system:anonymous", "system:unauthenticated", "system:authenticated"):
+            with self.subTest(name=name):
+                findings = scan(self.binding(name))
+                self.assertEqual(findings[0].rule_id, "K8S010")
+                self.assertIn("cluster-admin", findings[0].title)
+
+    def test_binding_to_a_service_account_is_ordinary(self):
+        self.assertEqual(scan(self.binding("app-service-account")), [])
+
+    def test_a_namespaced_binding_counts_as_well(self):
+        self.assertIn("K8S010", rule_ids(scan(self.binding("system:anonymous", "RoleBinding"))))
+
+
 class TestWorkloadKinds(unittest.TestCase):
     def test_containers_are_found_at_any_depth(self):
         text = (

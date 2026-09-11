@@ -287,6 +287,8 @@ of each mistake is absent.
 | K8S006 | Privilege handed back after being dropped | high |
 | K8S007 | Credential committed inside a Secret manifest | critical |
 | K8S008 | Container image tag can point elsewhere tomorrow | medium |
+| K8S009 | Role grants every verb on every resource | critical for a ClusterRole |
+| K8S010 | Binding grants to anonymous or all authenticated users | critical |
 
 Manifests are found by content, not by filename: a Kubernetes document is one
 with `apiVersion` and `kind` at its root. That beats guessing at `deploy/`,
@@ -307,6 +309,14 @@ contains still run (`privileged: true` in a chart is `privileged: true` when it
 is installed), and the two that conclude something from a value's *absence* --
 missing limits, a floating tag -- do not, because the values file supplies both
 and neither is in front of us.
+
+K8S009 and K8S010 are the RBAC pair, and they are TF004's cousins. A role with
+`verbs: ["*"]` on `resources: ["*"]` is indistinguishable from cluster-admin:
+whoever holds it can read every Secret in the cluster and grant themselves the
+rest. A binding whose subject is `system:anonymous`, `system:unauthenticated`
+or `system:authenticated` hands that to a category of everybody rather than to
+a workload -- the last of those is every service account in the cluster, which
+surprises people.
 
 K8S007 decodes what it finds. A `Secret` stores values base64-encoded, which is
 not encryption but is enough to hide a credential from every rule that reads

@@ -40,6 +40,10 @@ repository the tool can read at all: it grew from two file formats to six.
 - **Per-path configuration**: a `paths` table switches rules off under one glob
   rather than everywhere, using the `.gitignore` dialect matched by the same
   code that reads `.gitignore`.
+- **K8S009 and K8S010**, the RBAC pair: a Role or ClusterRole granting every
+  verb on every resource, and a binding whose subject is `system:anonymous`,
+  `system:unauthenticated` or `system:authenticated` -- the last of which is
+  every service account in the cluster.
 - **TF001 covers every cloud**, not only AWS: `azurerm_network_security_rule`
   (where "anywhere" is `*` or the service tag `Internet`), nested
   `security_rule` blocks, and `google_compute_firewall`, alongside the four

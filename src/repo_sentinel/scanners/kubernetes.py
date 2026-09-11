@@ -41,6 +41,18 @@ _HOST_NAMESPACES = {
 }
 
 _CONTAINER_KEYS = ("containers", "initContainers", "ephemeralContainers")
+
+#: Subjects that are not a person or a workload but a category of everybody.
+#: ``system:authenticated`` is every account the cluster will authenticate,
+#: which on a cluster with any external identity provider is a great many.
+_EVERYONE = {
+    "system:anonymous": "unauthenticated callers",
+    "system:unauthenticated": "unauthenticated callers",
+    "system:authenticated": "every authenticated account, including every service account",
+}
+
+_RBAC_ROLES = ("Role", "ClusterRole")
+_RBAC_BINDINGS = ("RoleBinding", "ClusterRoleBinding")
 _IMAGE_TAG = re.compile(r"^(?P<image>[^\s@]+?)(?::(?P<tag>[^:/@]+))?(?:@(?P<digest>sha256:\w+))?$")
 
 
@@ -280,6 +292,85 @@ def _check_images(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
         )
 
 
+def _check_rbac_wildcards(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
+    """K8S009: a role that grants every verb on every resource.
+
+    The Kubernetes equivalent of a wildcard IAM policy, and it reads the same
+    way: a subject holding this can create a pod that mounts the node, read
+    every Secret in the cluster, and grant itself anything it is missing.
+    """
+    kind = (document.get("kind") or yamlish.Node("", 0)).text.strip("\"'")
+    if kind not in _RBAC_ROLES:
+        return
+    rules = document.get("rules")
+    if rules is None:
+        return
+    for rule in rules.entries():
+        verbs = _values(rule.get("verbs"))
+        resources = _values(rule.get("resources"))
+        if "*" not in verbs or "*" not in resources:
+            continue
+        yield Finding(
+            rule_id="K8S009",
+            severity=Severity.CRITICAL if kind == "ClusterRole" else Severity.HIGH,
+            title=f"{_describe(document)} grants every verb on every resource",
+            path=path,
+            line=(rule.get("verbs") or rule).line,
+            evidence='verbs: ["*"] with resources: ["*"]',
+            remediation=(
+                "A wildcard role is indistinguishable from cluster-admin: it "
+                "can read every Secret and grant itself the rest. List the "
+                "verbs and resources the workload uses; `kubectl auth "
+                "can-i --list` will tell you which they are."
+            ),
+        )
+
+
+def _check_rbac_subjects(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
+    """K8S010: a binding whose subject is a category of everybody."""
+    kind = (document.get("kind") or yamlish.Node("", 0)).text.strip("\"'")
+    if kind not in _RBAC_BINDINGS:
+        return
+    subjects = document.get("subjects")
+    role = (document.get("roleRef", "name") or yamlish.Node("", 0)).text.strip("\"'")
+    if subjects is None:
+        return
+    for subject in subjects.entries():
+        name_node = subject.get("name")
+        if name_node is None:
+            continue
+        name = name_node.text.strip().strip("\"'").lower()
+        who = _EVERYONE.get(name)
+        if who is None:
+            continue
+        granted = f" the {role!r} role" if role else ""
+        yield Finding(
+            rule_id="K8S010",
+            severity=Severity.CRITICAL,
+            title=f"{_describe(document)} grants{granted} to {name}",
+            path=path,
+            line=name_node.line,
+            evidence=f"subject {name}",
+            remediation=(
+                f"This binds to {who}. Bind to the service account of the "
+                "workload that needs the permission, and check the role it "
+                "points at while you are there."
+            ),
+        )
+
+
+def _values(node: "yamlish.Node | None") -> "list[str]":
+    """A YAML list, or an inline one, as plain strings."""
+    if node is None:
+        return []
+    if node.is_list:
+        return [entry.text.strip().strip("\"'") for entry in node.entries()]
+    text = node.text.strip()
+    if text.startswith("[") and text.endswith("]"):
+        return [part.strip().strip("\"'") for part in text[1:-1].split(",") if part.strip()]
+    return [text.strip("\"'")] if text else []
+
+
 def _check_secret_data(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
     """K8S007: a credential committed inside a Secret manifest.
 
@@ -359,6 +450,8 @@ _POSITIVE_RULES = (
     _check_capabilities,
     _check_root,
     _check_secret_data,
+    _check_rbac_wildcards,
+    _check_rbac_subjects,
 )
 
 #: Rules that conclude something from what is *missing* or from a value's

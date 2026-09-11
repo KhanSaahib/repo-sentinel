@@ -106,6 +106,8 @@ RULES: "dict[str, Rule]" = _rules(
     ("K8S006", "capability-granted", "Privilege handed back after being dropped", Severity.HIGH),
     ("K8S007", "secret-in-manifest", "Credential committed inside a Secret manifest", Severity.CRITICAL),
     ("K8S008", "floating-image", "Container image tag can point elsewhere tomorrow", Severity.MEDIUM),
+    ("K8S009", "rbac-wildcard", "Role grants every verb on every resource", Severity.CRITICAL),
+    ("K8S010", "rbac-binds-everyone", "Binding grants to anonymous or all authenticated users", Severity.CRITICAL),
     ("DC001", "privileged-service", "Compose service runs privileged", Severity.CRITICAL),
     ("DC002", "host-bind-mount", "Service bind-mounts a path that grants the host", Severity.CRITICAL),
     ("DC003", "host-namespace-share", "Service shares a host namespace", Severity.HIGH),

