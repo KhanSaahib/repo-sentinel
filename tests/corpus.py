@@ -316,6 +316,20 @@ steps:
     displayName: Build
 """
 
+CIRCLECI_FILE = """version: 2.1
+orbs:
+  aws-cli: circleci/aws-cli@volatile
+jobs:
+  build:
+    docker:
+      - image: cimg/node
+    steps:
+      - run:
+          name: Greet
+          command: echo "Building $CIRCLE_BRANCH"
+      - run: curl -sSL https://get.example.invalid/i.sh | sh
+"""
+
 #: ``(path, text)`` pairs, in the shape :func:`iter_files` yields.
 FILES = (
     ("src/config.py", SECRETS_FILE),
@@ -333,6 +347,7 @@ FILES = (
     ("web/.npmrc", NPMRC_FILE),
     ("playbooks/web.yml", PLAYBOOK_FILE),
     ("azure-pipelines.yml", AZURE_PIPELINE_FILE),
+    (".circleci/config.yml", CIRCLECI_FILE),
 )
 
 #: ``(path, text)`` pairs, in the shape the walk reports, with None for the

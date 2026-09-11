@@ -8,6 +8,7 @@ from repo_sentinel import rules
 from repo_sentinel.scanners import (
     ansible,
     azure,
+    circleci,
     cloudformation,
     compose,
     dependencies,
@@ -28,6 +29,8 @@ from repo_sentinel.scanners import (
 CONTENT_SCANNERS = (
     ansible,
     azure,
+    circleci,
+    circleci,
     cloudformation,
     compose,
     dependencies,
@@ -141,6 +144,9 @@ class TestCatalogue(unittest.TestCase):
             93: "Ninety-three", 94: "Ninety-four", 95: "Ninety-five",
             96: "Ninety-six", 97: "Ninety-seven", 98: "Ninety-eight",
             99: "Ninety-nine", 100: "One hundred",
+            101: "One hundred and one", 102: "One hundred and two",
+            103: "One hundred and three", 104: "One hundred and four",
+            105: "One hundred and five", 106: "One hundred and six",
         }
         spelled = words.get(len(rules.RULES))
         self.assertIsNotNone(spelled, "extend the number words in this test")

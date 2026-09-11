@@ -73,9 +73,9 @@ outcome than a feature nobody wanted.
 - [x] Ansible playbooks and task files
 - [x] Azure Pipelines, which expands its variables into the shell exactly as
       the other two do
-- [ ] CircleCI and Jenkinsfiles, the two remaining CI systems people actually
-      have. A Jenkinsfile is Groovy, which this tool has no business parsing;
-      the honest scope there is its shell steps and nothing else
+- [x] CircleCI, including orbs pinned to a reference the registry moves
+- [ ] Jenkinsfiles. Groovy, which this tool has no business parsing; the honest
+      scope there is its shell steps and nothing else
 
 - [x] Dockerfile checks: running as root, `curl | sh`, unpinned base images,
       secrets in `ARG`/`ENV`, `ADD` from a URL, disabled TLS verification

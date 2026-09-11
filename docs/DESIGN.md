@@ -86,6 +86,21 @@ Two consequences worth knowing before touching a rule:
 If you find yourself lowering a severity because a rule is unreliable, lower
 the confidence instead. That is what it is for.
 
+## Four CI systems, one bug
+
+GitHub expands `${{ github.event.issue.title }}`, GitLab expands
+`$CI_COMMIT_TITLE`, Azure expands `$(Build.SourceVersionMessage)`, CircleCI
+expands `$CIRCLE_BRANCH` -- each into the command line, before the shell parses
+it, each from a value an outside contributor writes. The syntax differs; the
+bug does not.
+
+`scanners/ci.py` holds the parts that do not depend on syntax: finding the
+shell lines in a step, and the list of fields that cannot carry an injection.
+Each scanner keeps its own pattern and vocabulary, because those are exactly
+what differ. The reason to share the rest is not brevity -- it is that a fix
+found in one system belongs in all of them, and the harmless-fields list was
+written for GitHub and then written again, identically, for Azure.
+
 ## The catalogue
 
 `rules.py` lists every rule, and the scanners hold the detection logic and the

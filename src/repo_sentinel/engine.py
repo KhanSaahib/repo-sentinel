@@ -12,6 +12,7 @@ from .findings import Finding
 from .scanners import (
     ansible,
     azure,
+    circleci,
     cloudformation,
     compose,
     dependencies,
@@ -88,6 +89,7 @@ def scan(
         dependencies,
         ansible,
         azure,
+        circleci,
     ):
         found += scanner.scan_files(files, honour_markers=honour_markers)
 

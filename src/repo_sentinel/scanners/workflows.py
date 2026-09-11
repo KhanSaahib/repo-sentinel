@@ -20,6 +20,7 @@ import re
 from collections.abc import Iterable, Iterator
 
 from .. import suppression
+from . import ci
 from ..findings import Confidence, Finding, Severity
 
 _WORKFLOW_DIR = ".github/workflows"
@@ -49,17 +50,11 @@ _STEP_START = re.compile(r"^(?P<indent>\s*)-\s+\S")
 #: Everything else is a third party, however popular.
 _FIRST_PARTY_OWNERS = frozenset({"actions", "github"})
 
-#: Fields of an otherwise untrusted context that cannot carry an injection.
-#: A pull request number is an integer and a commit sha is forty hex
-#: characters; GitHub decides both. Reporting them is how a rule that matters
-#: gets a reputation for crying wolf.
-_HARMLESS_FIELDS = frozenset(
-    {
-        "number", "id", "node_id", "sha", "merged", "state", "draft", "locked",
-        "created_at", "updated_at", "closed_at", "merged_at", "commits",
-        "additions", "deletions", "changed_files", "comments", "review_comments",
-    }
-)
+#: Fields of an otherwise untrusted context that cannot carry an injection --
+#: a pull request number is an integer, a commit sha is forty hex characters,
+#: and GitHub decides both. Shared with the other CI scanners, because this
+#: lesson was learned here and then learned again, identically, on Azure.
+_HARMLESS_FIELDS = ci.HARMLESS_FIELDS
 
 #: Contexts an outside contributor can write to. Interpolating any of these
 #: into a shell command hands them the runner.

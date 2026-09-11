@@ -24,6 +24,7 @@ import re
 from collections.abc import Iterable, Iterator
 
 from .. import suppression, wellknown, yamlish
+from . import ci
 from ..findings import Confidence, Finding, Severity
 
 _YAML_SUFFIXES = (".yaml", ".yml")
@@ -50,10 +51,6 @@ _UNTRUSTED = re.compile(
     r"\$\(\s*(?P<name>" + "|".join(re.escape(name) for name in _UNTRUSTED_VARIABLES) + r")\s*\)",
     re.IGNORECASE,
 )
-
-#: Fields of those that cannot carry an injection: an id is a number, a commit
-#: id is hex, and Azure picks both.
-_HARMLESS = ("pullrequestid", "sourcecommitid")
 
 _SCRIPT_KEYS = ("script", "bash", "powershell", "pwsh")
 _IMAGE_TAG = re.compile(r"^(?P<image>[^\s@]+?)(?::(?P<tag>[^:/@]+))?(?:@(?P<digest>sha256:\w+))?$")
@@ -99,20 +96,17 @@ def _describe(step: "yamlish.Node") -> str:
 def _check_injection(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
     """AZ001: text an outsider wrote, expanded into a command line."""
     for step in _steps(document):
-        for key in _SCRIPT_KEYS:
-            node = step.get(key)
-            if node is None:
-                continue
-            match = _UNTRUSTED.search(node.text)
-            if match is None or match.group("name").split(".")[-1].lower() in _HARMLESS:
+        for line, command in ci.script_lines(step, _SCRIPT_KEYS):
+            match = next(ci.untrusted_matches(command, _UNTRUSTED, ci.HARMLESS_FIELDS), None)
+            if match is None:
                 continue
             yield Finding(
                 rule_id="AZ001",
                 severity=Severity.CRITICAL,
                 title=f"{_describe(step)} expands $({match.group('name')}) into a command",
                 path=path,
-                line=node.line,
-                evidence=node.text.strip()[:120],
+                line=line,
+                evidence=command.strip()[:120],
                 remediation=(
                     "Azure substitutes this before the shell parses the line, "
                     "so a commit message containing $(...) or a backtick runs "

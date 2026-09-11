@@ -23,6 +23,7 @@ import re
 from collections.abc import Iterable, Iterator
 
 from .. import suppression, wellknown, yamlish
+from . import ci
 from ..findings import Confidence, Finding, Severity
 
 _YAML_SUFFIXES = (".yaml", ".yml")
@@ -108,15 +109,7 @@ def _jobs(document: "yamlish.Node") -> "Iterator[tuple[str, yamlish.Node]]":
 
 def _script_lines(node: "yamlish.Node") -> "Iterator[tuple[int, str]]":
     """Every shell line in a job, from all three script keys."""
-    for key in _SCRIPT_KEYS:
-        section = node.get(key)
-        if section is None:
-            continue
-        if section.is_list:
-            for entry in section.entries():
-                yield entry.line, entry.text
-        elif section.text:
-            yield section.line, section.text
+    return ci.script_lines(node, _SCRIPT_KEYS)
 
 
 def _image_of(node: "yamlish.Node") -> "yamlish.Node | None":
@@ -130,7 +123,7 @@ def _image_of(node: "yamlish.Node") -> "yamlish.Node | None":
 def _check_injection(path: str, name: str, job: "yamlish.Node") -> "Iterator[Finding]":
     """GL002: text an outsider wrote, substituted into a shell command."""
     for line_number, line in _script_lines(job):
-        match = _UNTRUSTED.search(line)
+        match = next(ci.untrusted_matches(line, _UNTRUSTED, ci.HARMLESS_FIELDS), None)
         if match is None:
             continue
         yield Finding(

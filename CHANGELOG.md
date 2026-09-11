@@ -70,6 +70,12 @@ repository the tool can read at all: it grew from two file formats to six.
   changed to gain this.
 - **Composer** joins the dependency manifests, with its own install-time
   lifecycle scripts.
+- **CircleCI** (CC001–CC004): the same injection a fourth time, plus orbs
+  pinned to `@volatile` or `@dev:`, which the registry is documented to move.
+  What the four CI scanners share now lives in one module: finding the shell
+  lines in a step, and the list of fields that cannot carry an injection --
+  which was learned on GitHub Actions and then learned again, identically, on
+  Azure.
 - **Azure Pipelines** (AZ001–AZ004): `$(Build.SourceVersionMessage)` expanded
   into a command -- the third CI system and the third appearance of the same
   bug -- plus self-hosted pools, floating container images, and `system.debug`.

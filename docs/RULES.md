@@ -318,6 +318,24 @@ included, into a log that is often readable by anyone who can see the project.
 Pipelines are recognised by name or by shape, since a template can live in any
 file and be included from anywhere.
 
+## CircleCI
+
+| Rule | Finds | Severity |
+| --- | --- | --- |
+| CC001 | Outsider-supplied variable expanded into a command | critical |
+| CC002 | Orb pinned to a reference the registry moves | high |
+| CC003 | Job image can point elsewhere tomorrow | medium |
+| CC004 | Step pipes a download into a shell | high |
+
+The fourth CI system, and the same rules the other three needed --
+`$CIRCLE_BRANCH` is chosen by whoever opened the pull request, exactly as
+`$CI_COMMIT_TITLE` and `${{ github.event.issue.title }}` are.
+
+CC002 is CircleCI's own: `circleci/aws-cli@volatile` and `somebody/orb@dev:branch`
+are *documented* as moving references, so the registry hands you whatever was
+published last. That is a supply chain you do not control, written down in the
+file.
+
 ## Terraform
 
 | Rule | Finds | Severity |
