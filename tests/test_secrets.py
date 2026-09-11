@@ -204,10 +204,22 @@ class TestDocumentation(unittest.TestCase):
             secrets.scan_text("app/config.py", self.LINE)[0].confidence, Confidence.MEDIUM
         )
 
-    def test_a_real_key_in_a_readme_is_still_a_real_key(self):
+    def test_a_key_in_a_readme_is_reported_but_believed_less(self):
+        # Grafana's manual contains two dozen service account tokens and none
+        # of them is real. A live key does get pasted into a README, so the
+        # finding stays and keeps its severity; it is --min-confidence high
+        # that stops hearing about it.
         finding = secrets.scan_text("README.md", f'k = "{fixtures.REALISTIC_AWS_KEY_ID}"')[0]
-        self.assertEqual(finding.confidence, Confidence.HIGH)
+        self.assertEqual(finding.confidence, Confidence.MEDIUM)
         self.assertEqual(finding.severity, Severity.CRITICAL)
+
+    def test_a_documented_shape_in_a_fixture_tree_keeps_its_confidence(self):
+        # Different mistake, different weighing: the classic way a real key
+        # reaches a repository is a test that once talked to a real service.
+        finding = secrets.scan_text(
+            "tests/fixtures/creds.py", f'k = "{fixtures.REALISTIC_AWS_KEY_ID}"'
+        )[0]
+        self.assertEqual(finding.confidence, Confidence.HIGH)
 
 
 class TestUrlCredentials(unittest.TestCase):

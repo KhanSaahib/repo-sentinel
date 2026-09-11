@@ -44,10 +44,13 @@ repository the tool can read at all: it grew from two file formats to six.
   provider patterns rejects four fifths of lines before the expensive pass
   runs. With the quadratic YAML fix, the Python standard library went from 5.1s
   to 1.5s and Prometheus from not finishing in five minutes to 5.8s.
-- **Confidence is weighed by where a file sits**: a secret rule already at
-  medium confidence drops to low in fixture trees and in documentation. The
-  provider rules keep theirs everywhere. On the GitLab runner repository this
-  takes `--min-confidence medium` from 70 findings to 27.
+- **Confidence is weighed by where a file sits**, and the two places are
+  weighed differently. In documentation every secret finding drops one step,
+  documented token shapes included, because a credential in prose is usually an
+  example -- Grafana's manual holds two dozen service account tokens and none
+  is real. In a fixture tree only the guessing rules drop, because the classic
+  way a real key reaches a repository is a test that once talked to a real
+  service. Nothing is silenced either way.
 - **Twelve more provider rules** (SEC023–SEC034): GitLab personal access and
   runner registration tokens, DigitalOcean, Shopify, Databricks, Doppler,
   Grafana, Telegram, Postman, Linear, Atlassian and Square. All documented

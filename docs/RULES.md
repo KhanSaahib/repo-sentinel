@@ -94,17 +94,21 @@ too lax for the second. What generalises is the ratio: a generated credential
 lands near the ceiling of what its alphabet and length allow, and a hand-written
 value does not. The floor is 75% of that ceiling.
 
-A guess is worth less in some places than others. Any secret rule that was
-already at medium confidence drops to low in two of them: fixture trees
-(`testdata/`, `fixtures/`, `spec/`, `*_test.*`), where invented credentials are
-the point, and documentation (`docs/`, `*.md`, `*.rst`), where a credential is
-an example because that is what documentation is for. Nothing is silenced --
-a real key does get committed to a fixture directory, and that one is exactly
-what nobody is looking for -- but `--min-confidence medium` then clears the
-noise those trees are full of.
+A finding is weighed by where it was made, and the two places are weighed
+differently because the mistakes people make in them differ.
 
-The provider rules are untouched by this. They were not guessing, and a live
-AWS key in a README is still a live AWS key.
+In **documentation** (`docs/`, `*.md`, `*.rst`) every secret finding drops one
+step of confidence, documented token shapes included. A credential written into
+prose is usually an example, which is what prose is for: Grafana's own manual
+contains two dozen service account tokens and not one of them is real. Nothing
+is silenced -- a live key does get pasted into a README -- but
+`--min-confidence high` stops hearing about them.
+
+In a **fixture tree** (`testdata/`, `fixtures/`, `spec/`, `*_test.*`) only the
+rules that were already guessing drop. Entropy is worth less there because
+invented credentials are the point of a fixture. A documented token shape is
+not worth less, because the classic way a real key reaches a repository is a
+test that once talked to a real service.
 
 Placeholders are filtered before entropy is measured at all — `your-password-here`,
 `${DB_PASSWORD}`, `xxxxxxxx`, `changeme` — and so is structure that is not a

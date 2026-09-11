@@ -372,26 +372,44 @@ def scan_text(
 
 
 def _weigh_for_context(path: str, findings: "list[Finding]") -> "list[Finding]":
-    """Downgrade the rules that were already guessing, where a guess is worse.
+    """Weigh a finding by where it was made. Nothing is silenced.
 
-    Two places: fixture trees, where invented credentials are the point, and
-    documentation, where a credential is an example because that is what
-    documentation is for. Nothing is silenced -- a real key does get committed
-    to a fixture directory, and that one is exactly what nobody is looking for
-    -- but a rule that was already at medium confidence drops to low, and
-    ``--min-confidence medium`` then clears the noise these trees are full of.
+    Two places, and they are weighed differently because the mistakes people
+    make in them are different.
 
-    Rules that match a documented token shape are untouched. They were not
-    guessing, and a live AWS key in a README is still a live AWS key.
+    In **documentation**, every finding drops a step. A credential written into
+    prose is usually an example -- that is what prose is for -- and this is as
+    true of a documented token shape as of a high-entropy string: Grafana's own
+    manual contains two dozen service account tokens, none of them real. A live
+    key does get pasted into a README, so the finding stays; it is
+    ``--min-confidence high`` that stops hearing about it.
+
+    In a **fixture tree**, only the rules that were already guessing drop. The
+    entropy rules are worth less there because invented credentials are the
+    point of a fixture. A documented token shape is not worth less, because the
+    classic way a real key reaches a repository is a test that once talked to a
+    real service.
     """
-    if not findings or not (wellknown.is_test_path(path) or wellknown.is_prose_path(path)):
+    if not findings:
         return findings
-    return [
-        dataclasses.replace(finding, confidence=Confidence.LOW)
-        if finding.confidence == Confidence.MEDIUM
-        else finding
-        for finding in findings
-    ]
+    prose = wellknown.is_prose_path(path)
+    fixtures = wellknown.is_test_path(path)
+    if not (prose or fixtures):
+        return findings
+
+    weighed = []
+    for finding in findings:
+        if prose and finding.confidence > Confidence.LOW:
+            weighed.append(dataclasses.replace(finding, confidence=_one_step_down(finding.confidence)))
+        elif fixtures and finding.confidence == Confidence.MEDIUM:
+            weighed.append(dataclasses.replace(finding, confidence=Confidence.LOW))
+        else:
+            weighed.append(finding)
+    return weighed
+
+
+def _one_step_down(confidence: Confidence) -> Confidence:
+    return Confidence.MEDIUM if confidence == Confidence.HIGH else Confidence.LOW
 
 
 def scan_files(
