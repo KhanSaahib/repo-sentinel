@@ -339,7 +339,6 @@ def scan_line(
     *,
     allow_examples: bool = True,
     value_position: bool = False,
-    guessing_costs_less: bool = False,
 ) -> Iterator[Finding]:
     """Yield every finding in a single line of text.
 
@@ -350,10 +349,6 @@ def scan_line(
     ``value_position`` enables the bare-assignment rule, which only makes sense
     in the file formats :func:`has_value_positions` recognises.
 
-    ``guessing_costs_less`` lowers the confidence of the entropy rules, for the
-    directories where invented credentials are expected to live. It does not
-    silence them: a real key does get committed to a fixture tree, and the one
-    that does is exactly the one nobody is looking for.
     """
     # A marker that names no rules silences the line outright, so there is
     # nothing to look for. A marker that names rules leaves the rest of them
@@ -371,13 +366,7 @@ def scan_line(
     )
 
     yield from _scan_assignments(
-        path,
-        line_number,
-        line,
-        matched_spans,
-        allow_examples,
-        value_position,
-        guessing_costs_less,
+        path, line_number, line, matched_spans, allow_examples, value_position
     )
 
 
@@ -427,7 +416,6 @@ def _scan_assignments(
     matched_spans: list[tuple[int, int]],
     allow_examples: bool,
     value_position: bool,
-    guessing_costs_less: bool = False,
 ) -> Iterator[Finding]:
     """The two entropy rules, which differ only in how they find the value."""
     # Both rules need an assignment, and the quoted one needs a quote. Checking
@@ -482,7 +470,7 @@ def _scan_assignments(
                 "Move the value to an environment variable or secret store. "
                 f"Add a trailing '# {IGNORE_MARKER}' comment if this is a false positive."
             ),
-            confidence=Confidence.LOW if guessing_costs_less else Confidence.MEDIUM,
+            confidence=Confidence.MEDIUM,
         )
 
 
@@ -594,7 +582,6 @@ def scan_text(path: str, text: str, *, allow_examples: bool = True) -> list[Find
         return []
 
     value_position = has_value_positions(path)
-    guessing_costs_less = wellknown.is_test_path(path)
     findings = marks.filter_findings(
         finding
         for number, line in enumerate(text.splitlines(), start=1)
@@ -605,7 +592,6 @@ def scan_text(path: str, text: str, *, allow_examples: bool = True) -> list[Find
             line,
             allow_examples=allow_examples,
             value_position=value_position,
-            guessing_costs_less=guessing_costs_less,
         )
     )
 
@@ -617,7 +603,30 @@ def scan_text(path: str, text: str, *, allow_examples: bool = True) -> list[Find
     warning = suppression.unterminated_finding(path, marks)
     if warning is not None:
         findings.append(warning)
-    return findings
+    return _weigh_for_context(path, findings)
+
+
+def _weigh_for_context(path: str, findings: "list[Finding]") -> "list[Finding]":
+    """Downgrade the rules that were already guessing, where a guess is worse.
+
+    Two places: fixture trees, where invented credentials are the point, and
+    documentation, where a credential is an example because that is what
+    documentation is for. Nothing is silenced -- a real key does get committed
+    to a fixture directory, and that one is exactly what nobody is looking for
+    -- but a rule that was already at medium confidence drops to low, and
+    ``--min-confidence medium`` then clears the noise these trees are full of.
+
+    Rules that match a documented token shape are untouched. They were not
+    guessing, and a live AWS key in a README is still a live AWS key.
+    """
+    if not findings or not (wellknown.is_test_path(path) or wellknown.is_prose_path(path)):
+        return findings
+    return [
+        dataclasses.replace(finding, confidence=Confidence.LOW)
+        if finding.confidence == Confidence.MEDIUM
+        else finding
+        for finding in findings
+    ]
 
 
 def scan_files(

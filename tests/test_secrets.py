@@ -160,6 +160,29 @@ class TestFixtureTrees(unittest.TestCase):
         self.assertEqual(finding.severity, Severity.CRITICAL)
 
 
+class TestDocumentation(unittest.TestCase):
+    """Prose is where credentials are examples, because that is what it is for."""
+
+    LINE = 'api_key = "Qq7Zx9Lm2Pv4Rt8WcY6h"'
+
+    def test_a_guess_in_documentation_is_reported_at_lower_confidence(self):
+        for path in ("README.md", "docs/install.md", "documentation/guide.rst"):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    secrets.scan_text(path, self.LINE)[0].confidence, Confidence.LOW
+                )
+
+    def test_source_keeps_its_confidence(self):
+        self.assertEqual(
+            secrets.scan_text("app/config.py", self.LINE)[0].confidence, Confidence.MEDIUM
+        )
+
+    def test_a_real_key_in_a_readme_is_still_a_real_key(self):
+        finding = secrets.scan_text("README.md", f'k = "{fixtures.REALISTIC_AWS_KEY_ID}"')[0]
+        self.assertEqual(finding.confidence, Confidence.HIGH)
+        self.assertEqual(finding.severity, Severity.CRITICAL)
+
+
 class TestUrlCredentials(unittest.TestCase):
     def test_reports_a_password_in_a_connection_string(self):
         findings = secrets.scan_text("db.py", 'DSN = "postgres://svc:Xk92mQp7Lz4TvB8n@db.internal:5432/app"')

@@ -101,6 +101,22 @@ def is_test_path(path: str) -> bool:
     return any(marker in name for marker in _TEST_NAME_MARKERS)
 
 
+#: Extensions and directories that hold prose. A credential written in
+#: documentation is overwhelmingly an example -- that is what documentation is
+#: for -- and the ones that are not are usually caught by a provider rule,
+#: which keeps its confidence everywhere.
+_PROSE_SUFFIXES = (".md", ".markdown", ".rst", ".adoc", ".asciidoc", ".txt")
+_PROSE_DIRECTORIES = frozenset({"docs", "doc", "documentation", "website", "site", "man"})
+
+
+def is_prose_path(path: str) -> bool:
+    """True when a file is documentation rather than something that runs."""
+    parts = path.replace("\\", "/").split("/")
+    if any(part.lower().startswith(tuple(_PROSE_DIRECTORIES)) for part in parts[:-1]):
+        return True
+    return parts[-1].lower().endswith(_PROSE_SUFFIXES)
+
+
 def is_critical_host_path(path: str) -> bool:
     """True when mounting ``path`` hands over the host.
 

@@ -40,6 +40,10 @@ repository the tool can read at all: it grew from two file formats to six.
 - **Per-path configuration**: a `paths` table switches rules off under one glob
   rather than everywhere, using the `.gitignore` dialect matched by the same
   code that reads `.gitignore`.
+- **Confidence is weighed by where a file sits**: a secret rule already at
+  medium confidence drops to low in fixture trees and in documentation. The
+  provider rules keep theirs everywhere. On the GitLab runner repository this
+  takes `--min-confidence medium` from 70 findings to 27.
 - **K8S009 and K8S010**, the RBAC pair: a Role or ClusterRole granting every
   verb on every resource, and a binding whose subject is `system:anonymous`,
   `system:unauthenticated` or `system:authenticated` -- the last of which is

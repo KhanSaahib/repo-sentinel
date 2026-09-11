@@ -76,10 +76,15 @@ _STRUCTURED = (
     # A quoted type expression: tuple[int, str, int], dict[str, Node]. Common
     # wherever annotations are strings, and this one caught this project out.
     re.compile(r"^[A-Za-z_][\w.]*\[[^\]]*\]$"),
-    # A screaming-snake identifier: AZURE_FEDERATED_TOKEN_FILE is the *name* of
-    # an environment variable, not its value. Real tokens in this shape do not
-    # exist; they carry mixed case, digits and punctuation.
-    re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$"),
+    # A screaming identifier, snake or kebab: AZURE_FEDERATED_TOKEN_FILE is the
+    # name of an environment variable and PRIVATE-TOKEN is the name of an HTTP
+    # header. Real tokens in this shape do not exist; they carry mixed case,
+    # digits and punctuation.
+    re.compile(r"^[A-Z][A-Z0-9]*(?:[-_][A-Z0-9]+)+$"),
+    # Camel or Pascal case with no digits: "ImagePullSecret", "privateToken".
+    # Identifiers assigned to identifier-shaped names, which is what a
+    # constants file is. A generated credential carries digits or punctuation.
+    re.compile(r"^[A-Za-z][a-z]*(?:[A-Z][a-z]+)+$"),
     # An all-lowercase relative path: "testdata/secret_key". Anchored to
     # lowercase on purpose -- a base64 blob containing slashes has mixed case,
     # so this does not swallow one.
@@ -158,13 +163,17 @@ def entropy_floor(value: str) -> float:
 #: ``"GITHUB_TOKEN_${org^^}"`` is a variable name being assembled.
 _EMBEDDED_INTERPOLATION = re.compile(r"\$\{|\$\(|\{\{|%\(")
 
+#: An angle-bracket placeholder anywhere in a value: "glrt-<TOKEN>" is what
+#: documentation writes where a real token will go.
+_ANGLE_PLACEHOLDER = re.compile(r"<[A-Za-z_][\w .-]*>")
+
 
 def looks_like_placeholder(value: str) -> bool:
     """True when a value is obviously a stand-in rather than a real credential."""
     stripped = value.strip()
     if not stripped or _PLACEHOLDER.match(stripped):
         return True
-    if _EMBEDDED_INTERPOLATION.search(stripped):
+    if _EMBEDDED_INTERPOLATION.search(stripped) or _ANGLE_PLACEHOLDER.search(stripped):
         return True
     if any(pattern.match(stripped) for pattern in _STRUCTURED):
         return True

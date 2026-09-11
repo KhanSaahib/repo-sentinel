@@ -93,6 +93,11 @@ class TestLooksGenerated(unittest.TestCase):
             "*externalAuthorization",
             "type!=kubernetes.io/dockercfg,type!=helm.sh/release.v1",
             "tracing.yaml",
+            # From the GitLab runner: an HTTP header name, a placeholder in
+            # documentation, and a constant holding a Kubernetes type name.
+            "PRIVATE-TOKEN",
+            "glrt-<TOKEN>",
+            "ImagePullSecret",
         ):
             with self.subTest(value=value):
                 self.assertFalse(heuristics.looks_generated(value))

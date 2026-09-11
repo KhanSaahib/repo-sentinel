@@ -80,11 +80,17 @@ too lax for the second. What generalises is the ratio: a generated credential
 lands near the ceiling of what its alphabet and length allow, and a hand-written
 value does not. The floor is 75% of that ceiling.
 
-A guess is worth less in a fixture tree, so SEC100 and SEC101 drop to low
-confidence under `testdata/`, `fixtures/`, `spec/` and in `*_test.*` files. They
-are not silenced there: a real key does get committed to a fixture directory,
-and that one is exactly what nobody is looking for. The provider rules keep
-their confidence everywhere, because they are not guessing.
+A guess is worth less in some places than others. Any secret rule that was
+already at medium confidence drops to low in two of them: fixture trees
+(`testdata/`, `fixtures/`, `spec/`, `*_test.*`), where invented credentials are
+the point, and documentation (`docs/`, `*.md`, `*.rst`), where a credential is
+an example because that is what documentation is for. Nothing is silenced --
+a real key does get committed to a fixture directory, and that one is exactly
+what nobody is looking for -- but `--min-confidence medium` then clears the
+noise those trees are full of.
+
+The provider rules are untouched by this. They were not guessing, and a live
+AWS key in a README is still a live AWS key.
 
 Placeholders are filtered before entropy is measured at all — `your-password-here`,
 `${DB_PASSWORD}`, `xxxxxxxx`, `changeme` — and so is structure that is not a
