@@ -71,6 +71,9 @@ _STRUCTURED = (
     re.compile(r"^\d{4}-\d{2}-\d{2}[T \d:.+Z-]*$", re.I),  # timestamps
     re.compile(r"^[A-Za-z_][\w-]*(?:\.[A-Za-z_][\w-]*){2,}$"),  # com.example.thing
     re.compile(r"^[\[{]"),                                # a list or object, not a value
+    # A quoted type expression: tuple[int, str, int], dict[str, Node]. Common
+    # wherever annotations are strings, and this one caught this project out.
+    re.compile(r"^[A-Za-z_][\w.]*\[[^\]]*\]$"),
     # Words joined by hyphens or underscores: "unstructured", "content-type",
     # "Proxy-Authorization". Generated credentials carry digits
     # or mixed case; a pure word-list slug is vocabulary. The cost is that a

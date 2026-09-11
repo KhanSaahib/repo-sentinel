@@ -11,6 +11,8 @@ rejected by GitHub's push protection, correctly, and no fixture is worth
 costing a person a judgement call.
 """
 
+import base64
+
 import fixtures
 
 _ALNUM = "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4z"
@@ -18,6 +20,11 @@ _ALNUM = "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4z"
 
 def _filler(length, alphabet=_ALNUM):
     return (alphabet * (length // len(alphabet) + 1))[:length]
+
+
+def _b64(value):
+    """Encode the way a Kubernetes Secret does, so K8S007 has to decode it."""
+    return base64.b64encode(value.encode()).decode()
 
 
 SECRETS_FILE = "\n".join(
@@ -128,6 +135,35 @@ data "aws_iam_policy_document" "admin" {
 }
 """
 
+MANIFEST_FILE = """apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  template:
+    spec:
+      hostNetwork: true
+      containers:
+        - name: app
+          image: nginx
+          securityContext:
+            privileged: true
+            runAsUser: 0
+            capabilities:
+              add: ["SYS_ADMIN"]
+      volumes:
+        - name: sock
+          hostPath:
+            path: /var/run/docker.sock
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db
+data:
+  password: """ + _b64("Tv8nRw1YXk92mQp7Lz4T") + """
+"""
+
 #: ``(path, text)`` pairs, in the shape :func:`iter_files` yields.
 FILES = (
     ("src/config.py", SECRETS_FILE),
@@ -136,4 +172,5 @@ FILES = (
     (".github/workflows/risky.yml", WORKFLOW_FILE),
     ("Dockerfile", DOCKERFILE),
     ("infra/main.tf", TERRAFORM_FILE),
+    ("deploy/web.yaml", MANIFEST_FILE),
 )

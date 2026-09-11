@@ -7,7 +7,7 @@ import time
 
 from .discovery import DEFAULT_EXCLUDES, iter_files
 from .findings import Finding
-from .scanners import dockerfiles, secrets, terraform, workflows
+from .scanners import dockerfiles, kubernetes, secrets, terraform, workflows
 
 
 @dataclasses.dataclass(frozen=True)
@@ -40,6 +40,7 @@ def scan(
     found += workflows.scan_files(files)
     found += dockerfiles.scan_files(files)
     found += terraform.scan_files(files)
+    found += kubernetes.scan_files(files)
 
     return ScanReport(
         findings=sorted(found, key=lambda finding: finding.sort_key),

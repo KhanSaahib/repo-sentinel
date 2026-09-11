@@ -1,0 +1,234 @@
+"""Enough YAML to ask structural questions, and no more.
+
+The workflow scanner gets by on indentation heuristics because the questions it
+asks are shallow. Kubernetes manifests are not like that: "does this container
+set resource limits" is a question about a path four levels down a document,
+and the honest answer to "is there a privileged container here" cannot be found
+by grepping for ``privileged: true`` -- that line means one thing under
+``securityContext`` and nothing at all under ``annotations``.
+
+So this module reads the subset of YAML that configuration is actually written
+in: block mappings, block sequences, scalars, block scalars, inline flow
+collections kept as raw text, and multi-document streams. Every node carries
+the line it started on, because a finding without a line number is a finding
+nobody acts on.
+
+What it does not do, and what a rule built on it must therefore never claim to
+have checked: anchors and aliases, merge keys, tags, multi-line flow
+collections, and the several exotic scalar forms. A document using them parses
+into something incomplete rather than something wrong -- unknown structure
+becomes a scalar string, which reads as "no nested value here". Rules degrade
+to silence, which is the safe direction for a parser this small.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import re
+from collections.abc import Iterator
+from typing import Union
+
+_COMMENT_OR_BLANK = re.compile(r"^\s*(?:#.*)?$")
+_DOCUMENT_BREAK = re.compile(r"^---\s*(?:#.*)?$")
+_KEY = re.compile(
+    r"""^(?P<key>"[^"]*"|'[^']*'|[^:#\s][^:#]*?)\s*:\s*(?P<value>.*?)\s*$"""
+)
+_ITEM = re.compile(r"^-(?:\s+(?P<rest>.*?))?\s*$")
+_BLOCK_SCALAR = re.compile(r"^[|>][+-]?\d*$")
+
+
+@dataclasses.dataclass(frozen=True)
+class Node:
+    """One value, and the line it began on.
+
+    ``value`` is a ``dict`` for a mapping, a ``list`` for a sequence, and a
+    ``str`` for everything else -- including the flow collections this parser
+    keeps as raw text, so that a rule wanting ``[a, b]`` can match it and a rule
+    wanting structure correctly finds none.
+    """
+
+    value: "Union[dict, list, str]"
+    line: int
+
+    @property
+    def is_map(self) -> bool:
+        return isinstance(self.value, dict)
+
+    @property
+    def is_list(self) -> bool:
+        return isinstance(self.value, list)
+
+    @property
+    def text(self) -> str:
+        return self.value if isinstance(self.value, str) else ""
+
+    def get(self, *keys: str) -> "Node | None":
+        """Follow a path of mapping keys, or return None the moment it breaks."""
+        node: "Node | None" = self
+        for key in keys:
+            if node is None or not node.is_map:
+                return None
+            node = node.value.get(key)  # type: ignore[union-attr]
+        return node
+
+    def items(self) -> "Iterator[tuple[str, Node]]":
+        if self.is_map:
+            yield from self.value.items()  # type: ignore[union-attr]
+
+    def entries(self) -> "Iterator[Node]":
+        """The elements of a sequence, or nothing for anything else."""
+        if self.is_list:
+            yield from self.value  # type: ignore[misc]
+
+    def truthy(self) -> bool:
+        return self.text.strip().strip("\"'").lower() in ("true", "yes", "on")
+
+    def falsy(self) -> bool:
+        return self.text.strip().strip("\"'").lower() in ("false", "no", "off")
+
+    def walk(self) -> "Iterator[tuple[str, Node]]":
+        """Every node beneath this one, as ``(key, node)``.
+
+        The key is the mapping key a node was found under, or ``""`` for a
+        sequence element. Rules use it to ask "is there a ``securityContext``
+        anywhere in here" without knowing the shape of the document above it.
+        """
+        for key, child in self.items():
+            yield key, child
+            yield from child.walk()
+        for child in self.entries():
+            yield "", child
+            yield from child.walk()
+
+
+def parse(text: str) -> "list[Node]":
+    """Read a YAML stream into one :class:`Node` per document."""
+    lines = text.splitlines()
+    documents: "list[Node]" = []
+    starts = [index for index, line in enumerate(lines) if _DOCUMENT_BREAK.match(line)]
+    bounds = [0, *[start + 1 for start in starts], len(lines)]
+    for begin, end in zip(bounds, bounds[1:]):
+        chunk = _tokenise(lines, begin, end)
+        if not chunk:
+            continue
+        node, _ = _parse_block(chunk, 0, chunk[0][0])
+        documents.append(node)
+    return documents
+
+
+def parse_one(text: str) -> "Node | None":
+    """The first document, for callers that expect a single one."""
+    documents = parse(text)
+    return documents[0] if documents else None
+
+
+Token = "tuple[int, str, int]"  # indent, content, line number
+
+
+def _tokenise(lines: "list[str]", begin: int, end: int) -> "list[Token]":
+    """Drop blanks and comments, and fold block scalars into one token."""
+    tokens: "list[Token]" = []
+    index = begin
+    while index < end:
+        line = lines[index]
+        if _COMMENT_OR_BLANK.match(line) or _DOCUMENT_BREAK.match(line):
+            index += 1
+            continue
+        indent = len(line) - len(line.lstrip())
+        content = line.strip()
+        tokens.append((indent, content, index + 1))
+        if _opens_block_scalar(content):
+            index = _skip_indented(lines, index + 1, end, indent)
+            continue
+        index += 1
+    return tokens
+
+
+def _opens_block_scalar(content: str) -> bool:
+    match = _KEY.match(content)
+    value = match.group("value") if match else ""
+    return bool(value) and bool(_BLOCK_SCALAR.match(value))
+
+
+def _skip_indented(lines: "list[str]", index: int, end: int, indent: int) -> int:
+    while index < end and (
+        not lines[index].strip() or len(lines[index]) - len(lines[index].lstrip()) > indent
+    ):
+        index += 1
+    return index
+
+
+def _parse_block(tokens: "list[Token]", index: int, indent: int) -> "tuple[Node, int]":
+    """Parse the mapping or sequence that starts at ``tokens[index]``."""
+    if index >= len(tokens):
+        return Node("", 0), index
+    if _ITEM.match(tokens[index][1]):
+        return _parse_sequence(tokens, index, indent)
+    return _parse_mapping(tokens, index, indent)
+
+
+def _parse_mapping(tokens: "list[Token]", index: int, indent: int) -> "tuple[Node, int]":
+    mapping: "dict[str, Node]" = {}
+    start = tokens[index][2]
+    while index < len(tokens):
+        current_indent, content, line = tokens[index]
+        if current_indent < indent or _ITEM.match(content):
+            break
+        if current_indent > indent:  # stray deeper line: not ours to interpret
+            index += 1
+            continue
+        match = _KEY.match(content)
+        if match is None:
+            index += 1
+            continue
+        key = match.group("key").strip().strip("\"'")
+        value = match.group("value")
+        if value and not _BLOCK_SCALAR.match(value):
+            mapping[key] = Node(value.strip(), line)
+            index += 1
+            continue
+        child, index = _parse_child(tokens, index + 1, current_indent, line)
+        mapping[key] = child
+    return Node(mapping, start), index
+
+
+def _parse_sequence(tokens: "list[Token]", index: int, indent: int) -> "tuple[Node, int]":
+    items: "list[Node]" = []
+    start = tokens[index][2]
+    while index < len(tokens):
+        current_indent, content, line = tokens[index]
+        match = _ITEM.match(content)
+        if current_indent < indent or match is None:
+            break
+        if current_indent > indent:
+            index += 1
+            continue
+        rest = match.group("rest")
+        if not rest:
+            child, index = _parse_child(tokens, index + 1, current_indent, line)
+            items.append(child)
+            continue
+        # "- key: value" opens a mapping whose first key shares the dash's line.
+        inline = _KEY.match(rest)
+        if inline is None:
+            items.append(Node(rest.strip(), line))
+            index += 1
+            continue
+        item_indent = current_indent + (len(content) - len(content.lstrip("- ")))
+        rewritten: "list[Token]" = [(item_indent, rest, line), *tokens[index + 1 :]]
+        child, consumed = _parse_mapping(rewritten, 0, item_indent)
+        items.append(child)
+        index += consumed
+    return Node(items, start), index
+
+
+def _parse_child(
+    tokens: "list[Token]", index: int, indent: int, line: int
+) -> "tuple[Node, int]":
+    """The value of a key that had nothing after its colon."""
+    if index >= len(tokens) or tokens[index][0] <= indent:
+        if index < len(tokens) and _ITEM.match(tokens[index][1]) and tokens[index][0] == indent:
+            # A sequence may sit at the same indent as the key that owns it.
+            return _parse_sequence(tokens, index, indent)
+        return Node("", line), index
+    return _parse_block(tokens, index, tokens[index][0])

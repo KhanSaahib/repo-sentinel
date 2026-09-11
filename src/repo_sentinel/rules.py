@@ -37,7 +37,7 @@ class Rule:
         return _CATEGORIES[self.id[:3]]
 
 
-_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform"}
+_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes"}
 
 
 def _rules(*entries: tuple[str, str, str, Severity]) -> "dict[str, Rule]":
@@ -88,6 +88,14 @@ RULES: "dict[str, Rule]" = _rules(
     ("TF004", "wildcard-policy", "Policy allows every action on every resource", Severity.HIGH),
     ("TF005", "public-database", "Managed database given a public endpoint", Severity.HIGH),
     ("TF006", "unencrypted-state", "Terraform state stored without encryption", Severity.MEDIUM),
+    ("K8S001", "privileged-container", "Container runs privileged", Severity.CRITICAL),
+    ("K8S002", "host-path-mount", "Volume mounts a path from the node", Severity.HIGH),
+    ("K8S003", "host-namespace", "Pod shares a namespace with the node", Severity.HIGH),
+    ("K8S004", "no-resource-limits", "Container declares no resource limits", Severity.LOW),
+    ("K8S005", "runs-as-root", "Container declares that it runs as root", Severity.MEDIUM),
+    ("K8S006", "capability-granted", "Privilege handed back after being dropped", Severity.HIGH),
+    ("K8S007", "secret-in-manifest", "Credential committed inside a Secret manifest", Severity.CRITICAL),
+    ("K8S008", "floating-image", "Container image tag can point elsewhere tomorrow", Severity.MEDIUM),
 )
 
 

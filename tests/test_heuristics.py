@@ -77,6 +77,10 @@ class TestLooksGenerated(unittest.TestCase):
             "bare-quoted-string",
             "Proxy-Authorization",
             "obs-local-part",
+            # A quoted type alias, which is what a module full of string
+            # annotations assigns to names like Token and Block.
+            "tuple[int, str, int]",
+            "dict[str, Node]",
         ):
             with self.subTest(value=value):
                 self.assertFalse(heuristics.looks_generated(value))

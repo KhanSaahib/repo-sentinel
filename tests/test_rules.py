@@ -4,7 +4,7 @@ import unittest
 
 import corpus
 from repo_sentinel import rules
-from repo_sentinel.scanners import dockerfiles, secrets, terraform, workflows
+from repo_sentinel.scanners import dockerfiles, kubernetes, secrets, terraform, workflows
 
 
 def emitted_rule_ids():
@@ -12,6 +12,7 @@ def emitted_rule_ids():
     findings += workflows.scan_files(corpus.FILES)
     findings += dockerfiles.scan_files(corpus.FILES)
     findings += terraform.scan_files(corpus.FILES)
+    findings += kubernetes.scan_files(corpus.FILES)
     return {finding.rule_id for finding in findings}
 
 

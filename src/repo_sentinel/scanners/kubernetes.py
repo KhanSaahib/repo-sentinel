@@ -1,0 +1,407 @@
+"""Audit Kubernetes manifests for workloads that escape their container.
+
+The container boundary is the only thing between a compromised process and the
+node it runs on, and every rule here is about a manifest that removes part of
+it: a privileged container, a host namespace, a hostPath mount that reaches the
+node's filesystem, a capability set that was never narrowed.
+
+Manifests are found by content rather than by filename. A Kubernetes document
+is one with ``apiVersion`` and ``kind`` at its root, which is a far better test
+than a path pattern: manifests live under ``deploy/``, ``k8s/``, ``manifests/``,
+``charts/templates/`` and half a dozen other conventions, and a workflow file
+that happens to sit in one of them is not a workload.
+
+The last rule is the interesting one. A ``Secret`` manifest stores its values
+base64-encoded, which is not encryption and never was, but it does make a
+committed credential invisible to every scanner that reads lines. So K8S007
+decodes them and asks the secret rules what they see.
+"""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import posixpath
+import re
+from collections.abc import Iterable, Iterator
+
+from .. import suppression, yamlish
+from ..findings import Confidence, Finding, Severity, redact
+from ..heuristics import looks_generated
+from . import secrets
+
+_YAML_SUFFIXES = (".yaml", ".yml")
+
+#: Namespaces shared with the node. Any of them dissolves a part of the
+#: isolation the container was supposed to provide.
+_HOST_NAMESPACES = {
+    "hostNetwork": "the node's network, including services bound to localhost",
+    "hostPID": "the node's process table, where other containers' processes are visible",
+    "hostIPC": "the node's shared memory",
+}
+
+#: Capabilities that hand back most of what dropping root took away.
+_DANGEROUS_CAPABILITIES = {
+    "ALL",
+    "SYS_ADMIN",
+    "SYS_PTRACE",
+    "SYS_MODULE",
+    "NET_ADMIN",
+    "NET_RAW",
+    "DAC_READ_SEARCH",
+    "SYS_BOOT",
+}
+
+#: Host paths whose exposure is equivalent to owning the node.
+_CRITICAL_HOST_PATHS = (
+    "/var/run/docker.sock",
+    "/var/run/containerd",
+    "/var/run/crio",
+    "/etc/kubernetes",
+    "/var/lib/kubelet",
+    "/root",
+    "/etc",
+    "/",  # the node's whole filesystem; matched exactly, never as a prefix
+)
+
+_CONTAINER_KEYS = ("containers", "initContainers", "ephemeralContainers")
+_IMAGE_TAG = re.compile(r"^(?P<image>[^\s@]+?)(?::(?P<tag>[^:/@]+))?(?:@(?P<digest>sha256:\w+))?$")
+
+
+def is_yaml_path(path: str) -> bool:
+    return posixpath.basename(path.replace("\\", "/")).lower().endswith(_YAML_SUFFIXES)
+
+
+def is_manifest(document: "yamlish.Node") -> bool:
+    """True for a document that declares itself to the Kubernetes API."""
+    return document.get("apiVersion") is not None and document.get("kind") is not None
+
+
+def _describe(document: "yamlish.Node") -> str:
+    """``Deployment "web"``, for a report that names what it is talking about."""
+    kind = (document.get("kind") or yamlish.Node("", 0)).text or "workload"
+    name = (document.get("metadata", "name") or yamlish.Node("", 0)).text
+    return f"{kind} {name!r}" if name else kind
+
+
+def _containers(document: "yamlish.Node") -> "Iterator[tuple[str, yamlish.Node]]":
+    """Every container in the document, whatever workload kind wraps it.
+
+    Found by walking for the container list keys rather than by knowing the
+    shape of each kind: a Pod, a Deployment, a CronJob and a custom resource
+    that embeds a pod template all nest their containers at different depths,
+    and enumerating those depths is a list that would always be one short.
+    """
+    for key, node in document.walk():
+        if key not in _CONTAINER_KEYS or not node.is_list:
+            continue
+        for container in node.entries():
+            name = (container.get("name") or yamlish.Node("", container.line)).text
+            yield name or "container", container
+
+
+def _security_context(container: "yamlish.Node") -> "yamlish.Node | None":
+    return container.get("securityContext")
+
+
+def _check_privileged(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
+    """K8S001: privileged is root on the node with the safety catches removed."""
+    for name, container in _containers(document):
+        flag = container.get("securityContext", "privileged")
+        if flag is None or not flag.truthy():
+            continue
+        yield Finding(
+            rule_id="K8S001",
+            severity=Severity.CRITICAL,
+            title=f"Container {name!r} in {_describe(document)} runs privileged",
+            path=path,
+            line=flag.line,
+            evidence="privileged: true",
+            remediation=(
+                "A privileged container holds every capability and can reach "
+                "the node's devices, which makes container escape a formality. "
+                "Grant the one capability the workload needs instead."
+            ),
+        )
+
+
+def _check_host_namespaces(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
+    """K8S003: isolation the pod asked to do without."""
+    for key, node in document.walk():
+        if key not in _HOST_NAMESPACES or not node.truthy():
+            continue
+        yield Finding(
+            rule_id="K8S003",
+            severity=Severity.HIGH,
+            title=f"{_describe(document)} shares {key} with the node",
+            path=path,
+            line=node.line,
+            evidence=f"{key}: true",
+            remediation=(
+                f"This exposes {_HOST_NAMESPACES[key]}. Remove it unless the "
+                "workload is a node agent that genuinely needs it, and confine "
+                "that agent to its own namespace with its own policy."
+            ),
+        )
+
+
+def _check_host_paths(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
+    """K8S002: a mount that reaches out of the container and into the node."""
+    for key, node in document.walk():
+        if key != "hostPath":
+            continue
+        mounted = (node.get("path") or yamlish.Node("", node.line)).text.strip().strip("\"'")
+        # The root entry is matched exactly: treating it as a prefix would
+        # make every absolute path critical, which is the same as none of them.
+        critical = mounted == "/" or any(
+            mounted == dangerous or mounted.startswith(dangerous + "/")
+            for dangerous in _CRITICAL_HOST_PATHS
+            if dangerous != "/"
+        )
+        yield Finding(
+            rule_id="K8S002",
+            severity=Severity.CRITICAL if critical else Severity.HIGH,
+            title=f"{_describe(document)} mounts host path {mounted or 'unnamed'}",
+            path=path,
+            line=node.line,
+            evidence=f"hostPath: {mounted}" if mounted else "hostPath volume",
+            remediation=(
+                "A hostPath mount is shared with the node and every other pod "
+                "that mounts it. The container runtime socket in particular is "
+                "root on the node. Use a PersistentVolume, a projected volume, "
+                "or a CSI driver."
+            ),
+        )
+
+
+def _check_capabilities(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
+    """K8S006: privilege handed back after it was dropped."""
+    for name, container in _containers(document):
+        context = _security_context(container)
+        if context is None:
+            continue
+        escalation = context.get("allowPrivilegeEscalation")
+        if escalation is not None and escalation.truthy():
+            yield Finding(
+                rule_id="K8S006",
+                severity=Severity.MEDIUM,
+                title=f"Container {name!r} allows privilege escalation",
+                path=path,
+                line=escalation.line,
+                evidence="allowPrivilegeEscalation: true",
+                remediation=(
+                    "Setting this to false blocks setuid binaries from gaining "
+                    "privileges the pod was not granted. Very little needs it."
+                ),
+            )
+        added = context.get("capabilities", "add")
+        if added is None:
+            continue
+        granted = {
+            entry.text.strip().strip("\"'").upper()
+            for entry in (added.entries() if added.is_list else ())
+        } or set(re.findall(r"[A-Z_]+", added.text.upper()))
+        risky = sorted(granted & _DANGEROUS_CAPABILITIES)
+        if not risky:
+            continue
+        yield Finding(
+            rule_id="K8S006",
+            severity=Severity.HIGH,
+            title=f"Container {name!r} adds capability {', '.join(risky)}",
+            path=path,
+            line=added.line,
+            evidence=f"capabilities.add includes {', '.join(risky)}",
+            remediation=(
+                "SYS_ADMIN and ALL are close to privileged; NET_RAW enables "
+                "ARP spoofing between pods. Drop ALL and add back only what "
+                "the process fails without."
+            ),
+        )
+
+
+def _check_root(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
+    """K8S005: a workload that says, in writing, that it runs as root."""
+    for name, container in _containers(document):
+        context = _security_context(container)
+        if context is None:
+            continue
+        user = context.get("runAsUser")
+        non_root = context.get("runAsNonRoot")
+        if user is not None and user.text.strip().strip("\"'") == "0":
+            evidence, line = "runAsUser: 0", user.line
+        elif non_root is not None and non_root.falsy():
+            evidence, line = "runAsNonRoot: false", non_root.line
+        else:
+            continue
+        yield Finding(
+            rule_id="K8S005",
+            severity=Severity.MEDIUM,
+            title=f"Container {name!r} in {_describe(document)} runs as root",
+            path=path,
+            line=line,
+            evidence=evidence,
+            remediation=(
+                "Root in the container is root against the kernel if anything "
+                "escapes it. Build the image with a user and set runAsNonRoot."
+            ),
+        )
+
+
+def _check_resources(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
+    """K8S004: a container with no ceiling, which is a noisy-neighbour outage.
+
+    Low severity on purpose. It is a real availability problem and a real
+    finding, but it is not a way in, and reporting it at the same level as a
+    privileged container would teach people to read neither.
+    """
+    for name, container in _containers(document):
+        limits = container.get("resources", "limits")
+        if limits is not None and limits.is_map:
+            continue
+        yield Finding(
+            rule_id="K8S004",
+            severity=Severity.LOW,
+            title=f"Container {name!r} in {_describe(document)} declares no resource limits",
+            path=path,
+            line=container.line,
+            evidence="no resources.limits",
+            remediation=(
+                "Without a limit one container can exhaust the node's memory "
+                "and take its neighbours down with it. Set cpu and memory "
+                "limits, or a LimitRange for the namespace."
+            ),
+            confidence=Confidence.MEDIUM,
+        )
+
+
+def _check_images(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
+    """K8S008: an image reference that can point somewhere else tomorrow."""
+    for name, container in _containers(document):
+        image = container.get("image")
+        if image is None:
+            continue
+        reference = image.text.strip().strip("\"'")
+        match = _IMAGE_TAG.match(reference)
+        if match is None or match.group("digest"):
+            continue
+        tag = match.group("tag")
+        if tag is not None and tag != "latest":
+            continue
+        yield Finding(
+            rule_id="K8S008",
+            severity=Severity.MEDIUM,
+            title=f"Container {name!r} pulls {reference}, which floats",
+            path=path,
+            line=image.line,
+            evidence=f"image: {reference}",
+            remediation=(
+                "An unpinned tag means two pods of the same Deployment can run "
+                "different code, and a rollback restores nothing. Pin a version "
+                "tag, or a digest where the registry is not yours."
+            ),
+        )
+
+
+def _check_secret_data(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
+    """K8S007: a credential committed inside a Secret manifest.
+
+    base64 is an encoding, not encryption -- but it is enough to hide a value
+    from every rule that reads lines, so the value is decoded and handed to the
+    secret rules. When they recognise it, the finding says what it is; when
+    they only find entropy, it says that instead, at lower confidence.
+    """
+    if (document.get("kind") or yamlish.Node("", 0)).text.strip("\"'") != "Secret":
+        return
+
+    for field, decode in (("data", True), ("stringData", False)):
+        section = document.get(field)
+        if section is None or not section.is_map:
+            continue
+        for key, node in section.items():
+            raw = node.text.strip().strip("\"'")
+            value = _decode(raw) if decode else raw
+            if not value:
+                continue
+            recognised = next(
+                (
+                    finding
+                    for finding in secrets.scan_line(path, node.line, value)
+                    if not finding.rule_id.startswith("SEC10")
+                ),
+                None,
+            )
+            if recognised is not None:
+                yield Finding(
+                    rule_id="K8S007",
+                    severity=Severity.CRITICAL,
+                    title=f"{_describe(document)} contains {recognised.title.lower()} in {key!r}",
+                    path=path,
+                    line=node.line,
+                    evidence=recognised.evidence,
+                    remediation=(
+                        "The value is committed, base64 notwithstanding. Rotate "
+                        "it, then keep secrets out of manifests: use a sealed or "
+                        "external secret, or create it out of band."
+                    ),
+                )
+            elif looks_generated(value):
+                yield Finding(
+                    rule_id="K8S007",
+                    severity=Severity.HIGH,
+                    title=f"{_describe(document)} carries a literal value in {key!r}",
+                    path=path,
+                    line=node.line,
+                    evidence=f"{key}: {redact(value)}",
+                    remediation=(
+                        "base64 is an encoding, not encryption: anyone with the "
+                        "repository has this value. Rotate it and move it to a "
+                        "sealed or external secret."
+                    ),
+                    confidence=Confidence.MEDIUM,
+                )
+
+
+def _decode(value: str) -> str:
+    """base64-decode a Secret value, or return "" when it is not text."""
+    padded = value + "=" * (-len(value) % 4)
+    try:
+        return base64.b64decode(padded, validate=True).decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError, ValueError):
+        return ""
+
+
+_RULES = (
+    _check_privileged,
+    _check_host_paths,
+    _check_host_namespaces,
+    _check_capabilities,
+    _check_root,
+    _check_resources,
+    _check_images,
+    _check_secret_data,
+)
+
+
+def scan_manifest(path: str, text: str) -> "list[Finding]":
+    """Run every rule against every Kubernetes document in one file."""
+    marks = suppression.parse(text)
+    if marks.whole_file:
+        return []
+
+    findings: "list[Finding]" = []
+    for document in yamlish.parse(text):
+        if not is_manifest(document):
+            continue
+        for rule in _RULES:
+            findings.extend(rule(path, document))
+    return marks.filter_findings(findings)
+
+
+def scan_files(files: "Iterable[tuple[str, str]]") -> "list[Finding]":
+    """Scan ``(path, text)`` pairs, ignoring anything that is not a manifest."""
+    return [
+        finding
+        for path, text in files
+        if is_yaml_path(path)
+        for finding in scan_manifest(path, text)
+    ]
