@@ -34,6 +34,10 @@ repository the tool can read at all: it grew from two file formats to six.
 - **`--paths-from FILE`** (`-` for stdin) to scan only the files a pull request
   touched, **`--quiet`** for the summary alone, and **`--sort path`** for
   reading a report rather than triaging it.
+- **Helm chart support.** Template expressions are replaced with a placeholder
+  and control lines blanked, line for line, so the Kubernetes rules that read a
+  value the chart contains run over charts. The two rules that reason from a
+  value's absence are skipped there, since the values file supplies it.
 - **File-name rules** (FN001–FN003): a committed `id_rsa`, a `.p12` or `.jks`
   keystore, an `.npmrc` or `.env` that exists to hold a credential. The walk now
   reports every path it reaches, readable or not, which closes a blind spot:

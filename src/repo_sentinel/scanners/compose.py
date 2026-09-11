@@ -231,6 +231,8 @@ def _check_images(path: str, name: str, service: "yamlish.Node") -> "Iterator[Fi
     if image is None:
         return
     reference = image.text.strip().strip("\"'")
+    if wellknown.is_interpolated(reference):
+        return  # "${IMAGE_TAG}" is decided elsewhere, so its shape says nothing
     match = _IMAGE_TAG.match(reference)
     if match is None or match.group("digest"):
         return

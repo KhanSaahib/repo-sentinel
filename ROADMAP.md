@@ -110,7 +110,10 @@ outcome than a feature nobody wanted.
       material stops being invisible (FN001-FN003)
 - [ ] Multi-line PEM bodies: a private key is caught by its header line, so a
       body pasted without one is missed
-- [ ] Helm templates, where `{{ .Values.x }}` makes every structural rule guess
+- [x] Helm templates, where `{{ .Values.x }}` makes every structural rule guess.
+      Solved by splitting the Kubernetes rules into those that read a value the
+      chart contains, which run, and those that reason from a value's absence,
+      which cannot and do not
 - [ ] Coverage measurement in CI with a floor
 - [x] Property-based tests for the entropy and redaction functions, plus seeded
       fuzzing of both hand-written parsers and a time bound on hostile input

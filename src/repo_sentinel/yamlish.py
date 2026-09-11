@@ -104,6 +104,48 @@ class Node:
             yield from child.walk()
 
 
+#: A Go template action: ``{{ .Values.image }}``, ``{{- if .Values.rbac }}``.
+_TEMPLATE_ACTION = re.compile(r"\{\{-?.*?-?\}\}", re.DOTALL)
+
+#: What a template expression is replaced with. Deliberately meaningless: a
+#: rule that reads it is looking at a value the chart supplies from elsewhere,
+#: and should draw no conclusion from its shape.
+TEMPLATE_PLACEHOLDER = "__TEMPLATED__"
+
+
+def is_templated(text: str) -> bool:
+    """True when a document is a Go template rather than a finished manifest."""
+    return "{{" in text
+
+
+def strip_templates(text: str) -> str:
+    """Turn a Helm-style template into something parseable, line for line.
+
+    Charts are where most real Kubernetes manifests live, and a chart is not
+    YAML: ``{{- if .Values.rbac }}`` is a control line that belongs to no
+    mapping, and ``{{ .Values.image }}`` is a value that does not exist yet.
+
+    Expressions become a placeholder scalar and control-only lines become
+    blank, which keeps every remaining line at its original number -- a finding
+    that points at the wrong line of a chart is worse than no finding.
+
+    What comes out is not the manifest that will be installed; it is the parts
+    of it that are written down. Rules that read a value present in the
+    template are still right. Rules that conclude something from a value's
+    *absence* are not, because the chart may supply it, which is why
+    :mod:`.scanners.kubernetes` runs only some of its rules over a template.
+    """
+    out = []
+    for line in text.splitlines():
+        stripped = _TEMPLATE_ACTION.sub(TEMPLATE_PLACEHOLDER, line)
+        naked = stripped.strip()
+        if naked in (TEMPLATE_PLACEHOLDER, "-", "- " + TEMPLATE_PLACEHOLDER):
+            out.append("")  # a control line: keeps the line number, adds nothing
+            continue
+        out.append(stripped)
+    return "\n".join(out)
+
+
 def parse(text: str) -> "list[Node]":
     """Read a YAML stream into one :class:`Node` per document."""
     lines = text.splitlines()

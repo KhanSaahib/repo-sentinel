@@ -68,6 +68,16 @@ CRITICAL_HOST_PATHS = (
 )
 
 
+#: Shell, Helm and Compose interpolation. A value written like this is decided
+#: somewhere else, so nothing about its shape here is evidence of anything.
+_INTERPOLATION = ("${", "{{", "$(")
+
+
+def is_interpolated(value: str) -> bool:
+    """True when a value is filled in from elsewhere at deploy or run time."""
+    return any(marker in value for marker in _INTERPOLATION)
+
+
 def is_critical_host_path(path: str) -> bool:
     """True when mounting ``path`` hands over the host.
 

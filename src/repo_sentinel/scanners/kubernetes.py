@@ -57,7 +57,11 @@ def _describe(document: "yamlish.Node") -> str:
     """``Deployment "web"``, for a report that names what it is talking about."""
     kind = (document.get("kind") or yamlish.Node("", 0)).text or "workload"
     name = (document.get("metadata", "name") or yamlish.Node("", 0)).text
-    return f"{kind} {name!r}" if name else kind
+    # A chart's name comes from a template, so quoting the placeholder back at
+    # the reader says nothing; the kind and the path already locate it.
+    if not name or yamlish.TEMPLATE_PLACEHOLDER in name:
+        return kind
+    return f"{kind} {name!r}"
 
 
 def _containers(document: "yamlish.Node") -> "Iterator[tuple[str, yamlish.Node]]":
@@ -253,6 +257,8 @@ def _check_images(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
         if image is None:
             continue
         reference = image.text.strip().strip("\"'")
+        if wellknown.is_interpolated(reference):
+            continue  # decided elsewhere; its shape here means nothing
         match = _IMAGE_TAG.match(reference)
         if match is None or match.group("digest"):
             continue
@@ -343,16 +349,27 @@ def _decode(value: str) -> str:
         return ""
 
 
-_RULES = (
+#: Rules that read a value the document actually contains. These are as sound
+#: on a Helm template as on a finished manifest: "privileged: true" written in
+#: a chart is privileged: true when it is installed.
+_POSITIVE_RULES = (
     _check_privileged,
     _check_host_paths,
     _check_host_namespaces,
     _check_capabilities,
     _check_root,
-    _check_resources,
-    _check_images,
     _check_secret_data,
 )
+
+#: Rules that conclude something from what is *missing* or from a value's
+#: exact shape. A template cannot answer either question: the values file
+#: supplies the limits and the image tag, and neither is in front of us.
+_COMPLETE_DOCUMENT_RULES = (
+    _check_resources,
+    _check_images,
+)
+
+_RULES = _POSITIVE_RULES + _COMPLETE_DOCUMENT_RULES
 
 
 def scan_manifest(path: str, text: str) -> "list[Finding]":
@@ -361,11 +378,15 @@ def scan_manifest(path: str, text: str) -> "list[Finding]":
     if marks.whole_file:
         return []
 
+    templated = yamlish.is_templated(text)
+    source = yamlish.strip_templates(text) if templated else text
+    active = _POSITIVE_RULES if templated else _RULES
+
     findings: "list[Finding]" = []
-    for document in yamlish.parse(text):
+    for document in yamlish.parse(source):
         if not is_manifest(document):
             continue
-        for rule in _RULES:
+        for rule in active:
             findings.extend(rule(path, document))
     return marks.filter_findings(findings)
 

@@ -115,6 +115,9 @@ class TestImages(unittest.TestCase):
     def test_a_pinned_tag_is_accepted(self):
         self.assertEqual(scan("services:\n  db:\n    image: postgres:16.2\n"), [])
 
+    def test_an_interpolated_tag_is_decided_elsewhere(self):
+        self.assertEqual(scan("services:\n  db:\n    image: postgres:${TAG}\n"), [])
+
     def test_a_built_service_has_no_image_to_judge(self):
         self.assertEqual(scan("services:\n  app:\n    build: .\n"), [])
 

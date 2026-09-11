@@ -374,6 +374,17 @@ Containers are found by walking for the container list keys rather than by
 knowing the shape of each workload kind, so a Pod, a Deployment, a CronJob and
 a custom resource that embeds a pod template are all covered by the same rules.
 
+Helm charts are read too. A chart is not YAML -- `{{- if .Values.rbac }}` is a
+control line belonging to no mapping, and `{{ .Values.image }}` is a value that
+does not exist yet -- so template expressions are replaced with a placeholder
+and control lines are blanked, keeping every remaining line at its original
+number. What comes out is not the manifest that will be installed; it is the
+part of it that is written down. So the rules that read a value the chart
+contains still run (`privileged: true` in a chart is `privileged: true` when it
+is installed), and the two that conclude something from a value's *absence* --
+missing limits, a floating tag -- do not, because the values file supplies both
+and neither is in front of us.
+
 K8S007 decodes what it finds. A `Secret` stores values base64-encoded, which is
 not encryption but is enough to hide a credential from every rule that reads
 lines; when the decoded value is a shape the secret rules recognise, the

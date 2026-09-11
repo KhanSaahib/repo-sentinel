@@ -108,6 +108,23 @@ class TestDocuments(unittest.TestCase):
         self.assertEqual(yamlish.parse("\n# nothing\n"), [])
 
 
+class TestTemplates(unittest.TestCase):
+    def test_expressions_become_a_placeholder(self):
+        stripped = yamlish.strip_templates("image: {{ .Values.image }}\n")
+        self.assertEqual(stripped.strip(), f"image: {yamlish.TEMPLATE_PLACEHOLDER}")
+
+    def test_control_lines_become_blank_and_keep_their_place(self):
+        text = "a: 1\n{{- if .Values.x }}\nb: 2\n{{- end }}\nc: 3\n"
+        stripped = yamlish.strip_templates(text)
+        self.assertEqual(len(stripped.splitlines()), 5)
+        document = yamlish.parse_one(stripped)
+        self.assertEqual(document.get("c").line, 5)
+
+    def test_an_untemplated_document_is_recognised_as_such(self):
+        self.assertFalse(yamlish.is_templated("a: 1\n"))
+        self.assertTrue(yamlish.is_templated("a: {{ .x }}\n"))
+
+
 class TestWalk(unittest.TestCase):
     def test_reaches_every_node_with_the_key_it_sat_under(self):
         document = parse("spec:\n  containers:\n    - name: a\n      ports:\n        - 80\n")

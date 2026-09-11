@@ -202,5 +202,60 @@ class TestSuppression(unittest.TestCase):
         self.assertNotIn("K8S001", rule_ids(scan(text)))
 
 
+class TestHelmTemplates(unittest.TestCase):
+    """Charts are where most real manifests live, and a chart is not YAML."""
+
+    CHART = (
+        "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n"
+        '  name: {{ include "chart.fullname" . }}\n'
+        "spec:\n  template:\n    spec:\n"
+        "      {{- if .Values.hostNetwork }}\n"
+        "      hostNetwork: true\n"
+        "      {{- end }}\n"
+        "      containers:\n        - name: app\n"
+        '          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"\n'
+        "          securityContext:\n            privileged: true\n"
+        "          resources:\n"
+        "            {{- toYaml .Values.resources | nindent 12 }}\n"
+    )
+
+    def test_a_value_written_in_the_chart_is_still_found(self):
+        findings = scan(self.CHART, "charts/app/templates/deployment.yaml")
+        self.assertIn("K8S001", rule_ids(findings))
+        self.assertIn("K8S003", rule_ids(findings))
+
+    def test_line_numbers_survive_the_stripping(self):
+        finding = next(f for f in scan(self.CHART) if f.rule_id == "K8S001")
+        self.assertEqual(finding.line, 15)
+
+    def test_absence_based_rules_do_not_run_on_a_template(self):
+        # The values file supplies the limits and the image tag. Neither is in
+        # front of us, so concluding anything from their absence is a guess.
+        findings = rule_ids(scan(self.CHART))
+        self.assertNotIn("K8S004", findings)
+        self.assertNotIn("K8S008", findings)
+
+    def test_the_same_document_without_templating_is_judged_completely(self):
+        plain = (
+            "apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\nspec:\n"
+            "  containers:\n    - name: app\n      image: nginx\n"
+        )
+        findings = rule_ids(scan(plain))
+        self.assertIn("K8S004", findings)
+        self.assertIn("K8S008", findings)
+
+    def test_a_templated_name_is_not_quoted_back_at_the_reader(self):
+        finding = next(f for f in scan(self.CHART) if f.rule_id == "K8S001")
+        self.assertNotIn("__TEMPLATED__", finding.title)
+
+    def test_an_interpolated_image_is_not_judged_on_its_shape(self):
+        plain = (
+            "apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\nspec:\n"
+            "  containers:\n    - name: app\n      image: ${IMAGE}\n"
+            "      resources:\n        limits:\n          cpu: 1\n"
+        )
+        self.assertNotIn("K8S008", rule_ids(scan(plain)))
+
+
 if __name__ == "__main__":
     unittest.main()
