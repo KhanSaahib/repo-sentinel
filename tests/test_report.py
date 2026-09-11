@@ -74,6 +74,10 @@ class TestSarif(unittest.TestCase):
     def test_only_rules_that_fired_are_described(self):
         self.assertLess(len(self.run["tool"]["driver"]["rules"]), len(rules.RULES))
 
+    def test_the_weakness_class_travels_as_a_tag(self):
+        tags = self.run["tool"]["driver"]["rules"][0]["properties"]["tags"]
+        self.assertIn("CWE-798", tags)
+
     def test_severity_is_expressed_the_way_github_reads_it(self):
         first = self.run["tool"]["driver"]["rules"][0]
         self.assertEqual(first["defaultConfiguration"]["level"], "error")
@@ -223,6 +227,7 @@ class TestCatalogueOutput(unittest.TestCase):
         payload = json.loads(report.format_rule_catalogue(as_json=True))
         self.assertEqual(len(payload["rules"]), len(rules.RULES))
         self.assertEqual(payload["rules"][0]["id"], "SEC001")
+        self.assertEqual(payload["rules"][0]["cwe"], "CWE-798")
 
 
 if __name__ == "__main__":

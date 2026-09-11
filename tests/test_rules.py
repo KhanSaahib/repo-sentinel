@@ -217,6 +217,20 @@ class TestCatalogue(unittest.TestCase):
         self.assertIsNotNone(spelled, "extend the number words in this test")
         self.assertIn(f"{spelled} rules", readme)
 
+    def test_every_rule_names_the_weakness_it_reports(self):
+        # A CWE is a claim, not a decoration, so the only rule without one is
+        # the one that reports a mistake in this tool's own configuration
+        # rather than a weakness in anybody's software.
+        without = {rule.id for rule in rules.RULES.values() if rule.cwe is None}
+        self.assertEqual(without, {"SEC900"})
+
+    def test_the_weakness_identifiers_are_well_formed(self):
+        for rule in rules.RULES.values():
+            if rule.cwe is None:
+                continue
+            with self.subTest(rule=rule.id):
+                self.assertRegex(rule.cwe, r"^CWE-\d{1,4}$")
+
     def test_ids_are_unique_and_sorted_within_a_category(self):
         for category, catalogued in rules.by_category().items():
             ids = [rule.id for rule in catalogued]

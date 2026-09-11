@@ -10,6 +10,14 @@ scanners all agree: a rule missing from any of the three fails the build.
 For what the severity and confidence columns mean, see
 [Severity and confidence](../README.md#severity-and-confidence) in the README.
 
+Every rule also names the weakness it reports, as a CWE identifier:
+`repo-sentinel rules --format json` carries it, and the SARIF output puts it in
+each rule's tags so the Security tab can group by it. It is a claim rather than
+a decoration -- five CI systems share CWE-78, and "unpinned" is CWE-1357
+whether it is an action, an orb, a base image or a dependency. SEC900 has no
+CWE, because it reports a mistake in this tool's own configuration rather than
+a weakness in anybody's software.
+
 ## Secrets
 
 | Rule | Finds | Severity | Confidence |

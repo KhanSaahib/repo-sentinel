@@ -37,6 +37,17 @@ class Rule:
     def category(self) -> str:
         return _CATEGORIES[self.id[:3]]
 
+    @property
+    def cwe(self) -> "str | None":
+        """The weakness class this rule reports, as a CWE identifier.
+
+        Useful to anyone who has to map findings onto a framework they did not
+        choose, and to SARIF consumers that group by weakness. It is a claim
+        rather than a decoration -- ``None`` where no class fits, which is the
+        honest answer for the scanner's own hygiene checks.
+        """
+        return _CWE.get(self.id)
+
 
 _CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose", "FN0": "filenames", "GL0": "gitlab", "CF0": "cloudformation", "SC0": "dependencies", "AN0": "ansible", "AZ0": "azure", "CC0": "circleci", "JK0": "jenkins"}
 
@@ -170,6 +181,88 @@ RULES: "dict[str, Rule]" = _rules(
     ("FN004", "secret-bearing-byproduct", "A file that records secrets as a side effect", Severity.CRITICAL),
     ("DC006", "floating-compose-image", "Service image tag can point elsewhere tomorrow", Severity.LOW),
 )
+
+
+#: The weakness each rule reports. Grouped by the claim rather than by family,
+#: because the claim is what a reader checking this list cares about: five CI
+#: systems share one injection weakness, and "unpinned" means the same thing
+#: for an action, an orb, a base image and a dependency.
+#:
+#: SEC900 has no entry on purpose. It reports that a suppression block was left
+#: open, which is a mistake in this tool's own configuration rather than a
+#: weakness in anybody's software.
+_CWE: "dict[str, str]" = {}
+
+
+def _claim(cwe: str, *rule_ids: str) -> None:
+    for rule_id in rule_ids:
+        _CWE[rule_id] = cwe
+
+
+# Use of hard-coded credentials.
+_claim(
+    "CWE-798",
+    *[f"SEC{index:03d}" for index in range(1, 48)],
+    "SEC100",
+    "SEC101",
+    "FN001",
+    "FN002",
+    "FN003",
+    "DK004",
+    "K8S007",
+)
+# Sensitive information in a file that should not hold it.
+_claim("CWE-538", "FN004")
+# OS command injection: the same weakness in five CI systems.
+_claim("CWE-78", "WF003", "GL002", "AZ001", "CC001", "JK001")
+# Download of code without an integrity check.
+_claim("CWE-494", "DK003", "DK005", "GL003", "CC004", "JK003", "SC002", "AN003")
+# Reliance on a component that can be replaced under you.
+_claim(
+    "CWE-1357",
+    "WF001",
+    "DK001",
+    "K8S008",
+    "DC006",
+    "GL001",
+    "AZ003",
+    "CC002",
+    "CC003",
+    "JK002",
+    "SC003",
+)
+# Cleartext transmission.
+_claim("CWE-319", "SC001", "TF007")
+# Improper certificate validation.
+_claim("CWE-295", "SC004", "DK006", "AN001")
+# Execution with unnecessary privileges.
+_claim("CWE-250", "DK002", "DC001", "DC004", "K8S001", "K8S005", "K8S006")
+# Incorrect permission assignment for a critical resource.
+_claim(
+    "CWE-732",
+    "WF002",
+    "WF005",
+    "TF002",
+    "TF004",
+    "CF002",
+    "CF004",
+    "K8S009",
+    "K8S010",
+    "AN002",
+)
+# Improper access control: something reachable that should not be.
+_claim("CWE-284", "TF001", "TF005", "CF001", "CF005", "DC005", "K8S011")
+# Missing encryption of data at rest.
+_claim("CWE-311", "TF003", "TF006", "CF003")
+# Exposure of a resource to the wrong control sphere.
+_claim("CWE-668", "K8S002", "K8S003", "DC002", "DC003", "WF006", "AZ002")
+# Inclusion of functionality from an untrusted control sphere.
+_claim("CWE-829", "WF004", "WF007", "WF008")
+# Insufficiently protected credentials, and credentials written to a log.
+_claim("CWE-522", "WF009")
+_claim("CWE-532", "WF010", "GL004", "AZ004")
+# Allocation of resources without limits.
+_claim("CWE-770", "K8S004")
 
 
 def matcher(patterns: "Iterable[str]"):

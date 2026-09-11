@@ -290,7 +290,7 @@ def _sarif_rule(rule_id: str, findings: Sequence[Finding]) -> dict:
         "helpUri": f"{_DOCUMENTATION}#{category.replace(' ', '-')}",
         "defaultConfiguration": {"level": _SARIF_LEVELS[severity]},
         "properties": {
-            "tags": ["security", category],
+            "tags": ["security", category] + ([catalogued.cwe] if catalogued and catalogued.cwe else []),
             "security-severity": _SECURITY_SEVERITY[severity],
         },
     }
@@ -359,6 +359,7 @@ def format_rule_catalogue(pattern: "str | None" = None, *, as_json: bool = False
                         "summary": rule.summary,
                         "severity": rule.severity.value,
                         "category": rule.category,
+                        "cwe": rule.cwe,
                     }
                     for rule in matched
                 ]

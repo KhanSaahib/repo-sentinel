@@ -143,6 +143,10 @@ repository the tool can read at all: it grew from two file formats to six.
 - A **YAML subset reader** and an **HCL block reader**, both standard library
   only, both explicit about what they do not parse.
 
+- **A CWE identifier per rule**, surfaced in `rules --format json` and in the
+  SARIF tags. Five CI systems share CWE-78; "unpinned" is CWE-1357 whether it
+  is an action, an orb, a base image or a dependency.
+
 ### Changed
 
 - Findings that share a path, a line and a redacted value are collapsed to one:
