@@ -48,6 +48,12 @@ repository the tool can read at all: it grew from two file formats to six.
   medium confidence drops to low in fixture trees and in documentation. The
   provider rules keep theirs everywhere. On the GitLab runner repository this
   takes `--min-confidence medium` from 70 findings to 27.
+- **Dependency manifests** (SC001–SC004): a registry over plain HTTP,
+  certificate verification switched off, a dependency on a branch somebody can
+  move, and an install-time script that downloads code and runs it. Covers
+  `package.json`, `.npmrc`, `requirements*.txt`, `pip.conf`, `Gemfile` and
+  `pom.xml` -- the question of where the rest of the build comes from, which
+  every other family leaves unasked.
 - **CloudFormation** (CF001–CF005): open security groups, public buckets,
   encryption switched off, wildcard policies, public databases. The Terraform
   rules in AWS's other vocabulary, since the mistakes do not care which tool

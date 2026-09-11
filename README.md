@@ -151,7 +151,7 @@ repo-sentinel scan . --no-gitignore
 
 ## What it checks
 
-Seventy-six rules across nine families. [docs/RULES.md](docs/RULES.md) is the
+Eighty rules across ten families. [docs/RULES.md](docs/RULES.md) is the
 full list, with a paragraph on each family explaining what it is looking for
 and why; `repo-sentinel rules` prints the same catalogue from the tool.
 
@@ -159,6 +159,7 @@ and why; `repo-sentinel rules` prints the same catalogue from the tool.
 | --- | --- | --- |
 | [Secrets](docs/RULES.md#secrets) | SEC001–SEC022, SEC100–SEC101 | Credentials in any text file, including inside base64 |
 | [File names](docs/RULES.md#file-names) | FN001–FN003 | Key material and credential files, which have no text to read |
+| [Dependencies](docs/RULES.md#dependencies) | SC001–SC004 | Where the rest of the build comes from |
 | [GitHub Actions](docs/RULES.md#github-actions-workflows) | WF001–WF010 | Script injection, token scope, privileged triggers |
 | [GitLab CI](docs/RULES.md#gitlab-ci) | GL001–GL004 | The same injection class, and debug tracing |
 | [Dockerfiles](docs/RULES.md#dockerfiles) | DK001–DK006 | Base images, root, pipe-to-shell, layer secrets |

