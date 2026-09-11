@@ -13,6 +13,8 @@ not be buried in a file-format module.
 
 from __future__ import annotations
 
+import re
+
 #: Ports whose exposure to the internet is a finding in itself. Web ports are
 #: absent on purpose: a server on 443 open to the world is the point of it.
 ADMIN_PORTS: "dict[int, str]" = {
@@ -68,14 +70,15 @@ CRITICAL_HOST_PATHS = (
 )
 
 
-#: Shell, Helm and Compose interpolation. A value written like this is decided
+#: Shell, Helm and Compose interpolation, including the bare ``$NAME`` form
+#: that GitLab and every shell accept. A value written like this is decided
 #: somewhere else, so nothing about its shape here is evidence of anything.
-_INTERPOLATION = ("${", "{{", "$(")
+_INTERPOLATION = re.compile(r"\$\{|\$\(|\{\{|\$[A-Za-z_]")
 
 
 def is_interpolated(value: str) -> bool:
     """True when a value is filled in from elsewhere at deploy or run time."""
-    return any(marker in value for marker in _INTERPOLATION)
+    return _INTERPOLATION.search(value) is not None
 
 
 def is_critical_host_path(path: str) -> bool:

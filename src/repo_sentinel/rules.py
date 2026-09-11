@@ -38,7 +38,7 @@ class Rule:
         return _CATEGORIES[self.id[:3]]
 
 
-_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose", "FN0": "filenames"}
+_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose", "FN0": "filenames", "GL0": "gitlab"}
 
 
 def _rules(*entries: tuple[str, str, str, Severity]) -> "dict[str, Rule]":
@@ -81,6 +81,10 @@ RULES: "dict[str, Rule]" = _rules(
     ("WF008", "workflow-run-checkout", "workflow_run checking out untrusted code", Severity.CRITICAL),
     ("WF009", "persisted-credentials", "Checkout leaves a usable token in .git/config", Severity.HIGH),
     ("WF010", "secret-exported", "Secret written to a job output or environment", Severity.HIGH),
+    ("GL001", "floating-job-image", "Pipeline image tag can point elsewhere tomorrow", Severity.MEDIUM),
+    ("GL002", "gitlab-script-injection", "Outsider-supplied variable interpolated into a script", Severity.CRITICAL),
+    ("GL003", "gitlab-pipe-to-shell", "Job pipes a download into a shell", Severity.HIGH),
+    ("GL004", "debug-trace", "CI_DEBUG_TRACE writes every variable to the job log", Severity.HIGH),
     ("DK001", "unpinned-base-image", "Base image not pinned to a digest", Severity.MEDIUM),
     ("DK002", "root-container", "Final image runs as root", Severity.MEDIUM),
     ("DK003", "pipe-to-shell", "Build step pipes a download into a shell", Severity.HIGH),

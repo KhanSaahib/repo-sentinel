@@ -34,6 +34,12 @@ repository the tool can read at all: it grew from two file formats to six.
 - **`--paths-from FILE`** (`-` for stdin) to scan only the files a pull request
   touched, **`--quiet`** for the summary alone, and **`--sort path`** for
   reading a report rather than triaging it.
+- **GitLab CI** (GL001–GL004): the injection class WF003 covers, in the other
+  CI system -- `$CI_COMMIT_TITLE` and its siblings carry text a fork wrote --
+  plus floating job images, pipe-to-shell build steps, and `CI_DEBUG_TRACE`,
+  which disables variable masking and writes every secret into the job log.
+  Pipelines are recognised by name or by shape, since `include:` lets a
+  fragment live anywhere.
 - **Helm chart support.** Template expressions are replaced with a placeholder
   and control lines blanked, line for line, so the Kubernetes rules that read a
   value the chart contains run over charts. The two rules that reason from a

@@ -192,6 +192,18 @@ COMPOSE_FILE = """services:
       - seccomp:unconfined
 """
 
+PIPELINE_FILE = """stages: [build]
+
+variables:
+  CI_DEBUG_TRACE: "true"
+
+build:
+  image: python
+  script:
+    - echo "Building $CI_COMMIT_TITLE"
+    - curl -sSL https://get.example.invalid/install.sh | bash
+"""
+
 #: ``(path, text)`` pairs, in the shape :func:`iter_files` yields.
 FILES = (
     ("src/config.py", SECRETS_FILE),
@@ -203,6 +215,7 @@ FILES = (
     ("infra/main.tf", TERRAFORM_FILE),
     ("deploy/web.yaml", MANIFEST_FILE),
     ("docker-compose.yml", COMPOSE_FILE),
+    (".gitlab-ci.yml", PIPELINE_FILE),
 )
 
 #: ``(path, readable)`` pairs, in the shape the walk reports. The names here

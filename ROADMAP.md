@@ -64,6 +64,12 @@ outcome than a feature nobody wanted.
 
 ## Beyond GitHub Actions
 
+- [x] GitLab CI: script injection from outsider-supplied variables, floating
+      job images, pipe-to-shell, and CI_DEBUG_TRACE
+- [ ] CircleCI and Jenkinsfiles, the two remaining CI systems people actually
+      have. A Jenkinsfile is Groovy, which this tool has no business parsing;
+      the honest scope there is its shell steps and nothing else
+
 - [x] Dockerfile checks: running as root, `curl | sh`, unpinned base images,
       secrets in `ARG`/`ENV`, `ADD` from a URL, disabled TLS verification
 - [x] Terraform checks: public S3 buckets, `0.0.0.0/0` security group ingress,

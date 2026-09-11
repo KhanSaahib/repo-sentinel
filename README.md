@@ -327,6 +327,31 @@ DK004 is worth stating plainly: every `ENV` and `ARG` value survives in the imag
 metadata, so `docker history` reads them back out of any published image, and
 deleting the value in a later layer does not remove it from the earlier one.
 
+### GitLab CI
+
+| Rule | Finds | Severity |
+| --- | --- | --- |
+| GL001 | Pipeline image tag can point elsewhere tomorrow | medium |
+| GL002 | Outsider-supplied variable interpolated into a script | critical |
+| GL003 | Job pipes a download into a shell | high |
+| GL004 | `CI_DEBUG_TRACE` writes every variable to the job log | high |
+
+GL002 is WF003's twin. GitLab substitutes its predefined variables into the
+shell exactly as Actions substitutes its contexts, and several of them carry
+text an outsider wrote: `$CI_COMMIT_TITLE`, `$CI_MERGE_REQUEST_DESCRIPTION`,
+`$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME`. `echo "Building $CI_COMMIT_TITLE"` runs
+whatever a fork put in that title.
+
+GL004 catches the switch that turns off variable masking: with `CI_DEBUG_TRACE`
+on, every variable the job can see -- masked ones included -- is written to a
+log that is often readable by anyone who can see the project.
+
+Pipelines are recognised by name (`.gitlab-ci.yml`) or by shape, since
+`include:` lets a fragment live in any file under any name. Hidden `.template`
+jobs are scanned too: GitLab does not run them directly, but everything that
+`extends` one runs its script, so reporting the injection where it is written
+beats reporting it in each of the five jobs that inherited it.
+
 ### Terraform
 
 | Rule | Finds | Severity |
