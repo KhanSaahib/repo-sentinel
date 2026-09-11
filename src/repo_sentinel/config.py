@@ -19,10 +19,11 @@ than the project usually does.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 
-from . import rules
+from . import gitignore, rules
 from collections.abc import Sequence
 
 #: Looked for beside the scanned tree when ``--config`` is not given.
@@ -41,6 +42,7 @@ _KEYS = {
     "disable": list,
     "gitignore": bool,
     "example_allowlist": bool,
+    "paths": dict,
 }
 
 
@@ -81,7 +83,9 @@ def load(path: str) -> dict:
         if key not in payload:
             continue
         value = payload[key]
-        if expected is list:
+        if expected is dict:
+            _validate_paths(path, value)
+        elif expected is list:
             if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
                 raise ConfigError(f"{path!r}: {key!r} should be a list of strings")
         elif expected is bool:
@@ -91,6 +95,67 @@ def load(path: str) -> dict:
             raise ConfigError(f"{path!r}: {key!r} should be a string")
         settings[key] = value
     return settings
+
+
+def _validate_paths(path: str, value) -> None:
+    """Check the ``paths`` table: a glob mapping to settings for that subtree."""
+    if not isinstance(value, dict):
+        raise ConfigError(f"{path!r}: 'paths' should be an object keyed by glob")
+    for glob, settings in value.items():
+        where = f"{path!r}: paths[{glob!r}]"
+        if not isinstance(settings, dict):
+            raise ConfigError(f"{where} should be an object")
+        unknown = sorted(set(settings) - {"disable"})
+        if unknown:
+            raise ConfigError(f"{where} has unknown setting(s): {', '.join(unknown)}")
+        rules_off = settings.get("disable", [])
+        if not isinstance(rules_off, list) or not all(
+            isinstance(item, str) for item in rules_off
+        ):
+            raise ConfigError(f"{where}: 'disable' should be a list of strings")
+
+
+@dataclasses.dataclass(frozen=True)
+class PathScope:
+    """Rules switched off for the files under one glob.
+
+    The glob is matched with the same engine that reads ``.gitignore``, so
+    ``examples/``, ``charts/vendor/**`` and ``*.tf`` all mean here what they
+    would mean there. Inventing a second glob dialect for one config key is how
+    a tool ends up with two subtly different answers to "does this path match".
+    """
+
+    pattern: str
+    disable: "tuple[str, ...]"
+    _rules: "gitignore.GitIgnoreFile"
+
+    @classmethod
+    def build(cls, pattern: str, disable: "Sequence[str]") -> "PathScope":
+        return cls(pattern, tuple(disable), gitignore.GitIgnoreFile.from_lines([pattern]))
+
+    def covers(self, path: str) -> bool:
+        """True when ``path`` is the file, or sits under a matched directory.
+
+        The walk gets this for free: a directory it excludes is a directory it
+        never descends into. Matching a path after the fact has to do the same
+        work by hand, or ``"examples/"`` would cover nothing at all.
+        """
+        parts = path.split("/")
+        candidates = [(path, False)]
+        candidates += [("/".join(parts[:depth]), True) for depth in range(1, len(parts))]
+        return any(
+            rule.matches(candidate, is_dir) and not rule.negated
+            for candidate, is_dir in candidates
+            for rule in self._rules.patterns
+        )
+
+
+def path_scopes(settings: dict) -> "list[PathScope]":
+    """The per-path rules from a loaded config, in the order they were written."""
+    return [
+        PathScope.build(pattern, options.get("disable", []))
+        for pattern, options in settings.get("paths", {}).items()
+    ]
 
 
 def disabled_matcher(patterns: Sequence[str]):

@@ -168,6 +168,12 @@ _CONFIG_TO_DEST = {
 }
 
 
+#: Filled in by :func:`_apply_config` and read by :func:`_apply_disabled`.
+#: Per-path rules have no command line form -- a glob table does not belong on
+#: a command line -- so unlike every other setting they live only in the file.
+_PATH_SCOPES: "list[config_module.PathScope]" = []
+
+
 def _apply_config(parser: argparse.ArgumentParser, argv: "Sequence[str] | None") -> argparse.Namespace:
     """Parse twice: once to find the config file, once with it as defaults.
 
@@ -184,9 +190,13 @@ def _apply_config(parser: argparse.ArgumentParser, argv: "Sequence[str] | None")
         return args
 
     settings = config_module.load(path)
+    _PATH_SCOPES[:] = config_module.path_scopes(settings)
     defaults = {}
     for key, value in settings.items():
-        dest, inverted = _CONFIG_TO_DEST[key]
+        mapping = _CONFIG_TO_DEST.get(key)
+        if mapping is None:
+            continue  # a setting with no flag, like the paths table
+        dest, inverted = mapping
         defaults[dest] = (not value) if inverted else value
     parser.scan_parser.set_defaults(**defaults)  # type: ignore[attr-defined]
     reparsed = parser.parse_args(argv)
@@ -199,18 +209,32 @@ def _apply_disabled(
 ) -> "list[Finding]":
     """Drop the rules a project has switched off, and say that it did.
 
-    Silence that nobody can see is the failure mode this whole tool is built to
-    avoid, so a disabled rule is reported as a count rather than simply not
-    happening. An unknown rule id is called out too: a typo here quietly leaves
-    the rule switched on, which is the safe direction but not the intended one.
+    Two ways to switch one off: everywhere, through ``disable``, and under one
+    glob, through the ``paths`` table. Both are counted rather than silently
+    applied -- silence that nobody can see is the failure mode this whole tool
+    is built to avoid. An unknown rule id is called out too: a typo there
+    quietly leaves the rule switched on, which is the safe direction but not
+    the intended one.
     """
-    if not patterns:
+    if not patterns and not _PATH_SCOPES:
         return findings
+
     disabled = config_module.disabled_matcher(patterns)
-    kept = [finding for finding in findings if not disabled(finding.rule_id)]
+    scoped = [
+        (scope, config_module.disabled_matcher(scope.disable)) for scope in _PATH_SCOPES
+    ]
+    kept = [
+        finding
+        for finding in findings
+        if not disabled(finding.rule_id)
+        and not any(
+            scope.covers(finding.path) and matches(finding.rule_id) for scope, matches in scoped
+        )
+    ]
     hidden = len(findings) - len(kept)
     if hidden:
-        notes.append(f"{hidden} finding(s) hidden by disabled rules: {', '.join(patterns)}.")
+        where = ", ".join(patterns) if patterns else "the paths table"
+        notes.append(f"{hidden} finding(s) hidden by disabled rules: {where}.")
     unknown = [
         pattern
         for pattern in patterns

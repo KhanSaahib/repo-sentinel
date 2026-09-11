@@ -34,6 +34,9 @@ repository the tool can read at all: it grew from two file formats to six.
 - **`--paths-from FILE`** (`-` for stdin) to scan only the files a pull request
   touched, **`--quiet`** for the summary alone, and **`--sort path`** for
   reading a report rather than triaging it.
+- **Per-path configuration**: a `paths` table switches rules off under one glob
+  rather than everywhere, using the `.gitignore` dialect matched by the same
+  code that reads `.gitignore`.
 - **GitLab CI** (GL001–GL004): the injection class WF003 covers, in the other
   CI system -- `$CI_COMMIT_TITLE` and its siblings carry text a fork wrote --
   plus floating job images, pipe-to-shell build steps, and `CI_DEBUG_TRACE`,

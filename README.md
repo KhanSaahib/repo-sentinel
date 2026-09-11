@@ -459,6 +459,24 @@ Everything here is a *default*. Anything on the command line wins, so a config
 file can never stop someone auditing their own repository more strictly than the
 project usually does.
 
+Rules can also be switched off for one subtree rather than everywhere, which is
+usually what is actually wanted -- a vendored chart, an examples directory, a
+fixtures tree:
+
+```json
+{
+  "paths": {
+    "examples/**": { "disable": ["K8S*"] },
+    "charts/vendor/**": { "disable": ["*"] }
+  }
+}
+```
+
+The globs are the `.gitignore` dialect, matched by the same code, so
+`examples/`, `charts/vendor/**` and `*.tf` mean here exactly what they mean
+there. Inventing a second glob dialect for one config key is how a tool ends up
+with two subtly different answers to "does this path match".
+
 `disable` takes rule ids or family prefixes (`DC*`), and `--disable` does the
 same ad hoc. A disabled rule is still counted in the output -- *"3 finding(s)
 hidden by disabled rules"* -- because silence nobody can see is the failure mode

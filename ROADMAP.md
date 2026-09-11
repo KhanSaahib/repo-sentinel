@@ -94,8 +94,9 @@ outcome than a feature nobody wanted.
       per-rule and per-family disabling
 - [x] Rule-scoped suppression markers, so an exemption stays as narrow as the
       reason for it and does not silently cover rules added later
-- [ ] Per-path rule configuration: "K8S004 is fine in examples/, not in
-      deploy/". Needs a shape that does not turn into a policy language
+- [x] Per-path rule configuration: "K8S004 is fine in examples/, not in
+      deploy/". A `paths` table of glob to disabled rules, and nothing else --
+      the shape stops short of a policy language on purpose
 - [x] Markdown output for a pull request comment
 - [ ] Publish to PyPI so `pipx run repo-sentinel` works
 - [x] `--quiet` for CI logs that only need the summary line, and `--sort path`
