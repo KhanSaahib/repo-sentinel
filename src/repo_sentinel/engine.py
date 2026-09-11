@@ -70,7 +70,9 @@ def scan(
         ]
     files = [(entry.path, entry.text) for entry in entries if entry.text is not None]
 
-    found = filenames.scan_paths([(entry.path, entry.text) for entry in entries])
+    found = filenames.scan_paths(
+        [(entry.path, entry.text) for entry in entries], honour_markers=honour_markers
+    )
     found += secrets.scan_files(
         files, allow_examples=allow_examples, honour_markers=honour_markers
     )

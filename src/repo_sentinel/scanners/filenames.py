@@ -44,7 +44,7 @@ import posixpath
 import re
 from collections.abc import Iterable, Iterator
 
-from .. import wellknown
+from .. import suppression, wellknown
 from ..findings import Confidence, Finding, Severity
 from ..heuristics import is_secret_name, looks_like_placeholder
 
@@ -275,10 +275,23 @@ def scan_name(path: str, text: "str | None" = None) -> "Iterator[Finding]":
     )
 
 
-def scan_paths(entries: "Iterable[tuple[str, str | None]]") -> "list[Finding]":
+def scan_paths(
+    entries: "Iterable[tuple[str, str | None]]", *, honour_markers: bool = True
+) -> "list[Finding]":
     """Scan ``(path, text)`` pairs for every file the walk reached.
 
     ``text`` is None for the files nothing could read, which is the case these
     rules exist for.
+
+    A file that *can* be read can also carry a suppression marker, and a rule
+    that ignored one would be the only rule here that does. A file that cannot
+    be read has nowhere to put a marker, which is what the ``paths`` table in
+    the config file is for.
     """
-    return [finding for path, text in entries for finding in scan_name(path, text)]
+    findings: "list[Finding]" = []
+    for path, text in entries:
+        found = list(scan_name(path, text))
+        if found and text is not None and honour_markers:
+            found = suppression.parse(text).filter_findings(found)
+        findings.extend(found)
+    return findings

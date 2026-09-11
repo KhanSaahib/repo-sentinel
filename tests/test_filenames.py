@@ -114,15 +114,38 @@ class TestByproducts(unittest.TestCase):
                 self.assertEqual(scan(name, "x\n"), [])
 
 
+class TestSuppression(unittest.TestCase):
+    """A file that can be read can carry a marker, like every other file."""
+
+    def test_a_marker_in_the_file_silences_the_name_rule(self):
+        found = filenames.scan_paths(
+            [(".npmrc", "# repo-sentinel: ignore-file\nAPI_TOKEN=Tv8nRw1YXk92mQp7Lz4T\n")]
+        )
+        self.assertEqual(found, [])
+
+    def test_a_rule_scoped_marker_works_too(self):
+        text = "# repo-sentinel: ignore-file[FN003]\nAPI_TOKEN=Tv8nRw1YXk92mQp7Lz4T\n"
+        self.assertEqual(filenames.scan_paths([(".npmrc", text)]), [])
+
+    def test_no_suppression_reads_past_it(self):
+        text = "# repo-sentinel: ignore-file\nAPI_TOKEN=Tv8nRw1YXk92mQp7Lz4T\n"
+        found = filenames.scan_paths([(".npmrc", text)], honour_markers=False)
+        self.assertEqual([finding.rule_id for finding in found], ["FN003"])
+
+    def test_an_unreadable_file_has_nowhere_to_put_a_marker(self):
+        # Which is what the paths table in the config file is for.
+        self.assertEqual(len(filenames.scan_paths([("deploy/id_rsa", None)])), 1)
+
+
 class TestScanPaths(unittest.TestCase):
     def test_aggregates_over_the_walk(self):
         findings = filenames.scan_paths(
-            [("app.py", True), ("deploy/id_rsa", False), ("README.md", True)]
+            [("app.py", "x = 1\n"), ("deploy/id_rsa", None), ("README.md", "# hi\n")]
         )
         self.assertEqual([finding.path for finding in findings], ["deploy/id_rsa"])
 
     def test_paths_are_reported_with_forward_slashes(self):
-        finding = filenames.scan_paths([("deploy\\\\id_rsa", False)])[0]
+        finding = filenames.scan_paths([("deploy\\\\id_rsa", None)])[0]
         self.assertIn("/", finding.path)
 
 
