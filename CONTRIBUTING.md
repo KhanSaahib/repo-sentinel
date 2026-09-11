@@ -96,6 +96,27 @@ Two places name rules -- a `disable` list in `.repo-sentinel.json` and a
 `rules.matcher`, so the syntax is identical in both. Keep it that way: the
 answer to "what do I write here" should not depend on where here is.
 
+## Measuring against real repositories
+
+A rule that looks right against a hand-written fixture can still be wrong
+against a real repository, and it is always wrong in a way nobody imagined.
+Before changing a heuristic, point the tool at a few trees and read every
+finding:
+
+```bash
+python3 tools/measure.py --sample 3 ~/corpora/*
+```
+
+`tools/measure.py` lists the corpus it was written for -- a Compose examples
+repository, Prometheus, a Helm chart monorepo, a Terraform module, and two
+deliberately vulnerable repositories that measure the other direction: what the
+rules fail to notice.
+
+Every false positive fixed this way is worth a line in the commit message
+saying which repository produced it and what the value actually was. "A YAML
+anchor" and "the name of an environment variable" are the kinds of thing that
+only turn up this way, and the next person will want to know they were real.
+
 ## Tests
 
 ```bash
