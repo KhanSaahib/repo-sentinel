@@ -9,6 +9,7 @@ from collections.abc import Iterable
 from .discovery import DEFAULT_EXCLUDES, Entry, read_listed, walk
 from .findings import Finding
 from .scanners import (
+    cloudformation,
     compose,
     dockerfiles,
     filenames,
@@ -68,6 +69,7 @@ def scan(
     found += kubernetes.scan_files(files)
     found += compose.scan_files(files)
     found += gitlab.scan_files(files)
+    found += cloudformation.scan_files(files)
 
     return ScanReport(
         findings=sorted(collapse(found), key=lambda finding: finding.sort_key),

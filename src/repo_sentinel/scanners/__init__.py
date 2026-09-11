@@ -7,6 +7,7 @@ it is about have no text to read.
 
 from . import (
     allowlist,
+    cloudformation,
     compose,
     dockerfiles,
     filenames,
@@ -19,6 +20,7 @@ from . import (
 
 __all__ = [
     "allowlist",
+    "cloudformation",
     "compose",
     "dockerfiles",
     "filenames",

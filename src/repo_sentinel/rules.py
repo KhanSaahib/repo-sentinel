@@ -38,7 +38,7 @@ class Rule:
         return _CATEGORIES[self.id[:3]]
 
 
-_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose", "FN0": "filenames", "GL0": "gitlab"}
+_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose", "FN0": "filenames", "GL0": "gitlab", "CF0": "cloudformation"}
 
 
 def _rules(*entries: tuple[str, str, str, Severity]) -> "dict[str, Rule]":
@@ -98,6 +98,11 @@ RULES: "dict[str, Rule]" = _rules(
     ("TF005", "public-database", "Managed database given a public endpoint", Severity.HIGH),
     ("TF006", "unencrypted-state", "Terraform state stored without encryption", Severity.MEDIUM),
     ("TF007", "plaintext-transport", "Service accepts unencrypted connections", Severity.HIGH),
+    ("CF001", "cfn-open-ingress", "Security group admits 0.0.0.0/0", Severity.CRITICAL),
+    ("CF002", "cfn-public-bucket", "Bucket granted to the public", Severity.HIGH),
+    ("CF003", "cfn-encryption-disabled", "Encryption at rest explicitly switched off", Severity.MEDIUM),
+    ("CF004", "cfn-wildcard-policy", "Policy allows every action on every resource", Severity.HIGH),
+    ("CF005", "cfn-public-database", "Managed database given a public endpoint", Severity.HIGH),
     ("K8S001", "privileged-container", "Container runs privileged", Severity.CRITICAL),
     ("K8S002", "host-path-mount", "Volume mounts a path from the node", Severity.HIGH),
     ("K8S003", "host-namespace", "Pod shares a namespace with the node", Severity.HIGH),

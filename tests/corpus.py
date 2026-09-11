@@ -228,6 +228,36 @@ build:
     - curl -sSL https://get.example.invalid/install.sh | bash
 """
 
+TEMPLATE_FILE = """AWSTemplateFormatVersion: "2010-09-09"
+Resources:
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+  Assets:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: PublicRead
+  Database:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      PubliclyAccessible: true
+      StorageEncrypted: false
+  AdminRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: "*"
+                Resource: "*"
+"""
+
 #: ``(path, text)`` pairs, in the shape :func:`iter_files` yields.
 FILES = (
     ("src/config.py", SECRETS_FILE),
@@ -240,6 +270,7 @@ FILES = (
     ("deploy/web.yaml", MANIFEST_FILE),
     ("docker-compose.yml", COMPOSE_FILE),
     (".gitlab-ci.yml", PIPELINE_FILE),
+    ("infra/stack.yaml", TEMPLATE_FILE),
 )
 
 #: ``(path, text)`` pairs, in the shape the walk reports, with None for the

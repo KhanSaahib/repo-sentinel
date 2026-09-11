@@ -6,6 +6,7 @@ import unittest
 import corpus
 from repo_sentinel import rules
 from repo_sentinel.scanners import (
+    cloudformation,
     compose,
     dockerfiles,
     filenames,
@@ -26,6 +27,7 @@ def emitted_rule_ids():
     findings += compose.scan_files(corpus.FILES)
     findings += filenames.scan_paths(corpus.PATHS)
     findings += gitlab.scan_files(corpus.FILES)
+    findings += cloudformation.scan_files(corpus.FILES)
     return {finding.rule_id for finding in findings}
 
 

@@ -48,6 +48,10 @@ repository the tool can read at all: it grew from two file formats to six.
   medium confidence drops to low in fixture trees and in documentation. The
   provider rules keep theirs everywhere. On the GitLab runner repository this
   takes `--min-confidence medium` from 70 findings to 27.
+- **CloudFormation** (CF001–CF005): open security groups, public buckets,
+  encryption switched off, wildcard policies, public databases. The Terraform
+  rules in AWS's other vocabulary, since the mistakes do not care which tool
+  describes them. YAML templates only, and the documentation says so.
 - **K8S009 and K8S010**, the RBAC pair: a Role or ClusterRole granting every
   verb on every resource, and a binding whose subject is `system:anonymous`,
   `system:unauthenticated` or `system:authenticated` -- the last of which is
