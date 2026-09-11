@@ -54,6 +54,7 @@ _MODE_KEYS = ("mode",)
 #: A file mode that gives every account on the machine write access.
 _WORLD_WRITABLE = re.compile(r"^0?[0-7][0-7][2367]$")
 _HTTP_URL = re.compile(r"^http://(?P<host>[\w.-]+)", re.IGNORECASE)
+#: Left by template flattening; see :func:`yamlish.strip_templates`.
 _LOCAL_HOSTS = ("localhost", "127.0.0.1")
 
 
@@ -197,10 +198,15 @@ def _check_plaintext_fetch(path: str, task: "yamlish.Node") -> "Iterator[Finding
         match = _HTTP_URL.match(value)
         if match is None or match.group("host").lower() in _LOCAL_HOSTS:
             continue
+        # The host may be a template -- "http://{{ hue_ip }}/api" -- in which
+        # case naming it says nothing. The scheme is literal either way, which
+        # is what the rule is about.
+        host = match.group("host")
+        where = "" if yamlish.TEMPLATE_PLACEHOLDER in host else f" from {host}"
         yield Finding(
             rule_id="AN003",
             severity=Severity.MEDIUM,
-            title=f"{_describe(task)} fetches from {match.group('host')} over plain HTTP",
+            title=f"{_describe(task)} fetches{where} over plain HTTP",
             path=path,
             line=node.line,
             evidence=f"{key}: {value[:80]}",

@@ -75,6 +75,14 @@ class TestPlaintextFetch(unittest.TestCase):
         self.assertIn("AN003", rule_ids(findings))
         self.assertIn("downloads.invalid", findings[0].title)
 
+    def test_a_templated_host_is_not_named_back_at_the_reader(self):
+        # "http://{{ hue_ip }}/api" is still a plaintext fetch; the host is a
+        # variable, and quoting the placeholder says nothing.
+        text = play("    - name: Fetch\n      uri:\n        url: http://{{ hue_ip }}/api\n")
+        findings = scan(text)
+        self.assertIn("AN003", rule_ids(findings))
+        self.assertNotIn("__TEMPLATED__", findings[0].title)
+
     def test_https_is_the_point(self):
         text = play("    - name: Fetch\n      get_url:\n        url: https://downloads.invalid/a.tgz\n")
         self.assertEqual(scan(text), [])
