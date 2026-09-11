@@ -255,6 +255,30 @@ class TestGitHubOutput(unittest.TestCase):
         self.assertTrue(any(line.startswith("::error ") for line in output.splitlines()))
 
 
+class TestFailureModes(unittest.TestCase):
+    """The paths a pipeline hits at three in the morning."""
+
+    def test_an_unwritable_output_path_is_an_error_not_a_traceback(self):
+        with sample_repo() as root:
+            blocker = os.path.join(root, "blocker")
+            with open(blocker, "w", encoding="utf-8") as handle:
+                handle.write("not a directory\n")
+            code, output = run(["scan", root, "--output", os.path.join(blocker, "out.txt")])
+        self.assertEqual(code, cli.EXIT_ERROR)
+        self.assertEqual(output, "")
+
+    def test_a_nonsense_severity_is_rejected_by_the_parser(self):
+        with sample_repo() as root:
+            with self.assertRaises(SystemExit) as caught:
+                run(["scan", root, "--min-severity", "catastrophic"])
+        self.assertEqual(caught.exception.code, 2)
+
+    def test_a_nonsense_confidence_is_rejected_too(self):
+        with sample_repo() as root:
+            with self.assertRaises(SystemExit):
+                run(["scan", root, "--min-confidence", "certain"])
+
+
 class TestConfidenceFilter(unittest.TestCase):
     def test_min_confidence_hides_the_heuristics(self):
         with tempfile.TemporaryDirectory() as root:
