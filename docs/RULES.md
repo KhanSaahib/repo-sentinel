@@ -254,6 +254,7 @@ beats reporting it in each of the five jobs that inherited it.
 | TF004 | Policy allows every action on every resource | high |
 | TF005 | Managed database given a public endpoint | high |
 | TF006 | Terraform state stored without encryption | medium |
+| TF007 | Service accepts unencrypted connections | high |
 
 These read block structure rather than lines, through a small HCL reader that
 knows a line ending in `{` opens a block and that braces inside strings,
@@ -262,7 +263,9 @@ comments and heredocs are not braces at all. The difference is the whole rule:
 `root_block_device` is a different finding from the same words at the top of a
 resource, and a wildcard action only counts when the statement's effect is
 `Allow`. TF001 grades on what the port range exposes, so `0.0.0.0/0` to 22 is
-critical and names SSH while `0.0.0.0/0` to 443 is high. It reads all four
+critical and names SSH while `0.0.0.0/0` to 443 is high. TF001 is asked of every cloud, in each one's spelling: AWS security groups and
+network ACLs, `azurerm_network_security_rule` (where "anywhere" is written `*`
+or the service tag `Internet`), and `google_compute_firewall`. It reads all four
 spellings AWS has accumulated: a nested `ingress` block, `aws_security_group_rule`,
 `aws_vpc_security_group_ingress_rule`, and `aws_network_acl_rule`, which calls
 the attribute `cidr_block` in the singular and marks direction with `egress`.

@@ -30,6 +30,10 @@ from ..findings import Confidence, Finding, Severity
 
 _TERRAFORM_SUFFIXES = (".tf", ".tf.json")
 
+#: Source addresses that mean "anywhere", in each provider's spelling. Azure
+#: writes "*" or the service tag "Internet"; GCP and AWS write a CIDR.
+_OPEN_SOURCES = frozenset({"*", "internet", "any", "0.0.0.0/0", "::/0"})
+
 _PUBLIC_ACLS = ("public-read", "public-read-write", "website")
 #: Grants to every AWS account anywhere, which is public with extra steps.
 _ANYONE = ("allusers", "allauthenticatedusers", "authenticated-read")
@@ -75,6 +79,27 @@ def _port(block: "hcl.Block", name: str) -> "int | None":
     if found is None or not _NUMBER.match(found[1]):
         return None
     return int(found[1])
+
+
+def _ports_from_ranges(specs: "Iterable[str]") -> "list[str]":
+    """Services exposed by port specifications written as strings.
+
+    Covers the spellings Azure and GCP use: a single port, a hyphenated range,
+    a comma-separated list, and ``*`` for everything.
+    """
+    exposed: "list[str]" = []
+    for spec in specs:
+        cleaned = spec.strip().strip('"')
+        if cleaned in ("*", "all"):
+            return ["every port"]
+        for part in cleaned.split(","):
+            low, _, high = part.strip().partition("-")
+            if not low.strip().isdigit():
+                continue
+            first = int(low)
+            last = int(high) if high.strip().isdigit() else first
+            exposed.extend(wellknown.services_in_range(first, last))
+    return sorted(set(exposed))
 
 
 def _exposed_services(block: "hcl.Block") -> "list[str]":
@@ -137,6 +162,89 @@ def _check_ingress(path: str, block: "hcl.Block", rule: "hcl.Block") -> "Finding
     )
 
 
+def _azure_ingress(path: str, block: "hcl.Block", rule: "hcl.Block") -> "Finding | None":
+    """TF001, in Azure's spelling: a network security rule open to the world."""
+    direction = (rule.attribute("direction") or (0, '"Inbound"'))[1].strip('"').lower()
+    access = (rule.attribute("access") or (0, '"Allow"'))[1].strip('"').lower()
+    if direction != "inbound" or access != "allow":
+        return None
+
+    found = rule.attribute("source_address_prefix") or rule.attribute("source_address_prefixes")
+    if found is None:
+        return None
+    line, value = found
+    sources = _strings(value) or [value]
+    opening = next(
+        (source for source in sources if source.strip().strip('"').lower() in _OPEN_SOURCES),
+        None,
+    )
+    if opening is None:
+        return None
+
+    ports = rule.attribute("destination_port_range") or rule.attribute("destination_port_ranges")
+    specs = _strings(ports[1]) if ports else []
+    if ports and not specs:
+        specs = [ports[1]]
+    services = _ports_from_ranges(specs)
+    return Finding(
+        rule_id="TF001",
+        severity=Severity.CRITICAL if services else Severity.HIGH,
+        title=(
+            f"{block.label()} admits {opening} to {', '.join(services)}"
+            if services
+            else f"{block.label()} admits {opening}"
+        ),
+        path=path,
+        line=line,
+        evidence=f"inbound from {opening}",
+        remediation=(
+            "Restrict the source to the addresses that need it. A service tag "
+            "of Internet, or a prefix of *, is every host that can route to "
+            "this network."
+        ),
+    )
+
+
+def _gcp_ingress(path: str, block: "hcl.Block") -> "Finding | None":
+    """TF001, in GCP's spelling: a firewall rule with an open source range."""
+    direction = (block.attribute("direction") or (0, '"INGRESS"'))[1].strip('"').upper()
+    if direction != "INGRESS":
+        return None
+    found = block.attribute("source_ranges")
+    if found is None:
+        return None
+    line, value = found
+    opening = next(
+        (cidr for cidr in _strings(value) if cidr in wellknown.OPEN_CIDRS), None
+    )
+    if opening is None:
+        return None
+
+    specs = [
+        port
+        for allow in block.blocks("allow")
+        for port in (_strings((allow.attribute("ports") or (0, ""))[1]) or ["*"])
+    ]
+    services = _ports_from_ranges(specs)
+    return Finding(
+        rule_id="TF001",
+        severity=Severity.CRITICAL if services else Severity.HIGH,
+        title=(
+            f"{block.label()} admits {opening} to {', '.join(services)}"
+            if services
+            else f"{block.label()} admits {opening}"
+        ),
+        path=path,
+        line=line,
+        evidence=f"source_ranges includes {opening}",
+        remediation=(
+            "Restrict source_ranges to the networks that need it, and prefer a "
+            "target_service_account over a tag so the rule cannot widen by "
+            "somebody labelling an instance."
+        ),
+    )
+
+
 def _ingress_rules(block: "hcl.Block") -> "Iterator[hcl.Block]":
     """Ingress, however it was written.
 
@@ -158,6 +266,14 @@ def _ingress_rules(block: "hcl.Block") -> "Iterator[hcl.Block]":
     elif block.type == "aws_network_acl_rule":
         if not _is_true((block.attribute("egress") or (0, "false"))[1]):
             yield block
+
+
+def _azure_rules(block: "hcl.Block") -> "Iterator[hcl.Block]":
+    """Azure security rules, standalone or nested in a security group."""
+    if block.type == "azurerm_network_security_rule":
+        yield block
+    elif block.type == "azurerm_network_security_group":
+        yield from block.blocks("security_rule")
 
 
 def _check_public_storage(path: str, block: "hcl.Block") -> "Iterator[Finding]":
@@ -235,6 +351,48 @@ def _check_encryption(path: str, block: "hcl.Block") -> "Iterator[Finding]":
                     "Encryption at rest is close to free on every managed "
                     "service and cannot be turned on later without a rebuild. "
                     "Remove the attribute to take the provider's default."
+                ),
+            )
+
+
+#: Attributes that switch off transport security. Each is a provider saying
+#: "yes, serve this over plain HTTP", which is a different failure from
+#: encryption at rest and needs a different fix.
+_TRANSPORT_ATTRIBUTES = (
+    "enable_https_traffic_only",
+    "https_only",
+    "enforce_https",
+    "min_tls_version",
+    "ssl_enforcement_enabled",
+    "require_ssl",
+)
+
+
+def _check_transport(path: str, block: "hcl.Block") -> "Iterator[Finding]":
+    """TF007: a service told to accept unencrypted connections."""
+    for scope in block.walk():
+        for attribute in _TRANSPORT_ATTRIBUTES:
+            found = scope.attribute(attribute)
+            if found is None:
+                continue
+            value = found[1].strip().strip('"').lower()
+            if attribute == "min_tls_version":
+                if value not in ("tls1_0", "tls1_1", "1.0", "1.1"):
+                    continue
+            elif not _is_false(found[1]):
+                continue
+            yield Finding(
+                rule_id="TF007",
+                severity=Severity.HIGH,
+                title=f"{block.label()} accepts unencrypted connections ({attribute})",
+                path=path,
+                line=found[0],
+                evidence=f"{attribute} = {found[1]}",
+                remediation=(
+                    "Anything that can see the network can read a plaintext "
+                    "connection and change it. Require TLS 1.2 or better; "
+                    "every provider defaults to it now, so this is a setting "
+                    "somebody turned off rather than one nobody turned on."
                 ),
             )
 
@@ -353,8 +511,17 @@ def scan_terraform(path: str, text: str) -> "list[Finding]":
             finding = _check_ingress(path, block, rule)
             if finding is not None:
                 findings.append(finding)
+        for rule in _azure_rules(block):
+            finding = _azure_ingress(path, block, rule)
+            if finding is not None:
+                findings.append(finding)
+        if block.type == "google_compute_firewall":
+            finding = _gcp_ingress(path, block)
+            if finding is not None:
+                findings.append(finding)
         findings.extend(_check_public_storage(path, block))
         findings.extend(_check_encryption(path, block))
+        findings.extend(_check_transport(path, block))
         findings.extend(_check_public_database(path, block))
         findings.extend(_check_wildcard_policy(path, block))
 

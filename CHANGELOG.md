@@ -40,6 +40,12 @@ repository the tool can read at all: it grew from two file formats to six.
 - **Per-path configuration**: a `paths` table switches rules off under one glob
   rather than everywhere, using the `.gitignore` dialect matched by the same
   code that reads `.gitignore`.
+- **TF001 covers every cloud**, not only AWS: `azurerm_network_security_rule`
+  (where "anywhere" is `*` or the service tag `Internet`), nested
+  `security_rule` blocks, and `google_compute_firewall`, alongside the four
+  spellings AWS has accumulated for a security group rule.
+- **TF007**: a service told to accept unencrypted connections --
+  `enable_https_traffic_only = false`, a TLS floor of 1.0.
 - **GitLab CI** (GL001–GL004): the injection class WF003 covers, in the other
   CI system -- `$CI_COMMIT_TITLE` and its siblings carry text a fork wrote --
   plus floating job images, pipe-to-shell build steps, and `CI_DEBUG_TRACE`,

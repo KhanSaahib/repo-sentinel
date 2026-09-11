@@ -97,6 +97,7 @@ RULES: "dict[str, Rule]" = _rules(
     ("TF004", "wildcard-policy", "Policy allows every action on every resource", Severity.HIGH),
     ("TF005", "public-database", "Managed database given a public endpoint", Severity.HIGH),
     ("TF006", "unencrypted-state", "Terraform state stored without encryption", Severity.MEDIUM),
+    ("TF007", "plaintext-transport", "Service accepts unencrypted connections", Severity.HIGH),
     ("K8S001", "privileged-container", "Container runs privileged", Severity.CRITICAL),
     ("K8S002", "host-path-mount", "Volume mounts a path from the node", Severity.HIGH),
     ("K8S003", "host-namespace", "Pod shares a namespace with the node", Severity.HIGH),

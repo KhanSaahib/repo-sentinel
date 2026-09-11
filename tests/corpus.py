@@ -140,6 +140,10 @@ resource "aws_db_instance" "main" {
   storage_encrypted   = false
 }
 
+resource "azurerm_storage_account" "logs" {
+  enable_https_traffic_only = false
+}
+
 data "aws_iam_policy_document" "admin" {
   statement {
     actions   = ["*"]

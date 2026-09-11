@@ -144,7 +144,7 @@ repo-sentinel scan . --no-gitignore
 
 ## What it checks
 
-Sixty-eight rules across eight families. [docs/RULES.md](docs/RULES.md) is the
+Sixty-nine rules across eight families. [docs/RULES.md](docs/RULES.md) is the
 full list, with a paragraph on each family explaining what it is looking for
 and why; `repo-sentinel rules` prints the same catalogue from the tool.
 
@@ -156,7 +156,7 @@ and why; `repo-sentinel rules` prints the same catalogue from the tool.
 | [GitLab CI](docs/RULES.md#gitlab-ci) | GL001–GL004 | The same injection class, and debug tracing |
 | [Dockerfiles](docs/RULES.md#dockerfiles) | DK001–DK006 | Base images, root, pipe-to-shell, layer secrets |
 | [Docker Compose](docs/RULES.md#docker-compose) | DC001–DC006 | Privilege, host mounts, ports on every interface |
-| [Terraform](docs/RULES.md#terraform) | TF001–TF006 | Open ingress, public storage, wildcard policies |
+| [Terraform](docs/RULES.md#terraform) | TF001–TF007 | Open ingress, public storage, wildcard policies |
 | [Kubernetes](docs/RULES.md#kubernetes) | K8S001–K8S008 | Container escape routes, secrets in manifests |
 
 Three things are worth knowing before you read the list.

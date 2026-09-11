@@ -132,6 +132,98 @@ class TestIngress(unittest.TestCase):
         self.assertEqual(scan(text), [])
 
 
+class TestOtherClouds(unittest.TestCase):
+    """The same mistake exists everywhere; only the spelling changes."""
+
+    def test_azure_security_rule_open_to_the_internet(self):
+        text = (
+            'resource "azurerm_network_security_rule" "bad" {\n'
+            '  direction = "Inbound"\n  access = "Allow"\n'
+            '  destination_port_range = "22"\n  source_address_prefix = "*"\n}\n'
+        )
+        findings = scan(text)
+        self.assertEqual(findings[0].rule_id, "TF001")
+        self.assertEqual(findings[0].severity, Severity.CRITICAL)
+
+    def test_the_internet_service_tag_means_the_internet(self):
+        text = (
+            'resource "azurerm_network_security_rule" "bad" {\n'
+            '  direction = "Inbound"\n  access = "Allow"\n'
+            '  destination_port_range = "3389"\n  source_address_prefix = "Internet"\n}\n'
+        )
+        self.assertIn("TF001", rule_ids(scan(text)))
+
+    def test_rules_nested_in_a_security_group_are_read(self):
+        text = (
+            'resource "azurerm_network_security_group" "bad" {\n  security_rule {\n'
+            '    direction = "Inbound"\n    access = "Allow"\n'
+            '    destination_port_range = "22"\n    source_address_prefix = "*"\n  }\n}\n'
+        )
+        self.assertIn("TF001", rule_ids(scan(text)))
+
+    def test_outbound_and_deny_rules_are_not_findings(self):
+        for line in ('  direction = "Outbound"\n  access = "Allow"\n',
+                     '  direction = "Inbound"\n  access = "Deny"\n'):
+            with self.subTest(line=line):
+                text = (
+                    'resource "azurerm_network_security_rule" "r" {\n' + line +
+                    '  destination_port_range = "22"\n  source_address_prefix = "*"\n}\n'
+                )
+                self.assertEqual(scan(text), [])
+
+    def test_a_narrow_azure_source_is_fine(self):
+        text = (
+            'resource "azurerm_network_security_rule" "ok" {\n'
+            '  direction = "Inbound"\n  access = "Allow"\n'
+            '  destination_port_range = "22"\n  source_address_prefix = "10.0.0.0/8"\n}\n'
+        )
+        self.assertEqual(scan(text), [])
+
+    def test_gcp_firewall_open_to_the_world(self):
+        text = (
+            'resource "google_compute_firewall" "bad" {\n'
+            '  source_ranges = ["0.0.0.0/0"]\n'
+            '  allow {\n    protocol = "tcp"\n    ports = ["22", "3389"]\n  }\n}\n'
+        )
+        findings = scan(text)
+        self.assertEqual(findings[0].severity, Severity.CRITICAL)
+        self.assertIn("SSH", findings[0].title)
+
+    def test_gcp_web_ports_are_high_not_critical(self):
+        text = (
+            'resource "google_compute_firewall" "web" {\n'
+            '  source_ranges = ["0.0.0.0/0"]\n'
+            '  allow {\n    protocol = "tcp"\n    ports = ["443"]\n  }\n}\n'
+        )
+        self.assertEqual(scan(text)[0].severity, Severity.HIGH)
+
+    def test_gcp_egress_rules_are_not_ingress(self):
+        text = (
+            'resource "google_compute_firewall" "out" {\n  direction = "EGRESS"\n'
+            '  source_ranges = ["0.0.0.0/0"]\n}\n'
+        )
+        self.assertEqual(scan(text), [])
+
+
+class TestTransport(unittest.TestCase):
+    def test_https_switched_off(self):
+        text = (
+            'resource "azurerm_storage_account" "a" {\n'
+            "  enable_https_traffic_only = false\n}\n"
+        )
+        findings = scan(text)
+        self.assertEqual(findings[0].rule_id, "TF007")
+        self.assertEqual(findings[0].severity, Severity.HIGH)
+
+    def test_an_obsolete_tls_floor(self):
+        text = 'resource "azurerm_storage_account" "a" {\n  min_tls_version = "TLS1_0"\n}\n'
+        self.assertIn("TF007", rule_ids(scan(text)))
+
+    def test_a_current_tls_floor_is_fine(self):
+        text = 'resource "azurerm_storage_account" "a" {\n  min_tls_version = "TLS1_2"\n}\n'
+        self.assertEqual(scan(text), [])
+
+
 class TestPublicStorage(unittest.TestCase):
     def test_public_acl(self):
         self.assertIn(
