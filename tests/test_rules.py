@@ -112,6 +112,38 @@ class TestCatalogue(unittest.TestCase):
                     f"catalogue promises at most {rules.RULES[finding.rule_id].severity.value}",
                 )
 
+    #: Shapes with no literal anywhere in them, which therefore run their
+    #: pattern on every candidate line. A Discord token is base64 all the way
+    #: through: the only thing every one of them contains is a dot, and a hint
+    #: of "." is every line in the repository.
+    UNHINTED = {"SEC036"}
+
+    def test_only_the_known_rules_run_without_a_hint(self):
+        # A rule with no hint still works; it just costs what the hints exist
+        # to avoid. Asserting the exact set means adding another is a decision
+        # somebody makes on purpose rather than by omission.
+        without = {rule.rule_id for rule in providers.RULES if not rule.hints}
+        self.assertEqual(without, self.UNHINTED)
+
+    def test_a_rule_fires_only_where_its_hint_appears(self):
+        # The other direction, and the dangerous one: a hint that does not
+        # appear in what the pattern matches disables the rule silently. The
+        # corpus catches it, so assert the property directly on that corpus.
+        for path, text in corpus.FILES:
+            for number, line in enumerate(text.splitlines(), start=1):
+                for finding in secrets.scan_line(path, number, line):
+                    rule = next(
+                        (item for item in providers.RULES if item.rule_id == finding.rule_id),
+                        None,
+                    )
+                    if rule is None or not rule.hints:
+                        continue
+                    with self.subTest(rule=rule.rule_id):
+                        self.assertTrue(
+                            any(hint in line for hint in rule.hints),
+                            f"{rule.rule_id} fired on a line containing none of its hints",
+                        )
+
     def test_provider_rules_agree_with_the_catalogue_on_severity(self):
         for rule in providers.RULES:
             with self.subTest(rule=rule.rule_id):

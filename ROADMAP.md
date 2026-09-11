@@ -140,10 +140,12 @@ outcome than a feature nobody wanted.
       Python 3.14 standard library went from 5.1s to 1.5s and Prometheus (39 MB,
       1,679 files) from not finishing in five minutes to about 8s, via a
       quadratic YAML parse, a cheap gate in front of the provider patterns, and
-      substring guards in front of five YAML scanners. The suite has scaling
-      guards. Still short of "10k files in a second", and the remaining cost is
-      one alternation of forty-five patterns per surviving line -- which grows
-      with every provider rule, and is where a pure-Python scanner ends up
+      substring guards in front of five YAML scanners, and a literal hint per
+      provider rule so the patterns themselves are almost never run. Grafana
+      (315 MB, 22,620 files) went from 127s to 77s on the last of those alone.
+      The suite has scaling guards. Still short of "10k files in a second", but
+      the cost no longer grows with every provider rule added, which was the
+      part that mattered
 - [ ] Type annotations checked with mypy in CI
 - [ ] Issue templates
 - [ ] Enable CodeQL default setup and branch protection on `main`

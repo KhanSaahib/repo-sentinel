@@ -105,6 +105,24 @@ what differ. The reason to share the rest is not brevity -- it is that a fix
 found in one system belongs in all of them, and the harmless-fields list was
 written for GitHub and then written again, identically, for Azure.
 
+## Two gates in front of the patterns
+
+Almost no line in a repository contains a credential, and the scanner's cost is
+dominated by proving that about each one. So the secret rules run behind two
+cheap questions.
+
+The first is one small pattern: does this line have a fourteen-character run of
+credential characters, a PEM header, or a URL carrying a password? Four fifths
+of lines do not. The second is per rule: does the line contain any of the
+literals that rule's shape must include -- `AKIA`, `ghp_`, `xoxb-`? Nine of the
+remaining lines in ten do not.
+
+Both are correctness risks as much as speed wins, because a line a gate rejects
+is never looked at again, and a hint absent from what a pattern matches
+disables that rule silently. The corpus test is what makes them safe: every
+rule must fire on a line carrying its own shape, so a bad gate or a bad hint
+fails the build rather than quietly removing a rule.
+
 ## The catalogue
 
 `rules.py` lists every rule, and the scanners hold the detection logic and the
