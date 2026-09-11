@@ -98,6 +98,10 @@ class TestLooksGenerated(unittest.TestCase):
             "PRIVATE-TOKEN",
             "glrt-<TOKEN>",
             "ImagePullSecret",
+            # From the Express examples: what a placeholder in a sample app
+            # actually looks like.
+            "shhhh, very secret",
+            "manny is cool",
         ):
             with self.subTest(value=value):
                 self.assertFalse(heuristics.looks_generated(value))

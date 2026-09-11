@@ -43,6 +43,10 @@ class TestBaseImages(unittest.TestCase):
         self.assertEqual(next(iter(floating)).severity, Severity.MEDIUM)
         self.assertEqual(next(iter(pinned)).severity, Severity.LOW)
 
+    def test_an_interpolated_tag_is_chosen_by_a_build_argument(self):
+        text = "ARG VARIANT=17\nFROM debian:${VARIANT}\nUSER app\n"
+        self.assertEqual(scan(text), [])
+
     def test_scratch_is_not_an_image_to_pin(self):
         self.assertEqual(scan("FROM scratch\nCOPY app /app\n"), [])
 

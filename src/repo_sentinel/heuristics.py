@@ -85,6 +85,10 @@ _STRUCTURED = (
     # Identifiers assigned to identifier-shaped names, which is what a
     # constants file is. A generated credential carries digits or punctuation.
     re.compile(r"^[A-Za-z][a-z]*(?:[A-Z][a-z]+)+$"),
+    # Words with spaces between them: "shhhh, very secret", "manny is cool".
+    # Prose, in other words, which is what a placeholder in an example app
+    # looks like. A generated credential has no spaces in it.
+    re.compile(r"^[A-Za-z][A-Za-z'’.,!?-]*(?: +[A-Za-z][A-Za-z'’.,!?-]*)+$"),
     # An all-lowercase relative path: "testdata/secret_key". Anchored to
     # lowercase on purpose -- a base64 blob containing slashes has mixed case,
     # so this does not swallow one.

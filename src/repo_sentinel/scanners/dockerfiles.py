@@ -19,7 +19,7 @@ import posixpath
 import re
 from collections.abc import Iterable, Iterator
 
-from .. import suppression
+from .. import suppression, wellknown
 from ..findings import Confidence, Finding, Severity, redact
 from ..heuristics import is_secret_name, looks_generated
 
@@ -79,7 +79,11 @@ def _check_base_image(path: str, line: int, argument: str) -> Iterator[Finding]:
     if match is None:
         return
     image = match.group("image")
-    if image.lower() == "scratch" or image.startswith("$"):
+    if image.lower() == "scratch":
+        return
+    # "java:0-${VARIANT}" is a tag chosen by a build argument, so its shape
+    # here says nothing about what will be pulled.
+    if wellknown.is_interpolated(argument):
         return
     if match.group("digest"):
         return
