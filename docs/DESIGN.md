@@ -1,0 +1,145 @@
+# Design
+
+How the pieces fit, and why they are shaped the way they are. This is for
+someone about to change the code; [RULES.md](RULES.md) is for someone about to
+read a finding.
+
+## The pipeline
+
+```
+discovery.walk ──► Entry(path, text|None)
+                        │
+                        ├─► scanners.filenames      (names, including binaries)
+                        ├─► scanners.secrets        (every text file)
+                        └─► the format scanners     (each filters by content)
+                                    │
+                                    ▼
+                              list[Finding]
+                                    │
+                        engine.collapse ──► sort ──► CLI filters ──► report
+```
+
+Four things happen in that order and the order matters:
+
+**The walk yields every path it reaches**, with text where it could read it and
+`None` where it could not. Before that, a binary was dropped before any rule
+saw it, which made a committed `id_rsa` or `.p12` invisible. A scanner that
+only ever sees text cannot report a file that has none.
+
+**Each scanner decides for itself whether a file is its business**, and mostly
+by content rather than by path. A Kubernetes manifest is a document with
+`apiVersion` and `kind`; a Compose file is one with a `services` map and no
+`apiVersion`; a GitLab pipeline is one named `.gitlab-ci.yml` *or* one whose
+top-level keys carry scripts. Directory conventions are guesses, and a workflow
+file living in `k8s/` is not a workload.
+
+**`engine.collapse` drops the second report of one problem.** Scanners overlap
+deliberately -- a credential inside a Kubernetes `Secret` is both a manifest
+problem and a secret -- and each rule says something the other cannot. What
+collapses is an explicit `subject`: the redacted credential. Nothing else
+participates, because two rules can legitimately report the same line for
+different reasons, and an earlier version keyed on evidence text quietly ate
+findings that way.
+
+**Filtering happens after scanning, never during.** Severity, confidence,
+disabled rules and the baseline are all decisions about which findings to
+*show*. Keeping them out of the scanners means a rule cannot accidentally
+become unreachable, and means every filter can report what it hid.
+
+## The two readers
+
+`hcl` and `yamlish` exist because most rules ask questions about a *block*, and
+a line cannot answer them. `privileged: true` under `securityContext` is
+critical and the same line under `annotations` is nothing; `cidr_blocks` in an
+`ingress` block is a finding and in `egress` it is normal.
+
+Neither is a parser, and both say so in their module docstring. The rule they
+follow is that **unknown structure degrades to a scalar**, never to a wrong
+shape: a flow collection, an anchor, a tag comes through as text, so a rule
+looking for nesting finds none and stays quiet. Silence is the safe direction
+for a parser this small, and it is the only direction that lets the zero
+dependency rule survive contact with real files.
+
+Line numbers are carried on every node. A finding that points at the wrong line
+of a Helm chart is worse than no finding, which is why template flattening
+replaces expressions in place rather than deleting them.
+
+## Severity and confidence
+
+They answer different questions and collapsing them loses both.
+
+*Severity* is what the finding costs if it is real. *Confidence* is how sure
+the rule is that it is. A documented token shape is high confidence; entropy
+next to a variable named `api_key` is a guess and says so.
+
+Two consequences worth knowing before touching a rule:
+
+- The catalogue's severity is the **worst case**, asserted by a test. A rule
+  may grade itself down by context -- TF001 is critical at port 22 and high at
+  443 -- but never up past what the catalogue promises.
+- Confidence is weighed by **where a file sits**. A rule already at medium
+  drops to low in fixture trees and documentation, because a credential in
+  `testdata/` or a README is usually invented. Nothing is silenced: a real key
+  does get committed to a fixture directory, and that one is exactly what
+  nobody is looking for.
+
+If you find yourself lowering a severity because a rule is unreliable, lower
+the confidence instead. That is what it is for.
+
+## The catalogue
+
+`rules.py` lists every rule, and the scanners hold the detection logic and the
+remediation text. That duplication is deliberate and defended by a test with
+three assertions: every rule a scanner emits is in the catalogue, every
+catalogue entry is reachable from a scanner, and every rule appears in
+`docs/RULES.md`. A corpus in `tests/corpus.py` trips all of them.
+
+The effect is that a rule cannot ship undocumented, a deleted rule cannot leave
+its entry behind, and the README's tables cannot describe the release before
+last. Adding a rule means touching four places, and the build says which one
+you forgot.
+
+## Suppression and configuration
+
+Three scopes of marker -- line, block, file -- each able to name the rules it
+means (`# repo-sentinel: ignore[K8S008]`). A configuration file supplies
+defaults, including rules disabled globally or under a glob.
+
+Two invariants hold across all of it:
+
+- **The command line always wins.** A config file can never stop somebody
+  auditing their own repository more strictly than the project usually does.
+- **Silence is always counted.** A disabled rule, a baselined finding, a
+  suppressed line: every one of them is reported as a number in the output.
+  Silence nobody can see is the failure this whole tool exists to avoid, and a
+  scanner that can be switched off invisibly is worse than no scanner.
+
+The unterminated suppression block is the same principle as a rule: SEC900
+reports a marker that silences the rest of a file, because otherwise the file
+goes quiet and looks clean.
+
+## No dependencies
+
+Not one, at runtime. A tool pointed at your supply chain should not enlarge it,
+and the constraint has been good for the design: it is why the scanners read
+structure the way a reviewer skims it rather than building trees nobody asked
+for, and why the coverage tool in `tools/` is fifty lines of `dis` and
+`sys.settrace`.
+
+What it costs is stated where a user can see it: exotic formatting slips past,
+JSON CloudFormation templates are not read, and a value arriving through a
+variable is invisible. A scanner that implies more coverage than it has is
+worse than one that admits its edges.
+
+## Adding a rule
+
+1. Detection in the scanner for that format. Provider patterns are data; the
+   structural rules are functions taking a parsed block.
+2. An entry in `rules.py`.
+3. A fixture in `tests/corpus.py` that trips it.
+4. A row in `docs/RULES.md`.
+5. Tests for what it should *not* match -- which matters more than the positive
+   case, because that is why anyone still has it switched on next quarter.
+6. `python3 tools/measure.py` over real repositories before trusting a
+   heuristic. Every false positive this project has fixed came from reading
+   real output, and not one was imagined in advance.

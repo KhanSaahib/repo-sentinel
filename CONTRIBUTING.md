@@ -3,6 +3,9 @@
 The bar for this project is not "does the check work". It is "will people still
 be reading the output six months from now". Most of what follows is about that.
 
+[docs/DESIGN.md](docs/DESIGN.md) is the shorter road into the codebase: the
+pipeline, the two readers, and the invariants the tests defend.
+
 ## Ground rules
 
 **No runtime dependencies.** Not one. A tool you point at your supply chain has

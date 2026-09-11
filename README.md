@@ -392,7 +392,9 @@ may be missing from [docs/RULES.md](docs/RULES.md). Adding a rule without
 documenting it fails the build, and so does leaving an entry behind after
 deleting one.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for how a new rule earns its place.
+[docs/DESIGN.md](docs/DESIGN.md) explains how the pieces fit and why they are
+shaped that way; [CONTRIBUTING.md](CONTRIBUTING.md) covers how a new rule earns
+its place.
 
 ## Security
 
