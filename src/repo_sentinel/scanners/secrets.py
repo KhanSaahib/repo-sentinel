@@ -398,6 +398,7 @@ def _provider_findings(
                 evidence=_evidence_for(match, rule),
                 remediation=rule.remediation,
                 confidence=rule.confidence,
+                subject=redact(secret),
             )
 
 
@@ -526,6 +527,7 @@ def _scan_encoded(
                     "value is as committed as if it were written out."
                 ),
                 confidence=finding.confidence,
+                subject=finding.subject,
             )
 
 

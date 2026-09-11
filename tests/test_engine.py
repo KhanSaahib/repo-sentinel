@@ -64,7 +64,7 @@ class TestScan(unittest.TestCase):
 class TestCollapse(unittest.TestCase):
     """Scanners overlap on purpose; reports should not."""
 
-    def finding(self, rule_id, severity, evidence="AKIA****LM3D", line=6):
+    def finding(self, rule_id, severity, evidence="AKIA****LM3D", line=6, subject="AKIA****LM3D"):
         from repo_sentinel.findings import Finding, Severity
 
         return Finding(
@@ -74,6 +74,7 @@ class TestCollapse(unittest.TestCase):
             path="s.yaml",
             line=line,
             evidence=evidence,
+            subject=subject,
         )
 
     def test_the_same_value_at_the_same_line_is_reported_once(self):
@@ -88,9 +89,24 @@ class TestCollapse(unittest.TestCase):
 
     def test_different_values_on_one_line_both_survive(self):
         kept = engine.collapse(
-            [self.finding("SEC001", "critical"), self.finding("SEC005", "critical", "sk_l****90ab")]
+            [
+                self.finding("SEC001", "critical"),
+                self.finding("SEC005", "critical", subject="sk_l****90ab"),
+            ]
         )
         self.assertEqual(len(kept), 2)
+
+    def test_findings_with_no_subject_are_never_collapsed(self):
+        # Two Dockerfile rules can report the same line with the same evidence
+        # and mean entirely different things. An unpinned base image is not the
+        # same problem as a container running as root.
+        kept = engine.collapse(
+            [
+                self.finding("DK001", "medium", evidence="FROM debian", subject=""),
+                self.finding("DK002", "medium", evidence="FROM debian", subject=""),
+            ]
+        )
+        self.assertEqual(sorted(finding.rule_id for finding in kept), ["DK001", "DK002"])
 
     def test_the_same_value_on_different_lines_both_survive(self):
         kept = engine.collapse([self.finding("SEC001", "critical"), self.finding("SEC001", "critical", line=9)])

@@ -84,6 +84,10 @@ outcome than a feature nobody wanted.
       from stdin or a file rather than shelling out to git. `git diff
       --name-only origin/main | repo-sentinel scan . --paths-from -` is the
       same feature without the dependency on git's CLI being where we think
+- [x] A project config file (`.repo-sentinel.json`) for defaults, with
+      per-rule and per-family disabling
+- [ ] Per-path rule configuration: "K8S004 is fine in examples/, not in
+      deploy/". Needs a shape that does not turn into a policy language
 - [ ] Publish to PyPI so `pipx run repo-sentinel` works
 - [x] `--quiet` for CI logs that only need the summary line, and `--sort path`
       for reading a report top to bottom

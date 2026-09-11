@@ -34,6 +34,11 @@ repository the tool can read at all: it grew from two file formats to six.
 - **`--paths-from FILE`** (`-` for stdin) to scan only the files a pull request
   touched, **`--quiet`** for the summary alone, and **`--sort path`** for
   reading a report rather than triaging it.
+- **`.repo-sentinel.json`**, a project config file supplying defaults for the
+  scan flags, plus `disable` for rules a project has decided not to run and
+  `--disable` for doing it ad hoc. Disabled findings are counted in the output
+  rather than silently dropped. Unknown settings are an error; unknown rule ids
+  are reported, since that typo leaves the rule switched on.
 - A **YAML subset reader** and an **HCL block reader**, both standard library
   only, both explicit about what they do not parse.
 

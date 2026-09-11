@@ -13,10 +13,11 @@ import os
 import sys
 from collections.abc import Sequence
 
-from . import __version__, baseline as baseline_module, report
+from . import __version__, baseline as baseline_module, config as config_module, report
 from .discovery import DEFAULT_EXCLUDES
 from .engine import scan, scan_path  # noqa: F401  (scan_path is public API)
 from .findings import Confidence, Finding, Severity
+from .rules import RULES
 
 EXIT_OK = 0
 EXIT_FINDINGS = 1
@@ -81,6 +82,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="record the current findings as accepted, then exit without failing",
     )
     scan_parser.add_argument(
+        "--config",
+        metavar="FILE",
+        help=(
+            "project defaults, as JSON "
+            f"(default: {config_module.DEFAULT_PATH} beside the scanned tree, if present)"
+        ),
+    )
+    scan_parser.add_argument(
+        "--disable",
+        action="append",
+        default=[],
+        metavar="RULE",
+        help="switch off a rule or a family ('K8S004', 'DC*'); repeatable",
+    )
+    scan_parser.add_argument(
         "--paths-from",
         metavar="FILE",
         help=(
@@ -113,6 +129,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     rules_parser = subparsers.add_parser("rules", help="list every rule the scanner knows")
     rules_parser.add_argument("--format", choices=("text", "json"), default="text")
+    # Kept for the second parse in main(), where a config file supplies
+    # defaults that explicit flags then override.
+    parser.scan_parser = scan_parser  # type: ignore[attr-defined]
     return parser
 
 
@@ -129,6 +148,74 @@ def _emit(text: str, destination: "str | None") -> int:
         print(f"repo-sentinel: could not write {destination!r}: {error}", file=sys.stderr)
         return EXIT_ERROR
     return EXIT_OK
+
+
+#: Config key -> the argparse destination it supplies a default for. The two
+#: booleans are inverted because the flags are phrased as opt-outs.
+_CONFIG_TO_DEST = {
+    "exclude": ("exclude", False),
+    "fail_on": ("fail_on", False),
+    "min_severity": ("min_severity", False),
+    "min_confidence": ("min_confidence", False),
+    "baseline": ("baseline", False),
+    "sort": ("sort", False),
+    "disable": ("disable", False),
+    "gitignore": ("no_gitignore", True),
+    "example_allowlist": ("no_example_allowlist", True),
+}
+
+
+def _apply_config(parser: argparse.ArgumentParser, argv: "Sequence[str] | None") -> argparse.Namespace:
+    """Parse twice: once to find the config file, once with it as defaults.
+
+    Parsing again is cheaper than working out whether each flag was passed
+    explicitly, and it gets the precedence right by construction -- argparse
+    already prefers what is on the command line to whatever the defaults say.
+    """
+    args = parser.parse_args(argv)
+    if args.command != "scan":
+        return args
+
+    path = config_module.find(args.path, args.config)
+    if path is None:
+        return args
+
+    settings = config_module.load(path)
+    defaults = {}
+    for key, value in settings.items():
+        dest, inverted = _CONFIG_TO_DEST[key]
+        defaults[dest] = (not value) if inverted else value
+    parser.scan_parser.set_defaults(**defaults)  # type: ignore[attr-defined]
+    reparsed = parser.parse_args(argv)
+    reparsed.config = path
+    return reparsed
+
+
+def _apply_disabled(
+    findings: "list[Finding]", patterns: "Sequence[str]", notes: "list[str]"
+) -> "list[Finding]":
+    """Drop the rules a project has switched off, and say that it did.
+
+    Silence that nobody can see is the failure mode this whole tool is built to
+    avoid, so a disabled rule is reported as a count rather than simply not
+    happening. An unknown rule id is called out too: a typo here quietly leaves
+    the rule switched on, which is the safe direction but not the intended one.
+    """
+    if not patterns:
+        return findings
+    disabled = config_module.disabled_matcher(patterns)
+    kept = [finding for finding in findings if not disabled(finding.rule_id)]
+    hidden = len(findings) - len(kept)
+    if hidden:
+        notes.append(f"{hidden} finding(s) hidden by disabled rules: {', '.join(patterns)}.")
+    unknown = [
+        pattern
+        for pattern in patterns
+        if not pattern.endswith("*") and pattern.upper() not in RULES
+    ]
+    if unknown:
+        notes.append(f"No such rule: {', '.join(unknown)}. Check 'repo-sentinel rules'.")
+    return kept
 
 
 def _run_scan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
@@ -159,10 +246,12 @@ def _run_scan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         if finding.severity >= min_severity and finding.confidence >= min_confidence
     ]
 
+    notes: "list[str]" = []
+    findings = _apply_disabled(findings, args.disable, notes)
+
     if args.write_baseline:
         return _write_baseline(args.write_baseline, findings)
 
-    notes: "list[str]" = []
     if args.baseline:
         try:
             recorded = baseline_module.load(args.baseline)
@@ -234,7 +323,11 @@ def _write_baseline(path: str, findings: "list[Finding]") -> int:
 
 def main(argv: "Sequence[str] | None" = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    try:
+        args = _apply_config(parser, argv)
+    except config_module.ConfigError as error:
+        print(f"repo-sentinel: {error}", file=sys.stderr)
+        return EXIT_ERROR
 
     if args.command == "rules":
         return _emit(report.format_rule_catalogue(as_json=args.format == "json"), None)

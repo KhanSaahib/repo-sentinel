@@ -315,6 +315,7 @@ def _check_secret_data(path: str, document: "yamlish.Node") -> "Iterator[Finding
                         "it, then keep secrets out of manifests: use a sealed or "
                         "external secret, or create it out of band."
                     ),
+                    subject=recognised.subject,
                 )
             elif looks_generated(value):
                 yield Finding(

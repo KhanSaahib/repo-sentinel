@@ -103,12 +103,22 @@ class Finding:
     evidence: str = ""
     remediation: str = ""
     confidence: Confidence = Confidence.HIGH
+    #: What this finding is *about*, when two rules could legitimately find the
+    #: same thing -- in practice, the redacted credential. Findings that carry
+    #: the same subject at the same place are one problem reported twice, and
+    #: :func:`repo_sentinel.engine.collapse` keeps the best of them. An empty
+    #: subject, which is the default, never collapses: two rules sharing a line
+    #: by coincidence are two findings, and guessing otherwise loses one.
+    subject: str = ""
 
     def to_dict(self) -> dict:
         data = dataclasses.asdict(self)
         data["severity"] = self.severity.value
         data["confidence"] = self.confidence.value
         data["fingerprint"] = self.fingerprint
+        # Internal plumbing for de-duplication, not something a consumer of the
+        # report has any use for.
+        data.pop("subject", None)
         return data
 
     @property

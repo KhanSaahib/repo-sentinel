@@ -43,6 +43,7 @@ repo-sentinel scan . --no-example-allowlist   # include documented example keys
 repo-sentinel scan . --write-baseline         # accept what is already there
 repo-sentinel scan . --baseline               # fail only on what is new
 
+repo-sentinel scan . --disable K8S004         # switch off a rule or family
 repo-sentinel scan . --quiet                  # just the summary line
 repo-sentinel scan . --sort path              # read a report, rather than triage it
 git diff --name-only origin/main | repo-sentinel scan . --paths-from -
@@ -371,6 +372,38 @@ the mistake removed. It fires only for ports worth shouting about -- a server on
 443 open to the world is the point of it. DC002 is scoped the same way: mounting
 the project directory is how everyone develops, so only the paths that grant the
 host are reported, the container runtime socket chief among them.
+
+## Project defaults
+
+Every project that adopts a scanner ends up with a preferred invocation. Putting
+it in a `Makefile` means the pre-commit hook, the pipeline and whoever runs the
+tool by hand all disagree. Put it in `.repo-sentinel.json` beside the tree
+instead:
+
+```json
+{
+  "fail_on": "high",
+  "min_confidence": "medium",
+  "exclude": ["vendor", "testdata"],
+  "disable": ["K8S004", "DC006"]
+}
+```
+
+The settings are `exclude`, `fail_on`, `min_severity`, `min_confidence`,
+`baseline`, `sort`, `disable`, `gitignore` and `example_allowlist`. An unknown
+key is an error rather than a shrug: a typo in a security tool's configuration
+means a project believes it configured something it did not.
+
+Everything here is a *default*. Anything on the command line wins, so a config
+file can never stop someone auditing their own repository more strictly than the
+project usually does.
+
+`disable` takes rule ids or family prefixes (`DC*`), and `--disable` does the
+same ad hoc. A disabled rule is still counted in the output -- *"3 finding(s)
+hidden by disabled rules"* -- because silence nobody can see is the failure mode
+this whole tool exists to avoid. An id that matches no rule is called out too:
+that typo leaves the rule switched on, which is the safe direction but not the
+one you meant.
 
 ## Baselines
 

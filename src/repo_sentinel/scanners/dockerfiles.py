@@ -244,7 +244,7 @@ def _check_final_user(
         ),
         path=path,
         line=line,
-        evidence=f"FROM {image}" if user is None else f"USER {user}",
+        evidence="no USER instruction" if user is None else f"USER {user}",
         remediation=(
             "A process that is root in the container is root against the kernel "
             "if anything escapes. Create a user and end the final stage with a "

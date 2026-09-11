@@ -66,24 +66,32 @@ def collapse(findings: "Iterable[Finding]") -> "list[Finding]":
 
     Scanners overlap on purpose -- a credential inside a Kubernetes Secret is
     both a manifest problem and a secret, and each rule says something the
-    other cannot. What nobody needs is the same value, at the same line, listed
-    twice. Where that happens the more severe finding wins; on a tie the rule
-    whose id sorts first does, which reliably keeps the file-format rule over
-    the generic one because every format prefix sorts ahead of SEC.
+    other cannot. What nobody needs is that one value listed twice.
 
-    Identity is the redacted evidence rather than the title, so two rules that
-    genuinely found different things on one line both survive.
+    Only findings that name a ``subject`` take part, and the subject is the
+    redacted credential itself. Collapsing on anything vaguer loses real
+    findings: two Dockerfile rules can report the same line with the same
+    evidence and mean entirely different things, and an unpinned base image is
+    not the same problem as a container running as root.
+
+    Where subjects do match, the more severe finding wins; on a tie the rule
+    whose id sorts first does, which keeps the format-specific rule over the
+    generic one, since every format prefix sorts ahead of SEC.
     """
     best: "dict[tuple[str, int, str], Finding]" = {}
+    kept: "list[Finding]" = []
     for finding in findings:
-        key = (finding.path, finding.line, finding.evidence)
+        if not finding.subject:
+            kept.append(finding)
+            continue
+        key = (finding.path, finding.line, finding.subject)
         current = best.get(key)
         if current is None or (
             (-finding.severity.rank, -finding.confidence.rank, finding.rule_id)
             < (-current.severity.rank, -current.confidence.rank, current.rule_id)
         ):
             best[key] = finding
-    return list(best.values())
+    return kept + list(best.values())
 
 
 def scan_path(
