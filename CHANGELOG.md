@@ -84,12 +84,16 @@ repository the tool can read at all: it grew from two file formats to six.
   scanning the Prometheus repository did not finish in five. It now takes 13
   seconds. The fix splits the dash from the mapping when tokenising, which also
   deleted the branch that was doing the copying.
-- **Four false positives, each measured against a public repository** rather than
+- **Ten false positives, each measured against a public repository** rather than
   imagined: `.npmrc` files holding `ignore-scripts=true`, a committed `.env` of
   documented defaults, `"$$(cat /run/secrets/db-password)"` in a Compose
   healthcheck, and `"GITHUB_TOKEN_${org^^}"` in a shell script. Also
   `AZURE_FEDERATED_TOKEN_FILE` (the name of an environment variable) and
-  `testdata/secret_key` (a path).
+  `testdata/secret_key` (a path). From a Helm chart repository: YAML anchors
+  and aliases (`&externalAuthorization`), label selectors containing `!=`,
+  filenames on the right of a key called `secret`, template service account
+  files whose `private_key` is empty, and `${{ github.event.pull_request.number }}`
+  in a `run:` step -- a pull request number is an integer, and GitHub picks it.
 - In the YAML reader, a colon only opens a mapping when whitespace follows it.
   Without that, `- 5432:5432` parses as a mapping and a Compose port list turns
   into nonsense.

@@ -267,7 +267,9 @@ class TestServiceAccountFiles(unittest.TestCase):
 
     def test_type_and_private_key_together_are_a_key_file(self):
         text = self.document(
-            '  "type": "service_account"', '  "project_id": "x"', '  "private_key_id": "abc"'
+            '  "type": "service_account"',
+            '  "project_id": "x"',
+            '  "private_key_id": "a3f5c9d1b7e204863f2a"',
         )
         findings = secrets.scan_text("sa.json", text)
         self.assertIn("SEC021", rule_ids(findings))
@@ -276,6 +278,16 @@ class TestServiceAccountFiles(unittest.TestCase):
     def test_the_type_alone_is_not_a_credential(self):
         text = self.document('  "type": "service_account"', '  "client_email": "a@b.com"')
         self.assertEqual(secrets.scan_text("sa.json", text), [])
+
+    def test_a_template_service_account_is_not_a_leak(self):
+        # Charts ship these to document the shape. The key field is there and
+        # empty, or filled with zeroes, which is the opposite of a credential.
+        for fields in (
+            ('  "type": "service_account"', '  "private_key": ""'),
+            ('  "type": "service_account"', '  "private_key_id": "' + "0" * 32 + '"'),
+        ):
+            with self.subTest(fields=fields):
+                self.assertEqual(secrets.scan_text("values.yaml", self.document(*fields)), [])
 
     def test_a_private_key_field_alone_is_not_a_service_account(self):
         text = self.document('  "private_key_id": "abc"')

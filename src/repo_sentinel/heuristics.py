@@ -84,6 +84,16 @@ _STRUCTURED = (
     # lowercase on purpose -- a base64 blob containing slashes has mixed case,
     # so this does not swallow one.
     re.compile(r"^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9._-]+)+$"),
+    # A YAML anchor or alias: "&externalAuthorization", "*externalAuthorization".
+    # The value is a name pointing at a block somewhere else in the document.
+    re.compile(r"^[&*][A-Za-z_][\w.-]*$"),
+    # A lowercase dotted name: "tracing.yaml", "example.internal",
+    # "com.example.app". Filenames turn up constantly on the right of a key
+    # ending in "secret" or "key", and none of them is a credential.
+    re.compile(r"^[a-z0-9][a-z0-9_-]*(?:\.[a-z0-9_-]{1,8})+$"),
+    # A query or selector expression: "type!=kubernetes.io/dockercfg,type!=x".
+    # Comparison operators do not appear in credentials; they appear in filters.
+    re.compile(r".*(?:!=|==|>=|<=).*$"),
     # Words joined by hyphens or underscores: "unstructured", "content-type",
     # "Proxy-Authorization". Generated credentials carry digits
     # or mixed case; a pure word-list slug is vocabulary. The cost is that a

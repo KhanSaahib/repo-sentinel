@@ -265,7 +265,9 @@ _BASE64_RUNS = (
 #: Either alone is unremarkable; the pair is a credential with no expiry that
 #: is accepted by every Google API the account can reach.
 _SERVICE_ACCOUNT_TYPE = re.compile(r'"type"\s*:\s*"service_account"')
-_SERVICE_ACCOUNT_KEY = re.compile(r'"private_key(?:_id)?"\s*:')
+#: The key field *and its value*: a chart shipping a template service account
+#: with "private_key": "" is showing the shape, not leaking the key.
+_SERVICE_ACCOUNT_KEY = re.compile(r'"private_key(?:_id)?"\s*:\s*"(?P<value>[^"]*)"')
 
 #: Quoted assignment: ``api_key = "...."`` in any language that quotes strings.
 _QUOTED_ASSIGNMENT = re.compile(
@@ -557,7 +559,12 @@ def scan_document(path: str, text: str) -> Iterator[Finding]:
     and usually far more authority than whatever needed it.
     """
     type_match = _SERVICE_ACCOUNT_TYPE.search(text)
-    if type_match is None or not _SERVICE_ACCOUNT_KEY.search(text):
+    if type_match is None:
+        return
+    if not any(
+        match.group("value") and not looks_like_placeholder(match.group("value"))
+        for match in _SERVICE_ACCOUNT_KEY.finditer(text)
+    ):
         return
     yield Finding(
         rule_id="SEC021",

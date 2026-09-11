@@ -87,6 +87,12 @@ class TestLooksGenerated(unittest.TestCase):
             "GITHUB_TOKEN_${org^^}",
             "AZURE_FEDERATED_TOKEN_FILE",
             "testdata/secret_key",
+            # From a Helm chart repository: a YAML anchor, an alias, a label
+            # selector, and a filename on the right of a key called "secret".
+            "&externalAuthorization",
+            "*externalAuthorization",
+            "type!=kubernetes.io/dockercfg,type!=helm.sh/release.v1",
+            "tracing.yaml",
         ):
             with self.subTest(value=value):
                 self.assertFalse(heuristics.looks_generated(value))

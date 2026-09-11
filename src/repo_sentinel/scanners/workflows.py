@@ -49,6 +49,18 @@ _STEP_START = re.compile(r"^(?P<indent>\s*)-\s+\S")
 #: Everything else is a third party, however popular.
 _FIRST_PARTY_OWNERS = frozenset({"actions", "github"})
 
+#: Fields of an otherwise untrusted context that cannot carry an injection.
+#: A pull request number is an integer and a commit sha is forty hex
+#: characters; GitHub decides both. Reporting them is how a rule that matters
+#: gets a reputation for crying wolf.
+_HARMLESS_FIELDS = frozenset(
+    {
+        "number", "id", "node_id", "sha", "merged", "state", "draft", "locked",
+        "created_at", "updated_at", "closed_at", "merged_at", "commits",
+        "additions", "deletions", "changed_files", "comments", "review_comments",
+    }
+)
+
 #: Contexts an outside contributor can write to. Interpolating any of these
 #: into a shell command hands them the runner.
 _UNTRUSTED = re.compile(
@@ -283,6 +295,9 @@ def _check_script_injection(path: str, lines: list[str]) -> Iterator[Finding]:
     """WF003: attacker-controlled text substituted into a shell command."""
     for number, line in _iter_run_lines(lines):
         for match in _UNTRUSTED.finditer(line):
+            expression = match.group("expr").strip()
+            if expression.rsplit(".", 1)[-1] in _HARMLESS_FIELDS:
+                continue
             yield Finding(
                 rule_id="WF003",
                 severity=Severity.CRITICAL,
