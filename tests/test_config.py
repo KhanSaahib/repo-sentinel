@@ -105,6 +105,19 @@ class TestPrecedence(unittest.TestCase):
         self.assertEqual(code, cli.EXIT_ERROR)
 
 
+class TestRelativePaths(unittest.TestCase):
+    def test_a_baseline_path_is_relative_to_the_config_file(self):
+        # Not to whatever directory the command was run from: "scan some/repo"
+        # has to find the baseline that repo's own config points at.
+        with tempfile.TemporaryDirectory() as root:
+            dockerfile(root)
+            write(root, {"baseline": "accepted.json"})
+            run(["scan", root, "--write-baseline", os.path.join(root, "accepted.json")])
+            code, output = run(["scan", root])
+        self.assertEqual(code, cli.EXIT_OK)
+        self.assertIn("accepted by", output)
+
+
 class TestDisabledRules(unittest.TestCase):
     def test_a_disabled_rule_is_dropped_and_counted(self):
         with tempfile.TemporaryDirectory() as root:

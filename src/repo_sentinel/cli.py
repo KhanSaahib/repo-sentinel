@@ -9,6 +9,7 @@ right moment, is worth keeping unmixed with anything else.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from collections.abc import Sequence
@@ -130,6 +131,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     scan_parser.add_argument("--no-color", action="store_true", help="disable coloured output")
 
+    init_parser = subparsers.add_parser(
+        "init", help="set this repository up: a config, a baseline, and a CI snippet"
+    )
+    init_parser.add_argument("path", nargs="?", default=".", help="repository to set up")
+    init_parser.add_argument(
+        "--fail-on",
+        default="high",
+        help="severity the generated config should fail on (default: high)",
+    )
+    init_parser.add_argument(
+        "--force", action="store_true", help="overwrite an existing config or baseline"
+    )
+    init_parser.add_argument(
+        "--no-baseline",
+        action="store_true",
+        help="do not record existing findings as accepted",
+    )
+
     rules_parser = subparsers.add_parser("rules", help="list every rule the scanner knows")
     rules_parser.add_argument("--format", choices=("text", "json"), default="text")
     # Kept for the second parse in main(), where a config file supplies
@@ -190,6 +209,12 @@ def _apply_config(parser: argparse.ArgumentParser, argv: "Sequence[str] | None")
         return args
 
     settings = config_module.load(path)
+    # A path in the config file is relative to the config file, not to
+    # whatever directory the command happened to be run from. Without this,
+    # `repo-sentinel scan some/repo` cannot find the baseline that repo's own
+    # config points at, which is exactly what `init` sets up.
+    if "baseline" in settings and not os.path.isabs(settings["baseline"]):
+        settings["baseline"] = os.path.join(os.path.dirname(path) or ".", settings["baseline"])
     _PATH_SCOPES[:] = config_module.path_scopes(settings)
     defaults = {}
     for key, value in settings.items():
@@ -350,6 +375,96 @@ def _write_baseline(path: str, findings: "list[Finding]") -> int:
     return EXIT_OK
 
 
+#: Both snippets use a git reference rather than a package index, because that
+#: is what actually works today, and both say to pin -- a tool whose own
+#: getting-started copy trips WF001 has a credibility problem.
+_ACTIONS_SNIPPET = """\
+# .github/workflows/repo-sentinel.yml
+name: repo-sentinel
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      # Pin both of these to a full commit SHA before you rely on them.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: KhanSaahib/repo-sentinel@main
+"""
+
+_GITLAB_SNIPPET = """\
+# .gitlab-ci.yml
+repo-sentinel:
+  image: python:3.13
+  script:
+    - pip install git+https://github.com/KhanSaahib/repo-sentinel@main
+    - repo-sentinel scan .
+"""
+
+
+def _run_init(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+    """Set a repository up, and say what was found on the way.
+
+    Three things, in the order someone actually needs them: what is in the
+    repository now, a config file recording the decisions that answer implies,
+    and a baseline holding whatever is already there so the first pipeline run
+    is green and every later one is about new work.
+
+    Nothing is overwritten without --force. Silently replacing a config
+    somebody tuned would be a poor introduction.
+    """
+    try:
+        fail_on = Severity.parse(args.fail_on)
+    except ValueError as error:
+        parser.error(str(error))
+        return EXIT_ERROR  # pragma: no cover - argparse exits first
+
+    root = args.path
+    result = scan(root, DEFAULT_EXCLUDES)
+    findings = result.findings
+    print(
+        f"Scanned {result.file_count} file(s) in {result.duration:.2f}s: "
+        f"{report.summarise(findings) if findings else 'no findings'}."
+    )
+
+    config_path = os.path.join(root, config_module.DEFAULT_PATH)
+    baseline_path = os.path.join(root, baseline_module.DEFAULT_PATH)
+    at_or_above = [finding for finding in findings if finding.severity >= fail_on]
+
+    settings: "dict[str, object]" = {"fail_on": fail_on.value}
+    if at_or_above and not args.no_baseline:
+        if os.path.exists(baseline_path) and not args.force:
+            print(f"{baseline_module.DEFAULT_PATH} exists already; left alone.")
+        else:
+            baseline_module.write(baseline_path, at_or_above, version=__version__)
+            settings["baseline"] = baseline_module.DEFAULT_PATH
+            print(
+                f"Recorded {len(at_or_above)} finding(s) in "
+                f"{baseline_module.DEFAULT_PATH}. It is a list of debts: shrink it."
+            )
+
+    if os.path.exists(config_path) and not args.force:
+        print(f"{config_module.DEFAULT_PATH} exists already; left alone.")
+    else:
+        with open(config_path, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(settings, indent=2) + "\n")
+        print(f"Wrote {config_module.DEFAULT_PATH}.")
+
+    print("\nAdd this to your pipeline:\n")
+    print(_GITLAB_SNIPPET if _uses_gitlab(root) else _ACTIONS_SNIPPET)
+    return EXIT_OK
+
+
+def _uses_gitlab(root: str) -> bool:
+    """Suggest the CI system the repository already has, not the popular one."""
+    return os.path.exists(os.path.join(root, ".gitlab-ci.yml")) and not os.path.isdir(
+        os.path.join(root, ".github", "workflows")
+    )
+
+
 def main(argv: "Sequence[str] | None" = None) -> int:
     parser = build_parser()
     try:
@@ -358,6 +473,8 @@ def main(argv: "Sequence[str] | None" = None) -> int:
         print(f"repo-sentinel: {error}", file=sys.stderr)
         return EXIT_ERROR
 
+    if args.command == "init":
+        return _run_init(args, parser)
     if args.command == "rules":
         return _emit(report.format_rule_catalogue(as_json=args.format == "json"), None)
     return _run_scan(args, parser)

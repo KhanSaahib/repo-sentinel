@@ -98,6 +98,7 @@ outcome than a feature nobody wanted.
       deploy/". A `paths` table of glob to disabled rules, and nothing else --
       the shape stops short of a policy language on purpose
 - [x] Markdown output for a pull request comment
+- [x] `repo-sentinel init`, for the first five minutes with the tool
 - [ ] Publish to PyPI so `pipx run repo-sentinel` works
 - [x] `--quiet` for CI logs that only need the summary line, and `--sort path`
       for reading a report top to bottom

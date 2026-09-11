@@ -34,6 +34,9 @@ repository the tool can read at all: it grew from two file formats to six.
 - **`--paths-from FILE`** (`-` for stdin) to scan only the files a pull request
   touched, **`--quiet`** for the summary alone, and **`--sort path`** for
   reading a report rather than triaging it.
+- **`repo-sentinel init`**, which scans a repository, records what is already
+  there as a baseline so the first pipeline run is green, writes a config, and
+  prints the CI snippet for whichever CI system the repository already has.
 - **Per-path configuration**: a `paths` table switches rules off under one glob
   rather than everywhere, using the `.gitignore` dialect matched by the same
   code that reads `.gitignore`.

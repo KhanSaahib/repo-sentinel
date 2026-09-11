@@ -26,10 +26,24 @@ PYTHONPATH=src python -m repo_sentinel scan .
 
 ## Use
 
+Start here:
+
+```bash
+repo-sentinel init .
+```
+
+That scans the repository, tells you what is in it, records the findings at or
+above `high` as a baseline so your first pipeline run is green, writes a
+`.repo-sentinel.json`, and prints the CI snippet for whichever CI system the
+repository already has. Nothing is overwritten without `--force`.
+
+Then, day to day:
+
 ```bash
 repo-sentinel scan .                          # scan the working directory
 repo-sentinel scan ../other-project           # scan somewhere else
 repo-sentinel rules                           # what does this thing check for?
+repo-sentinel init .                          # set a repository up
 
 repo-sentinel scan . --format json            # machine-readable output
 repo-sentinel scan . --format sarif --output results.sarif

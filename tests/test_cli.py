@@ -134,6 +134,78 @@ class TestSeverityParsing(unittest.TestCase):
             Severity.parse("catastrophic")
 
 
+class TestInit(unittest.TestCase):
+    """The first five minutes: what is here, what to accept, what to run."""
+
+    def repository(self, root):
+        with open(os.path.join(root, "Dockerfile"), "w", encoding="utf-8") as handle:
+            handle.write("FROM debian:latest\nRUN curl -s https://x/i.sh | sh\n")
+
+    def test_writes_a_config_a_baseline_and_a_snippet(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.repository(root)
+            code, output = run(["init", root])
+            config_path = os.path.join(root, ".repo-sentinel.json")
+            with open(config_path, encoding="utf-8") as handle:
+                settings = json.load(handle)
+        self.assertEqual(code, cli.EXIT_OK)
+        self.assertEqual(settings["fail_on"], "high")
+        self.assertEqual(settings["baseline"], ".repo-sentinel-baseline.json")
+        self.assertIn("repo-sentinel", output)
+        self.assertIn("uses: KhanSaahib/repo-sentinel", output)
+
+    def test_the_repository_is_green_immediately_afterwards(self):
+        # The point of the baseline is that the first pipeline run passes and
+        # every later one is about new work.
+        with tempfile.TemporaryDirectory() as root:
+            self.repository(root)
+            run(["init", root])
+            code, _ = run(["scan", root])
+        self.assertEqual(code, cli.EXIT_OK)
+
+    def test_a_clean_repository_gets_a_config_and_no_baseline(self):
+        with tempfile.TemporaryDirectory() as root:
+            with open(os.path.join(root, "README.md"), "w", encoding="utf-8") as handle:
+                handle.write("# nothing\n")
+            run(["init", root])
+            self.assertTrue(os.path.exists(os.path.join(root, ".repo-sentinel.json")))
+            self.assertFalse(os.path.exists(os.path.join(root, ".repo-sentinel-baseline.json")))
+
+    def test_existing_files_are_left_alone(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.repository(root)
+            with open(os.path.join(root, ".repo-sentinel.json"), "w", encoding="utf-8") as handle:
+                handle.write('{"fail_on": "critical"}')
+            _, output = run(["init", root])
+            with open(os.path.join(root, ".repo-sentinel.json"), encoding="utf-8") as handle:
+                self.assertEqual(json.load(handle)["fail_on"], "critical")
+        self.assertIn("exists already", output)
+
+    def test_force_overwrites(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.repository(root)
+            with open(os.path.join(root, ".repo-sentinel.json"), "w", encoding="utf-8") as handle:
+                handle.write('{"fail_on": "critical"}')
+            run(["init", root, "--force"])
+            with open(os.path.join(root, ".repo-sentinel.json"), encoding="utf-8") as handle:
+                self.assertEqual(json.load(handle)["fail_on"], "high")
+
+    def test_no_baseline_records_nothing(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.repository(root)
+            run(["init", root, "--no-baseline"])
+            self.assertFalse(os.path.exists(os.path.join(root, ".repo-sentinel-baseline.json")))
+
+    def test_the_snippet_matches_the_ci_system_the_repository_has(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.repository(root)
+            with open(os.path.join(root, ".gitlab-ci.yml"), "w", encoding="utf-8") as handle:
+                handle.write("stages: [test]\n")
+            _, output = run(["init", root])
+        self.assertIn(".gitlab-ci.yml", output)
+        self.assertNotIn("runs-on", output)
+
+
 class TestRulesCommand(unittest.TestCase):
     def test_lists_the_catalogue_without_scanning_anything(self):
         code, output = run(["rules"])
