@@ -96,6 +96,40 @@ class TestHostileInput(unittest.TestCase):
                 self.assertLess(time.monotonic() - started, 5.0)
 
 
+class TestScale(unittest.TestCase):
+    """Shapes that were quadratic once and must not become quadratic again."""
+
+    def test_a_long_sequence_parses_in_linear_time(self):
+        # Parsing "- key: value" used to rebuild the remaining token list for
+        # every item. A 40,000-line Prometheus rules file took minutes, and
+        # scanning that repository did not finish in five.
+        document = "groups:\n" + "".join(
+            f"  - alert: Alert{index}\n    expr: up == 0\n    for: 5m\n"
+            for index in range(4000)
+        )
+        started = time.monotonic()
+        parsed = yamlish.parse_one(document)
+        elapsed = time.monotonic() - started
+        self.assertEqual(len(list(parsed.get("groups").entries())), 4000)
+        self.assertLess(elapsed, 10.0, f"12,000 lines took {elapsed:.1f}s")
+
+    def test_a_wide_mapping_parses_in_linear_time(self):
+        document = "".join(f"key{index}: value{index}\n" for index in range(20000))
+        started = time.monotonic()
+        yamlish.parse_one(document)
+        self.assertLess(time.monotonic() - started, 10.0)
+
+    def test_a_long_hcl_document_parses_in_linear_time(self):
+        document = "".join(
+            f'resource "aws_s3_bucket" "b{index}" {{\n  acl = "private"\n}}\n'
+            for index in range(2000)
+        )
+        started = time.monotonic()
+        blocks = hcl.parse(document)
+        self.assertEqual(len(blocks), 2000)
+        self.assertLess(time.monotonic() - started, 10.0)
+
+
 class TestFuzz(unittest.TestCase):
     """Random documents, seeded so a failure can be reproduced exactly."""
 

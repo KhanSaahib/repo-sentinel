@@ -262,7 +262,10 @@ comments and heredocs are not braces at all. The difference is the whole rule:
 `root_block_device` is a different finding from the same words at the top of a
 resource, and a wildcard action only counts when the statement's effect is
 `Allow`. TF001 grades on what the port range exposes, so `0.0.0.0/0` to 22 is
-critical and names SSH while `0.0.0.0/0` to 443 is high.
+critical and names SSH while `0.0.0.0/0` to 443 is high. It reads all four
+spellings AWS has accumulated: a nested `ingress` block, `aws_security_group_rule`,
+`aws_vpc_security_group_ingress_rule`, and `aws_network_acl_rule`, which calls
+the attribute `cidr_block` in the singular and marks direction with `egress`.
 
 What none of this can do is evaluate Terraform. A CIDR arriving through a
 variable, a `for_each` over a map of rules, a module whose defaults live

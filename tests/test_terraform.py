@@ -97,6 +97,32 @@ class TestIngress(unittest.TestCase):
         )
         self.assertIn("TF001", rule_ids(scan(text)))
 
+    def test_the_newer_ingress_resource_type(self):
+        # AWS adds one of these roughly every time somebody decides the
+        # previous spelling was awkward.
+        text = (
+            'resource "aws_vpc_security_group_ingress_rule" "ssh" {\n'
+            '  from_port = 22\n  to_port = 22\n  cidr_ipv4 = "0.0.0.0/0"\n}\n'
+        )
+        self.assertIn("TF001", rule_ids(scan(text)))
+
+    def test_network_acl_entries_use_the_singular_attribute(self):
+        text = (
+            'resource "aws_network_acl_rule" "ssh" {\n  rule_number = 120\n'
+            '  egress = false\n  protocol = "tcp"\n  from_port = 22\n'
+            '  to_port = 22\n  cidr_block = "0.0.0.0/0"\n}\n'
+        )
+        findings = scan(text)
+        self.assertIn("TF001", rule_ids(findings))
+        self.assertEqual(findings[0].severity, Severity.CRITICAL)
+
+    def test_an_outbound_acl_entry_is_not_ingress(self):
+        text = (
+            'resource "aws_network_acl_rule" "out" {\n  egress = true\n'
+            '  from_port = 0\n  to_port = 0\n  cidr_block = "0.0.0.0/0"\n}\n'
+        )
+        self.assertEqual(scan(text), [])
+
     def test_a_standalone_egress_rule_is_not_a_finding(self):
         text = (
             'resource "aws_security_group_rule" "out" {\n'

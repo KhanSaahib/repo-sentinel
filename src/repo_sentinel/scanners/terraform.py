@@ -79,12 +79,19 @@ def _port(block: "hcl.Block", name: str) -> "int | None":
 
 def _exposed_services(block: "hcl.Block") -> "list[str]":
     """Which well-known services a rule's port range leaves open."""
-    low, high = _port(block, "from_port"), _port(block, "to_port")
+    low = _port(block, "from_port")
+    if low is None:
+        low = _port(block, "from_port_number")
+    high = _port(block, "to_port")
+    if high is None:
+        high = _port(block, "to_port_number")
     protocol = (block.attribute("protocol") or (0, ""))[1].strip('"').lower()
     if protocol in ("-1", "all"):
         return ["every port"]
-    if low is None or high is None:
+    if low is None and high is None:
         return []
+    low = high if low is None else low
+    high = low if high is None else high
     if low == 0 and high >= 65535:
         return ["every port"]
     return wellknown.services_in_range(low, high)
@@ -92,7 +99,7 @@ def _exposed_services(block: "hcl.Block") -> "list[str]":
 
 def _open_to_the_world(block: "hcl.Block") -> "tuple[int, str] | None":
     """The line and CIDR by which a rule admits the whole internet."""
-    for name in ("cidr_blocks", "ipv6_cidr_blocks"):
+    for name in ("cidr_blocks", "ipv6_cidr_blocks", "cidr_block", "cidr_ipv4", "cidr_ipv6"):
         found = block.attribute(name)
         if found is None:
             continue
@@ -131,12 +138,25 @@ def _check_ingress(path: str, block: "hcl.Block", rule: "hcl.Block") -> "Finding
 
 
 def _ingress_rules(block: "hcl.Block") -> "Iterator[hcl.Block]":
-    """Ingress, however it was written: a nested block or a standalone rule."""
+    """Ingress, however it was written.
+
+    Four spellings, because AWS has added a resource type roughly every time
+    somebody decided the previous one was awkward: a nested ``ingress`` block,
+    the standalone ``aws_security_group_rule``, the newer
+    ``aws_vpc_security_group_ingress_rule``, and network ACL entries, which
+    call the attribute ``cidr_block`` in the singular and mark direction with
+    ``egress = true``.
+    """
     if block.type == "aws_security_group":
         yield from block.blocks("ingress")
     elif block.type == "aws_security_group_rule":
         kind = (block.attribute("type") or (0, ""))[1].strip('"')
         if kind == "ingress":
+            yield block
+    elif block.type == "aws_vpc_security_group_ingress_rule":
+        yield block
+    elif block.type == "aws_network_acl_rule":
+        if not _is_true((block.attribute("egress") or (0, "false"))[1]):
             yield block
 
 
