@@ -22,6 +22,7 @@ from .scanners import (
     jenkins,
     kubernetes,
     secrets,
+    shell,
     terraform,
     workflows,
 )
@@ -46,6 +47,7 @@ FORMAT_SCANNERS = (
     gitlab,
     jenkins,
     kubernetes,
+    shell,
     terraform,
     workflows,
 )

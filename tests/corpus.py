@@ -361,6 +361,14 @@ JENKINSFILE = """pipeline {
 }
 """
 
+SHELL_SCRIPT = """#!/usr/bin/env bash
+set -euo pipefail
+
+curl -sSL https://get.example.invalid/install.sh | sudo bash
+wget --no-check-certificate https://example.invalid/pkg.tar.gz
+chmod -R 777 /opt/app
+"""
+
 #: ``(path, text)`` pairs, in the shape :func:`iter_files` yields.
 FILES = (
     ("src/config.py", SECRETS_FILE),
@@ -380,6 +388,7 @@ FILES = (
     ("azure-pipelines.yml", AZURE_PIPELINE_FILE),
     (".circleci/config.yml", CIRCLECI_FILE),
     ("Jenkinsfile", JENKINSFILE),
+    ("scripts/setup.sh", SHELL_SCRIPT),
 )
 
 #: ``(path, text)`` pairs, in the shape the walk reports, with None for the

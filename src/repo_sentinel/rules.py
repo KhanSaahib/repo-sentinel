@@ -49,7 +49,7 @@ class Rule:
         return _CWE.get(self.id)
 
 
-_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose", "FN0": "filenames", "GL0": "gitlab", "CF0": "cloudformation", "SC0": "dependencies", "AN0": "ansible", "AZ0": "azure", "CC0": "circleci", "JK0": "jenkins"}
+_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose", "FN0": "filenames", "GL0": "gitlab", "CF0": "cloudformation", "SC0": "dependencies", "AN0": "ansible", "AZ0": "azure", "CC0": "circleci", "JK0": "jenkins", "SH0": "shell"}
 
 
 def _rules(*entries: tuple[str, str, str, Severity]) -> "dict[str, Rule]":
@@ -136,6 +136,9 @@ RULES: "dict[str, Rule]" = _rules(
     ("TF005", "public-database", "Managed database given a public endpoint", Severity.HIGH),
     ("TF006", "unencrypted-state", "Terraform state stored without encryption", Severity.MEDIUM),
     ("TF007", "plaintext-transport", "Service accepts unencrypted connections", Severity.HIGH),
+    ("SH001", "script-downloads-and-runs", "Script downloads code and runs it in one step", Severity.HIGH),
+    ("SH002", "script-skips-verification", "Script disables certificate verification", Severity.MEDIUM),
+    ("SH003", "script-world-writable", "Script makes something world-writable", Severity.MEDIUM),
     ("SC001", "plaintext-package-source", "Packages fetched over plain HTTP", Severity.HIGH),
     ("SC002", "install-script-executes-download", "Install-time script downloads code and runs it", Severity.HIGH),
     ("SC003", "unpinned-source-dependency", "Dependency comes from a source that can move", Severity.MEDIUM),
@@ -216,7 +219,7 @@ _claim("CWE-538", "FN004")
 # OS command injection: the same weakness in five CI systems.
 _claim("CWE-78", "WF003", "GL002", "AZ001", "CC001", "JK001")
 # Download of code without an integrity check.
-_claim("CWE-494", "DK003", "DK005", "GL003", "CC004", "JK003", "SC002", "AN003")
+_claim("CWE-494", "DK003", "DK005", "GL003", "CC004", "JK003", "SC002", "AN003", "SH001")
 # Reliance on a component that can be replaced under you.
 _claim(
     "CWE-1357",
@@ -234,7 +237,7 @@ _claim(
 # Cleartext transmission.
 _claim("CWE-319", "SC001", "TF007")
 # Improper certificate validation.
-_claim("CWE-295", "SC004", "DK006", "AN001")
+_claim("CWE-295", "SC004", "DK006", "AN001", "SH002")
 # Execution with unnecessary privileges.
 _claim("CWE-250", "DK002", "DC001", "DC004", "K8S001", "K8S005", "K8S006")
 # Incorrect permission assignment for a critical resource.
@@ -249,6 +252,7 @@ _claim(
     "K8S009",
     "K8S010",
     "AN002",
+    "SH003",
 )
 # Improper access control: something reachable that should not be.
 _claim("CWE-284", "TF001", "TF005", "CF001", "CF005", "DC005", "K8S011")

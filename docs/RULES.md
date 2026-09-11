@@ -388,6 +388,25 @@ having and what makes a reviewer skim past it.
 Everything here is line-based. A pipeline that builds its commands through a
 helper function, or a shared library, is invisible to it.
 
+## Shell scripts and Makefiles
+
+| Rule | Finds | Severity |
+| --- | --- | --- |
+| SH001 | Script downloads code and runs it in one step | high |
+| SH002 | Script disables certificate verification | medium |
+| SH003 | Script makes something world-writable | medium |
+
+Every other family finds `curl \| sh` inside something -- a Dockerfile, a
+pipeline, a package manifest. This one finds it where it usually lives: in the
+script those things point at, which nobody re-reads once it works.
+
+Files are recognised by extension, by name (`Makefile`), or by shebang, which
+matters because a setup script with no extension is still a shell script and is
+exactly what a repository accumulates. Continuations are joined before the
+rules run, so a command split over four lines is judged as one and reported at
+the line it starts on. Comments are skipped -- a commented-out `curl | sh` is
+somebody's note about the thing they decided not to do.
+
 ## Terraform
 
 | Rule | Finds | Severity |

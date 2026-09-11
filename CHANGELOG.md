@@ -78,6 +78,12 @@ repository the tool can read at all: it grew from two file formats to six.
   changed to gain this.
 - **Composer** joins the dependency manifests, with its own install-time
   lifecycle scripts.
+- **Shell scripts and Makefiles** (SH001–SH003): `curl | sh`, certificate
+  verification switched off, and world-writable modes -- found where they
+  actually live rather than inside a Dockerfile or a pipeline. Files are
+  recognised by extension, by name, or by shebang. The pipe-to-shell pattern,
+  which five scanners had each copied, now lives in one place; they had already
+  drifted, and only one of them knew about zsh.
 - **Jenkins** (JK001–JK003): the shell steps of a Jenkinsfile, as far as is
   honest without parsing Groovy. JK001 turns on Groovy's quoting, which decides
   whether an interpolation is a bug at all: `sh "echo ${env.BRANCH_NAME}"` is

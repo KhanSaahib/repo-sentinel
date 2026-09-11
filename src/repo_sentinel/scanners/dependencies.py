@@ -31,12 +31,6 @@ from ..findings import Confidence, Finding, Severity
 _HTTP_URL = re.compile(r"http://(?P<host>[\w.-]+(?::\d+)?)", re.IGNORECASE)
 _LOCAL_HOSTS = ("localhost", "127.0.0.1", "[::1]", "0.0.0.0")
 
-#: Piping a download into a shell, wherever it appears.
-_PIPE_TO_SHELL = re.compile(
-    r"\b(?:curl|wget|iwr|Invoke-WebRequest)\b[^|]*\|\s*(?:sudo\s+)?(?:/bin/)?(?:ba|z|k|da|p)?sh\b",
-    re.IGNORECASE,
-)
-
 #: Switches that turn off certificate verification, across package managers.
 _VERIFICATION_OFF = re.compile(
     r"strict-ssl\s*=\s*false"
@@ -237,7 +231,7 @@ def _check_npm_scripts(path: str, text: str) -> "Iterator[Finding]":
             continue
         for step in node.entries() if node.is_list else (node,):
             command = step.text
-            if not command or not _PIPE_TO_SHELL.search(command):
+            if not command or not wellknown.PIPE_TO_SHELL.search(command):
                 continue
             yield Finding(
                 rule_id="SC002",

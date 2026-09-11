@@ -92,6 +92,29 @@ _TEST_DIRECTORIES = frozenset(
 _TEST_NAME_MARKERS = ("_test.", "test_", ".test.", "_spec.", "mock_", "_mock.")
 
 
+#: Downloading something and handing it straight to a shell, in the spellings
+#: that turn up: a pipe, or a command substitution inside eval. Five scanners
+#: asked this question with five copies of the pattern before it moved here,
+#: and they had already drifted -- one of them knew about zsh and the others
+#: did not.
+PIPE_TO_SHELL = re.compile(
+    r"\b(?:curl|wget|iwr|Invoke-WebRequest)\b[^|;]*\|\s*(?:sudo\s+)?(?:/bin/|/usr/bin/)?"
+    r"(?:ba|z|k|da|fi|a)?sh\b"
+    r"|\beval\s+[\"']?\$\((?:\s*sudo\s+)?(?:curl|wget)\b",
+    re.IGNORECASE,
+)
+
+#: Switches that turn off certificate verification while fetching.
+SKIPS_VERIFICATION = re.compile(
+    r"\bcurl\b[^|;]*\s(?:-k|--insecure)\b"
+    r"|\bwget\b[^|;]*--no-check-certificate\b"
+    r"|\bgit\b[^|;]*http\.sslverify=false"
+    r"|\bnpm\b[^|;]*--strict-ssl[= ]false"
+    r"|\bpip\b[^|;]*--trusted-host\b",
+    re.IGNORECASE,
+)
+
+
 def is_test_path(path: str) -> bool:
     """True when a path is somewhere invented values are expected to live."""
     parts = path.replace("\\", "/").split("/")

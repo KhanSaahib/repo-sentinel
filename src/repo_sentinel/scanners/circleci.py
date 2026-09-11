@@ -40,9 +40,6 @@ _UNTRUSTED = re.compile(
 #: Orb references the registry is documented to move under you.
 _MOVING_ORB = re.compile(r"@(?:volatile|dev:)", re.IGNORECASE)
 
-_PIPE_TO_SHELL = re.compile(
-    r"\b(?:curl|wget)\b[^|]*\|\s*(?:sudo\s+)?(?:/bin/)?(?:ba|z|k|da)?sh\b"
-)
 _IMAGE_TAG = re.compile(r"^(?P<image>[^\s@]+?)(?::(?P<tag>[^:/@]+))?(?:@(?P<digest>sha256:\w+))?$")
 _SCRIPT_KEYS = ("command", "run")
 
@@ -161,7 +158,7 @@ def _check_pipe_to_shell(path: str, document: "yamlish.Node") -> "Iterator[Findi
     """CC004: a build step that trusts a URL with its shell."""
     for step in _steps(document):
         for line, command in ci.script_lines(step, _SCRIPT_KEYS):
-            if not _PIPE_TO_SHELL.search(command):
+            if not wellknown.PIPE_TO_SHELL.search(command):
                 continue
             yield Finding(
                 rule_id="CC004",

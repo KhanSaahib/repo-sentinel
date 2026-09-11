@@ -19,6 +19,7 @@ from repo_sentinel.scanners import (
     kubernetes,
     providers,
     secrets,
+    shell,
     terraform,
     workflows,
 )
@@ -40,6 +41,7 @@ CONTENT_SCANNERS = (
     jenkins,
     kubernetes,
     secrets,
+    shell,
     terraform,
     workflows,
 )
@@ -212,6 +214,8 @@ class TestCatalogue(unittest.TestCase):
             117: "One hundred and seventeen", 118: "One hundred and eighteen",
             119: "One hundred and nineteen", 120: "One hundred and twenty",
             121: "One hundred and twenty-one", 122: "One hundred and twenty-two",
+            123: "One hundred and twenty-three", 124: "One hundred and twenty-four",
+            125: "One hundred and twenty-five", 126: "One hundred and twenty-six",
         }
         spelled = words.get(len(rules.RULES))
         self.assertIsNotNone(spelled, "extend the number words in this test")

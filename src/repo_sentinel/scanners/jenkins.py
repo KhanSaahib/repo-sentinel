@@ -48,9 +48,6 @@ _UNTRUSTED = re.compile(
     r")\b"
 )
 
-_PIPE_TO_SHELL = re.compile(
-    r"\b(?:curl|wget)\b[^|]*\|\s*(?:sudo\s+)?(?:/bin/)?(?:ba|z|k|da)?sh\b"
-)
 
 #: ``image 'node:latest'`` inside an agent block, in either quoting style.
 _AGENT_IMAGE = re.compile(r"\bimage\s+(?P<quote>[\"'])(?P<image>[^\"']+)(?P=quote)")
@@ -112,7 +109,7 @@ def _check_injection(path: str, text: str) -> "Iterator[Finding]":
 def _check_pipe_to_shell(path: str, text: str) -> "Iterator[Finding]":
     """JK003: a build step that trusts a URL with the agent's shell."""
     for line, _quote, body in _shell_steps(text):
-        if not _PIPE_TO_SHELL.search(body):
+        if not wellknown.PIPE_TO_SHELL.search(body):
             continue
         yield Finding(
             rule_id="JK003",

@@ -20,6 +20,7 @@ from . import (
     jenkins,
     kubernetes,
     secrets,
+    shell,
     terraform,
     workflows,
 )
@@ -38,6 +39,7 @@ __all__ = [
     "jenkins",
     "kubernetes",
     "secrets",
+    "shell",
     "terraform",
     "workflows",
 ]

@@ -34,9 +34,6 @@ _FROM = re.compile(
     r"^(?P<image>[^\s]+?)(?::(?P<tag>[^\s@]+))?(?:@(?P<digest>sha256:[0-9a-f]{64}))?"
     r"(?:\s+[Aa][Ss]\s+(?P<stage>\S+))?\s*$"
 )
-_PIPE_TO_SHELL = re.compile(
-    r"\b(?:curl|wget)\b[^|]*\|\s*(?:sudo\s+)?(?:/bin/)?(?:ba|z|k|da)?sh\b"
-)
 _INSECURE_FETCH = re.compile(
     r"\b(?:curl\b[^|;]*\s(?:-k|--insecure)|wget\b[^|;]*--no-check-certificate"
     r"|npm\b[^|;]*--strict-ssl[= ]false|pip\b[^|;]*--trusted-host)\b"
@@ -115,7 +112,7 @@ def _check_base_image(path: str, line: int, argument: str) -> Iterator[Finding]:
 
 def _check_run(path: str, line: int, command: str) -> Iterator[Finding]:
     """DK003 and DK006: what a build step trusts the network to hand it."""
-    if _PIPE_TO_SHELL.search(command):
+    if wellknown.PIPE_TO_SHELL.search(command):
         yield Finding(
             rule_id="DK003",
             severity=Severity.HIGH,
