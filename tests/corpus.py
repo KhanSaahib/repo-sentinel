@@ -49,6 +49,18 @@ SECRETS_FILE = "\n".join(
         'slack_hook = "https://hooks.sl' + "ack.com/services/T" + _filler(32) + '"',
         'huggingface = "h' + "f_" + _filler(34) + '"',
         'dsn = "postgres://svc:Xk92mQp7Lz4TvB8n@db.internal:5432/app"',
+        'gitlab = "glp' + 'at-' + _filler(24) + '"',
+        'runner = "glr' + 't-' + _filler(24) + '"',
+        'ocean = "dop' + '_v1_' + _filler(64, "0a1b2c3d4e5f") + '"',
+        'shopify = "shp' + 'at_' + _filler(32, "0a1b2c3d4e5f") + '"',
+        'bricks = "dap' + 'i' + _filler(32, "0a1b2c3d4e5f") + '"',
+        'doppler = "dp' + '.pt.' + _filler(44) + '"',
+        'grafana = "gls' + 'a_' + _filler(32) + '_' + _filler(8, "0a1b2c3d4e5f") + '"',
+        'telegram = "123456789' + ':AA' + _filler(33) + '"',
+        'postman = "PMA' + 'K-' + _filler(24, "0a1b2c3d4e5f") + '-' + _filler(34, "0a1b2c3d4e5f") + '"',
+        'linear = "lin' + '_api_' + _filler(40) + '"',
+        'atlassian = "ATA' + 'TT3x' + _filler(120) + '"',
+        'square = "sq0' + 'atp-' + _filler(22) + '"',
         'session_secret = "Qq7Zx9Lm2Pv4Rt8WcY6h"',
     )
 )

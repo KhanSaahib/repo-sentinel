@@ -36,6 +36,18 @@ For what the severity and confidence columns mean, see
 | SEC020 | Credentials embedded in a URL | high | medium |
 | SEC021 | Google service account key file | critical | high |
 | SEC022 | Provider credential hidden inside base64 | varies | high |
+| SEC023 | GitLab personal access token | critical | high |
+| SEC024 | GitLab runner registration token | critical | high |
+| SEC025 | DigitalOcean personal access token | critical | high |
+| SEC026 | Shopify access token | critical | high |
+| SEC027 | Databricks personal access token | critical | high |
+| SEC028 | Doppler service token | critical | high |
+| SEC029 | Grafana service account token | high | high |
+| SEC030 | Telegram bot token | high | high |
+| SEC031 | Postman API key | high | high |
+| SEC032 | Linear API key | high | high |
+| SEC033 | Atlassian API token | high | high |
+| SEC034 | Square access token | critical | high |
 | SEC100 | High-entropy value in a quoted assignment | high | medium |
 | SEC101 | High-entropy value in an unquoted config value | high | medium |
 | SEC900 | Suppression block opened and never closed | medium | high |
@@ -43,7 +55,9 @@ For what the severity and confidence columns mean, see
 SEC900 is not a class of secret; it reports a suppression block that was opened
 and never closed. See [Suppressing a false positive](#suppressing-a-false-positive).
 
-SEC001–SEC020 match on documented token structure. Two of them are looser than
+SEC001–SEC034 match on documented token structure. A token to a secrets
+manager (SEC028) is rated as what it opens rather than as one credential, and
+a payment token (SEC034) as what it can move. Two of them are looser than
 the rest and say so through their confidence: SEC014 is a two-letter prefix in
 front of 32 hex characters, and SEC020 is any `scheme://user:password@host`.
 

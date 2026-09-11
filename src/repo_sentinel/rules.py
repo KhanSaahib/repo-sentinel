@@ -70,6 +70,18 @@ RULES: "dict[str, Rule]" = _rules(
     # Inherits the severity of whatever it decodes to, so the worst case is
     # the worst case of every provider rule.
     ("SEC022", "base64-wrapped-credential", "Provider credential hidden inside base64", Severity.CRITICAL),
+    ("SEC023", "gitlab-pat", "GitLab personal access token", Severity.CRITICAL),
+    ("SEC024", "gitlab-runner-token", "GitLab runner registration token", Severity.CRITICAL),
+    ("SEC025", "digitalocean-token", "DigitalOcean personal access token", Severity.CRITICAL),
+    ("SEC026", "shopify-token", "Shopify access token", Severity.CRITICAL),
+    ("SEC027", "databricks-token", "Databricks personal access token", Severity.CRITICAL),
+    ("SEC028", "doppler-token", "Doppler service token", Severity.CRITICAL),
+    ("SEC029", "grafana-token", "Grafana service account token", Severity.HIGH),
+    ("SEC030", "telegram-bot-token", "Telegram bot token", Severity.HIGH),
+    ("SEC031", "postman-key", "Postman API key", Severity.HIGH),
+    ("SEC032", "linear-key", "Linear API key", Severity.HIGH),
+    ("SEC033", "atlassian-token", "Atlassian API token", Severity.HIGH),
+    ("SEC034", "square-token", "Square access token", Severity.CRITICAL),
     ("SEC100", "entropy-quoted", "High-entropy value assigned to a secret-shaped name", Severity.HIGH),
     ("SEC101", "entropy-value-position", "High-entropy value in an unquoted config value position", Severity.HIGH),
     ("SEC900", "unterminated-suppression", "Suppression block opened and never closed", Severity.MEDIUM),

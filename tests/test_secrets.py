@@ -132,6 +132,33 @@ class TestAdditionalProviders(unittest.TestCase):
     def test_huggingface_token(self):
         self.assert_rule("SEC019", 'HF = "h' + "f_" + "a" * 34 + '"')
 
+    def test_the_provider_rules_added_for_the_tokens_people_actually_leak(self):
+        # One apiece: the shapes are documented, so the test is that the
+        # pattern was transcribed correctly rather than that it is clever.
+        for rule_id, value in (
+            ("SEC023", "glp" + "at-" + "a1B2c3D4e5F6g7H8i9J0"),
+            ("SEC024", "glr" + "t-" + "a1B2c3D4e5F6g7H8i9J0"),
+            ("SEC025", "dop" + "_v1_" + "0a1b" * 16),
+            ("SEC026", "shp" + "at_" + "0a1b" * 8),
+            ("SEC027", "dap" + "i" + "0a1b" * 8),
+            ("SEC028", "dp" + ".pt." + "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4zaB3dEf7h"),
+            ("SEC029", "gls" + "a_" + "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4z_1a2b3c4d"),
+            ("SEC030", "1234567890" + ":AA" + "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4zQ"),
+            ("SEC031", "PMA" + "K-" + "0a1b" * 6 + "-" + "0a1b" * 8 + "aa"),
+            ("SEC032", "lin" + "_api_" + "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4zaB3dEf7h"),
+            ("SEC033", "ATA" + "TT3x" + "aB3dEf7h" * 13),
+            ("SEC034", "sq0" + "atp-" + "aB3dEf7hIj0kLm2nOp5qRs"),
+        ):
+            with self.subTest(rule=rule_id):
+                self.assertIn(rule_id, rule_ids(secrets.scan_text("app.py", f'k = "{value}"')))
+
+    def test_the_new_patterns_do_not_fire_on_their_own_prefixes(self):
+        # "glpat-" and friends turn up in documentation about tokens far more
+        # often than actual tokens do.
+        for value in ("glpat-", "dop_v1_", "dapi", "PMAK-xxxx", "lin_api_short"):
+            with self.subTest(value=value):
+                self.assertEqual(secrets.scan_text("docs/tokens.md", f'k = "{value}"'), [])
+
     def test_a_loose_shape_is_reported_at_lower_confidence(self):
         findings = secrets.scan_text("t.py", 'sid = "S' + "K" + "0a1b" * 8 + '"')
         twilio = next(f for f in findings if f.rule_id == "SEC014")
