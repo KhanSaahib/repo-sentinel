@@ -120,6 +120,9 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
     if args.write_baseline:
         return _write_baseline(args.write_baseline, findings)
 
+    if args.prune_baseline:
+        return _prune_baseline(args.prune_baseline, findings)
+
     if args.baseline:
         try:
             recorded = baseline_module.load(args.baseline)
@@ -132,7 +135,7 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
         if stale:
             notes.append(
                 f"{len(stale)} baseline entr{'y' if len(stale) == 1 else 'ies'} "
-                "no longer match anything: prune with --write-baseline."
+                "no longer match anything: remove them with --prune-baseline."
             )
 
     if args.sort == "path":
@@ -186,6 +189,40 @@ def _scan_note(result) -> str:
             "carry a suppression marker; --no-suppression reads past them."
         )
     return note
+
+
+def _prune_baseline(path: str, findings: "list[Finding]") -> int:
+    """Remove the entries that match nothing, and add nothing.
+
+    The difference from ``--write-baseline`` is the whole point of having both.
+    Rewriting a baseline accepts everything the scan just found, which is
+    exactly what somebody tidying up a stale file does not want to do by
+    accident; this keeps the entries that still match and drops the rest.
+    """
+    try:
+        recorded = baseline_module.load(path)
+    except baseline_module.BaselineError as error:
+        print(f"repo-sentinel: {error}", file=sys.stderr)
+        return EXIT_ERROR
+
+    _, accepted, stale = recorded.partition(findings)
+    if not stale:
+        print(f"Nothing to prune: every entry in {path} still matches.")
+        return EXIT_OK
+
+    try:
+        kept = baseline_module.write(path, accepted, version=__version__)
+    except baseline_module.BaselineError as error:
+        print(f"repo-sentinel: {error}", file=sys.stderr)
+        return EXIT_ERROR
+
+    print(
+        f"Pruned {len(stale)} entr{'y' if len(stale) == 1 else 'ies'} from {path}; "
+        f"{kept} left. Nothing new was accepted."
+    )
+    for entry in stale:
+        print(f"  gone: {entry.rule_id}  {entry.path}  {entry.title[:60]}")
+    return EXIT_OK
 
 
 def _write_baseline(path: str, findings: "list[Finding]") -> int:

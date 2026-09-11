@@ -66,6 +66,7 @@ repo-sentinel scan . --no-suppression         # read past the ignore markers
 
 repo-sentinel scan . --write-baseline         # accept what is already there
 repo-sentinel scan . --baseline               # fail only on what is new
+repo-sentinel scan . --prune-baseline         # drop entries that match nothing
 
 repo-sentinel scan . --disable K8S004         # switch off a rule or family
 repo-sentinel scan . --quiet                  # just the summary line

@@ -329,6 +329,39 @@ class TestBaselineIntegration(unittest.TestCase):
             _, output = run(["scan", root, "--baseline", path])
         self.assertIn("no longer match", output)
 
+    def test_pruning_removes_stale_entries_and_accepts_nothing(self):
+        # The difference from --write-baseline is the whole point of having
+        # both: rewriting accepts everything the scan just found.
+        with sample_repo() as root:
+            path = os.path.join(root, "baseline.json")
+            run(["scan", root, "--write-baseline", path])
+            os.remove(os.path.join(root, "app.py"))
+            with open(os.path.join(root, "new.py"), "w", encoding="utf-8") as handle:
+                handle.write(f'KEY = "{fixtures.REALISTIC_AWS_KEY_ID}"\n')
+
+            code, output = run(["scan", root, "--prune-baseline", path])
+            self.assertEqual(code, cli.EXIT_OK)
+            self.assertIn("Pruned", output)
+            self.assertIn("Nothing new was accepted", output)
+
+            code, output = run(["scan", root, "--baseline", path])
+        self.assertEqual(code, cli.EXIT_FINDINGS)
+        self.assertIn("new.py", output)
+        self.assertNotIn("no longer match", output)
+
+    def test_pruning_a_baseline_with_nothing_stale_says_so(self):
+        with sample_repo() as root:
+            path = os.path.join(root, "baseline.json")
+            run(["scan", root, "--write-baseline", path])
+            code, output = run(["scan", root, "--prune-baseline", path])
+        self.assertEqual(code, cli.EXIT_OK)
+        self.assertIn("Nothing to prune", output)
+
+    def test_pruning_a_missing_baseline_is_an_error(self):
+        with sample_repo() as root:
+            code, _ = run(["scan", root, "--prune-baseline", os.path.join(root, "absent.json")])
+        self.assertEqual(code, cli.EXIT_ERROR)
+
     def test_a_missing_baseline_is_an_error_not_a_pass(self):
         with sample_repo() as root:
             code, _ = run(["scan", root, "--baseline", os.path.join(root, "absent.json")])

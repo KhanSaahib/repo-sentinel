@@ -83,6 +83,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="record the current findings as accepted, then exit without failing",
     )
     scan_parser.add_argument(
+        "--prune-baseline",
+        nargs="?",
+        const=baseline_module.DEFAULT_PATH,
+        metavar="FILE",
+        help=(
+            "drop the entries that no longer match anything, and nothing else: "
+            "shrinks a baseline without accepting what has arrived since"
+        ),
+    )
+    scan_parser.add_argument(
         "--config",
         metavar="FILE",
         help=(

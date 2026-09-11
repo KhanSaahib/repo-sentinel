@@ -64,6 +64,8 @@ repository the tool can read at all: it grew from two file formats to six.
   `package.json`, `.npmrc`, `requirements*.txt`, `pip.conf`, `Gemfile` and
   `pom.xml` -- the question of where the rest of the build comes from, which
   every other family leaves unasked.
+- **`--prune-baseline`**, which removes the entries that match nothing and
+  accepts nothing new -- the safe half of re-running `--write-baseline`.
 - **`--no-suppression`**, which reads the `repo-sentinel: ignore` markers but
   does not obey them, and a count of marker lines in every run's summary
   whether or not they were obeyed.
