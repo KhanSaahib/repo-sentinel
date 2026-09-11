@@ -67,7 +67,9 @@ RULES: "dict[str, Rule]" = _rules(
     ("SEC019", "huggingface-token", "Hugging Face access token", Severity.HIGH),
     ("SEC020", "url-credentials", "Credentials embedded in a URL", Severity.HIGH),
     ("SEC021", "gcp-service-account", "Google service account key file", Severity.CRITICAL),
-    ("SEC022", "base64-wrapped-credential", "Provider credential hidden inside base64", Severity.HIGH),
+    # Inherits the severity of whatever it decodes to, so the worst case is
+    # the worst case of every provider rule.
+    ("SEC022", "base64-wrapped-credential", "Provider credential hidden inside base64", Severity.CRITICAL),
     ("SEC100", "entropy-quoted", "High-entropy value assigned to a secret-shaped name", Severity.HIGH),
     ("SEC101", "entropy-value-position", "High-entropy value in an unquoted config value position", Severity.HIGH),
     ("SEC900", "unterminated-suppression", "Suppression block opened and never closed", Severity.MEDIUM),
@@ -108,7 +110,7 @@ RULES: "dict[str, Rule]" = _rules(
     ("CF004", "cfn-wildcard-policy", "Policy allows every action on every resource", Severity.HIGH),
     ("CF005", "cfn-public-database", "Managed database given a public endpoint", Severity.HIGH),
     ("K8S001", "privileged-container", "Container runs privileged", Severity.CRITICAL),
-    ("K8S002", "host-path-mount", "Volume mounts a path from the node", Severity.HIGH),
+    ("K8S002", "host-path-mount", "Volume mounts a path from the node", Severity.CRITICAL),
     ("K8S003", "host-namespace", "Pod shares a namespace with the node", Severity.HIGH),
     ("K8S004", "no-resource-limits", "Container declares no resource limits", Severity.LOW),
     ("K8S005", "runs-as-root", "Container declares that it runs as root", Severity.MEDIUM),

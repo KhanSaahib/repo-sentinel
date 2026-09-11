@@ -60,6 +60,30 @@ class TestCatalogue(unittest.TestCase):
                     with self.subTest(rule=hits[0].rule_id):
                         self.assertIsNotNone(secrets._CANDIDATE.search(line))
 
+    def test_no_rule_is_worse_in_practice_than_the_catalogue_says(self):
+        # The catalogue lists the worst case, which is what a reader planning a
+        # gate needs: "TF001 is critical" has to mean it never arrives at
+        # something higher. Several rules grade themselves down by context, so
+        # the invariant is one-directional.
+        findings = secrets.scan_files(corpus.FILES)
+        findings += workflows.scan_files(corpus.FILES)
+        findings += dockerfiles.scan_files(corpus.FILES)
+        findings += terraform.scan_files(corpus.FILES)
+        findings += kubernetes.scan_files(corpus.FILES)
+        findings += compose.scan_files(corpus.FILES)
+        findings += gitlab.scan_files(corpus.FILES)
+        findings += cloudformation.scan_files(corpus.FILES)
+        findings += dependencies.scan_files(corpus.FILES)
+        findings += filenames.scan_paths(corpus.PATHS)
+        for finding in findings:
+            with self.subTest(rule=finding.rule_id):
+                self.assertLessEqual(
+                    finding.severity,
+                    rules.RULES[finding.rule_id].severity,
+                    f"{finding.rule_id} reported {finding.severity.value} but the "
+                    f"catalogue promises at most {rules.RULES[finding.rule_id].severity.value}",
+                )
+
     def test_provider_rules_agree_with_the_catalogue_on_severity(self):
         for rule in secrets._PROVIDER_RULES:
             with self.subTest(rule=rule.rule_id):
