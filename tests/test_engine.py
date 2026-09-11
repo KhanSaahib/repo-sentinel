@@ -18,6 +18,21 @@ def repository(files):
     return root
 
 
+class TestEveryScannerRuns(unittest.TestCase):
+    def test_the_engine_calls_every_scanner_the_package_has(self):
+        # A scanner missing from the engine runs in its own unit tests and
+        # nowhere else, which nothing else would notice.
+        from repo_sentinel import scanners
+
+        available = {
+            getattr(scanners, name)
+            for name in scanners.__all__
+            if hasattr(getattr(scanners, name), "scan_files")
+        }
+        called = set(engine.FORMAT_SCANNERS) | {scanners.secrets}
+        self.assertEqual(available, called)
+
+
 class TestScan(unittest.TestCase):
     def test_every_scanner_contributes(self):
         root = repository(

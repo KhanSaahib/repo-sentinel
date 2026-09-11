@@ -27,6 +27,30 @@ from .scanners import (
 )
 
 
+#: Every scanner that reads whole files and filters by format. Named here
+#: rather than inline so a test can assert it holds every scanner the package
+#: has -- a new one missing from this tuple is a scanner that runs in its own
+#: unit tests and nowhere else, which is the kind of gap nothing else notices.
+#:
+#: :mod:`.scanners.secrets` is called separately because it reads every file
+#: rather than filtering, and :mod:`.scanners.filenames` because it takes paths
+#: rather than contents.
+FORMAT_SCANNERS = (
+    ansible,
+    azure,
+    circleci,
+    cloudformation,
+    compose,
+    dependencies,
+    dockerfiles,
+    gitlab,
+    jenkins,
+    kubernetes,
+    terraform,
+    workflows,
+)
+
+
 @dataclasses.dataclass(frozen=True)
 class ScanReport:
     """Everything one run learned, including what it looked at.
@@ -79,20 +103,7 @@ def scan(
     found += secrets.scan_files(
         files, allow_examples=allow_examples, honour_markers=honour_markers
     )
-    for scanner in (
-        workflows,
-        dockerfiles,
-        terraform,
-        kubernetes,
-        compose,
-        gitlab,
-        cloudformation,
-        dependencies,
-        ansible,
-        azure,
-        circleci,
-        jenkins,
-    ):
+    for scanner in FORMAT_SCANNERS:
         found += scanner.scan_files(files, honour_markers=honour_markers)
 
     marked = [_count_markers(text) for _, text in files]
