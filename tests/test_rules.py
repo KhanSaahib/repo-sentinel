@@ -46,15 +46,32 @@ class TestCatalogue(unittest.TestCase):
             with self.subTest(rule=rule.rule_id):
                 self.assertEqual(rules.RULES[rule.rule_id].severity, rule.severity)
 
-    def test_every_rule_is_documented_in_the_readme(self):
-        # The catalogue keeps the scanners honest; this keeps the README
-        # honest. A rule table nobody is forced to update is a rule table that
+    def test_every_rule_is_documented(self):
+        # The catalogue keeps the scanners honest; this keeps the prose honest.
+        # A rule table nobody is forced to update is a rule table that
         # describes the release before last.
-        readme = (pathlib.Path(__file__).resolve().parents[1] / "README.md").read_text(
-            encoding="utf-8"
+        root = pathlib.Path(__file__).resolve().parents[1]
+        documentation = (root / "docs" / "RULES.md").read_text(encoding="utf-8")
+        undocumented = sorted(
+            rule_id for rule_id in rules.RULES if rule_id not in documentation
         )
-        undocumented = sorted(rule_id for rule_id in rules.RULES if rule_id not in readme)
-        self.assertEqual(undocumented, [], "rules missing from the README tables")
+        self.assertEqual(undocumented, [], "rules missing from docs/RULES.md")
+
+    def test_the_readme_summary_counts_the_rules_correctly(self):
+        # The README quotes a total. A number in prose is a number that rots.
+        root = pathlib.Path(__file__).resolve().parents[1]
+        readme = (root / "README.md").read_text(encoding="utf-8")
+        words = {
+            60: "Sixty", 61: "Sixty-one", 62: "Sixty-two", 63: "Sixty-three",
+            64: "Sixty-four", 65: "Sixty-five", 66: "Sixty-six", 67: "Sixty-seven",
+            68: "Sixty-eight", 69: "Sixty-nine", 70: "Seventy", 71: "Seventy-one",
+            72: "Seventy-two", 73: "Seventy-three", 74: "Seventy-four",
+            75: "Seventy-five", 76: "Seventy-six", 77: "Seventy-seven",
+            78: "Seventy-eight", 79: "Seventy-nine", 80: "Eighty",
+        }
+        spelled = words.get(len(rules.RULES))
+        self.assertIsNotNone(spelled, "extend the number words in this test")
+        self.assertIn(f"{spelled} rules", readme)
 
     def test_ids_are_unique_and_sorted_within_a_category(self):
         for category, catalogued in rules.by_category().items():

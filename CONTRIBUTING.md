@@ -45,12 +45,13 @@ never be the thing that leaks the credential it found.
    `scanners/secrets.py`. Structural checks are functions.
 3. Add it to `rules.py`. The suite fails if you do not.
 4. Extend `tests/corpus.py` so the rule fires there. The corpus is what proves
-   the catalogue, the scanners and the README agree; a rule missing from any of
-   the three fails the build.
+   the catalogue, the scanners and the documentation agree; a rule missing from
+   any of the three fails the build.
 5. Write tests for what it should *not* match. This matters more than the
    positive case: the positive case is why you wrote the rule, and the negative
    cases are why anyone will still have it switched on next quarter.
-6. Add a row to the README table. This is enforced, not asked for.
+6. Add a row to the table in `docs/RULES.md`. This is enforced, not asked
+   for: the suite fails if the catalogue and that file disagree.
 
 ### Choosing a severity
 
