@@ -228,5 +228,71 @@ class TestRunSummary(unittest.TestCase):
         self.assertIn("Scanned 0 files", output)
 
 
+class TestPathList(unittest.TestCase):
+    def test_only_the_listed_files_are_scanned(self):
+        with sample_repo() as root:
+            listing = os.path.join(root, "changed.txt")
+            with open(listing, "w", encoding="utf-8") as handle:
+                handle.write(".github/workflows/ci.yml\n")
+            _, output = run(["scan", root, "--format", "json", "--paths-from", listing])
+        paths = {finding["path"] for finding in json.loads(output)["findings"]}
+        self.assertEqual(paths, {".github/workflows/ci.yml"})
+
+    def test_a_deleted_path_is_skipped_not_fatal(self):
+        # A diff lists deletions too, and a scanner that fails on one is a
+        # scanner nobody puts in a pipeline.
+        with sample_repo() as root:
+            listing = os.path.join(root, "changed.txt")
+            with open(listing, "w", encoding="utf-8") as handle:
+                handle.write("app.py\ndeleted.py\n")
+            code, output = run(["scan", root, "--paths-from", listing])
+        self.assertEqual(code, cli.EXIT_FINDINGS)
+        self.assertIn("Scanned 1 file(s)", output)
+
+    def test_a_missing_list_is_a_usage_error(self):
+        with sample_repo() as root:
+            code, _ = run(["scan", root, "--paths-from", os.path.join(root, "absent.txt")])
+        self.assertEqual(code, cli.EXIT_ERROR)
+
+    def test_an_ignored_file_is_still_scanned_when_named(self):
+        # The caller named it. Second-guessing an explicit list is how a tool
+        # acquires a reputation for missing things.
+        with tempfile.TemporaryDirectory() as root:
+            with open(os.path.join(root, ".gitignore"), "w", encoding="utf-8") as handle:
+                handle.write("secrets.py\n")
+            with open(os.path.join(root, "secrets.py"), "w", encoding="utf-8") as handle:
+                handle.write(f'KEY = "{fixtures.REALISTIC_AWS_KEY_ID}"\n')
+            listing = os.path.join(root, "changed.txt")
+            with open(listing, "w", encoding="utf-8") as handle:
+                handle.write("secrets.py\n")
+            walked, _ = run(["scan", root])
+            listed, _ = run(["scan", root, "--paths-from", listing])
+        self.assertEqual(walked, cli.EXIT_OK)
+        self.assertEqual(listed, cli.EXIT_FINDINGS)
+
+
+class TestQuietAndSort(unittest.TestCase):
+    def test_quiet_keeps_the_counts_and_drops_the_detail(self):
+        with sample_repo() as root:
+            _, output = run(["scan", root, "--quiet"])
+        self.assertIn("finding(s):", output)
+        self.assertNotIn("evidence:", output)
+
+    def test_sorting_by_path_groups_a_file_together(self):
+        with sample_repo() as root:
+            _, output = run(["scan", root, "--format", "json", "--sort", "path"])
+        paths = [finding["path"] for finding in json.loads(output)["findings"]]
+        self.assertEqual(paths, sorted(paths))
+
+    def test_default_order_is_worst_first(self):
+        with sample_repo() as root:
+            _, output = run(["scan", root, "--format", "json"])
+        ranks = [
+            ["low", "medium", "high", "critical"].index(finding["severity"])
+            for finding in json.loads(output)["findings"]
+        ]
+        self.assertEqual(ranks, sorted(ranks, reverse=True))
+
+
 if __name__ == "__main__":
     unittest.main()

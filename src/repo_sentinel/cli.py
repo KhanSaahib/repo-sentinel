@@ -81,6 +81,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="record the current findings as accepted, then exit without failing",
     )
     scan_parser.add_argument(
+        "--paths-from",
+        metavar="FILE",
+        help=(
+            "scan only the files listed in FILE, one per line ('-' for stdin). "
+            "Pipe in `git diff --name-only origin/main` for a fast pull request run"
+        ),
+    )
+    scan_parser.add_argument(
+        "--sort",
+        choices=("severity", "path"),
+        default="severity",
+        help="order findings worst-first (default) or by file",
+    )
+    scan_parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="print only the summary, not each finding",
+    )
+    scan_parser.add_argument(
         "--no-gitignore",
         action="store_true",
         help="also scan files git was told to ignore",
@@ -121,11 +140,18 @@ def _run_scan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         parser.error(str(error))
         return EXIT_ERROR  # pragma: no cover - argparse exits first
 
+    try:
+        only_paths = _listed_paths(args.paths_from)
+    except OSError as error:
+        print(f"repo-sentinel: could not read {args.paths_from!r}: {error}", file=sys.stderr)
+        return EXIT_ERROR
+
     result = scan(
         args.path,
         DEFAULT_EXCLUDES + tuple(args.exclude),
         allow_examples=not args.no_example_allowlist,
         use_gitignore=not args.no_gitignore,
+        only_paths=only_paths,
     )
     findings: "list[Finding]" = [
         finding
@@ -152,6 +178,9 @@ def _run_scan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
                 "no longer match anything: prune with --write-baseline."
             )
 
+    if args.sort == "path":
+        findings.sort(key=lambda finding: (finding.path, finding.line, finding.rule_id))
+
     if args.format == "text":
         notes.append(_scan_note(result))
 
@@ -171,7 +200,19 @@ def _render(
     if args.format == "sarif":
         return report.format_sarif(findings, version=__version__)
     colour = not args.no_color and args.output is None and sys.stdout.isatty()
+    if args.quiet:
+        return report.format_summary(findings, notes=notes)
     return report.format_text(findings, colour=colour, notes=notes)
+
+
+def _listed_paths(source: "str | None") -> "list[str] | None":
+    """Read a file list from a file or from stdin, or None when not asked."""
+    if source is None:
+        return None
+    if source == "-":
+        return sys.stdin.read().splitlines()
+    with open(source, encoding="utf-8") as handle:
+        return handle.read().splitlines()
 
 
 def _scan_note(result) -> str:

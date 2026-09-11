@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import fnmatch
 import os
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 
 from .gitignore import GitIgnoreFile, GitIgnoreStack
 
@@ -115,6 +115,45 @@ def iter_files(
             text = _read_text(absolute, max_bytes)
             if text is None:
                 continue
+            yield relative, text
+
+
+def read_listed(
+    root: str,
+    paths: "Iterable[str]",
+    excludes: "tuple[str, ...]" = (),
+    max_bytes: int = MAX_FILE_BYTES,
+) -> Iterator[tuple[str, str]]:
+    """Yield ``(relative_path, text)`` for an explicit list of files.
+
+    This is the walk's opposite number, for the case where something else has
+    already decided what to look at -- typically the files a pull request
+    touched, fed in from ``git diff --name-only``. A path that no longer exists
+    is skipped rather than reported: a diff lists deletions too, and a scanner
+    that fails on one is a scanner nobody puts in a pipeline.
+
+    ``.gitignore`` is deliberately not consulted here. The caller named these
+    files, and second-guessing an explicit list is how a tool acquires a
+    reputation for missing things.
+    """
+    root = os.path.abspath(root)
+    seen: set = set()
+    for raw in paths:
+        candidate = raw.strip().strip('"')
+        if not candidate or candidate.startswith("#"):
+            continue
+        absolute = candidate if os.path.isabs(candidate) else os.path.join(root, candidate)
+        if absolute in seen or not os.path.isfile(absolute):
+            continue
+        seen.add(absolute)
+        relative = os.path.relpath(absolute, root).replace(os.sep, "/")
+        name = os.path.basename(absolute)
+        if os.path.splitext(name)[1].lower() in BINARY_SUFFIXES:
+            continue
+        if any(fnmatch.fnmatch(part, pattern) for part in relative.split("/") for pattern in excludes):
+            continue
+        text = _read_text(absolute, max_bytes)
+        if text is not None:
             yield relative, text
 
 

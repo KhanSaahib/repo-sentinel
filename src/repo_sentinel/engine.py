@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import dataclasses
 import time
+from collections.abc import Iterable
 
-from .discovery import DEFAULT_EXCLUDES, iter_files
+from .discovery import DEFAULT_EXCLUDES, iter_files, read_listed
 from .findings import Finding
 from .scanners import compose, dockerfiles, kubernetes, secrets, terraform, workflows
 
@@ -31,10 +32,20 @@ def scan(
     *,
     allow_examples: bool = True,
     use_gitignore: bool = True,
+    only_paths: "Iterable[str] | None" = None,
 ) -> ScanReport:
-    """Run every scanner over ``path``, worst findings first."""
+    """Run every scanner over ``path``, worst findings first.
+
+    With ``only_paths``, the walk is replaced by that explicit list -- the files
+    a pull request touched, usually. Everything downstream is identical, so a
+    fast per-PR run and a full audit produce the same findings for the same
+    file.
+    """
     started = time.monotonic()
-    files = list(iter_files(path, excludes=excludes, use_gitignore=use_gitignore))
+    if only_paths is None:
+        files = list(iter_files(path, excludes=excludes, use_gitignore=use_gitignore))
+    else:
+        files = list(read_listed(path, only_paths, excludes=excludes))
 
     found = secrets.scan_files(files, allow_examples=allow_examples)
     found += workflows.scan_files(files)
@@ -56,8 +67,13 @@ def scan_path(
     *,
     allow_examples: bool = True,
     use_gitignore: bool = True,
+    only_paths: "Iterable[str] | None" = None,
 ) -> "list[Finding]":
     """Just the findings, for callers that do not care how the run went."""
     return scan(
-        path, excludes, allow_examples=allow_examples, use_gitignore=use_gitignore
+        path,
+        excludes,
+        allow_examples=allow_examples,
+        use_gitignore=use_gitignore,
+        only_paths=only_paths,
     ).findings

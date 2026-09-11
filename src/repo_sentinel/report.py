@@ -88,6 +88,16 @@ def format_text(
     return "\n".join(lines)
 
 
+def format_summary(findings: Sequence[Finding], *, notes: Sequence[str] = ()) -> str:
+    """The summary line and nothing else, for a pipeline log that is read once.
+
+    The counts still distinguish severities, because "12 findings" and "12
+    findings, one critical" call for different reactions and a quiet mode that
+    loses that distinction is just a broken one.
+    """
+    return "\n".join([summarise(findings) if findings else _CLEAN, *notes])
+
+
 def format_json(findings: Sequence[Finding], *, version: str, notes: Sequence[str] = ()) -> str:
     payload = {
         "version": version,
