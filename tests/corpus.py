@@ -300,6 +300,22 @@ PLAYBOOK_FILE = """---
         mode: "0777"
 """
 
+AZURE_PIPELINE_FILE = """trigger:
+  - main
+
+variables:
+  system.debug: true
+
+pool:
+  name: our-build-servers
+
+container: node
+
+steps:
+  - script: echo "Building $(Build.SourceVersionMessage)"
+    displayName: Build
+"""
+
 #: ``(path, text)`` pairs, in the shape :func:`iter_files` yields.
 FILES = (
     ("src/config.py", SECRETS_FILE),
@@ -316,6 +332,7 @@ FILES = (
     ("package.json", PACKAGE_JSON),
     ("web/.npmrc", NPMRC_FILE),
     ("playbooks/web.yml", PLAYBOOK_FILE),
+    ("azure-pipelines.yml", AZURE_PIPELINE_FILE),
 )
 
 #: ``(path, text)`` pairs, in the shape the walk reports, with None for the

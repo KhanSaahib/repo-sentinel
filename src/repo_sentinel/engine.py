@@ -11,6 +11,7 @@ from . import suppression
 from .findings import Finding
 from .scanners import (
     ansible,
+    azure,
     cloudformation,
     compose,
     dependencies,
@@ -86,6 +87,7 @@ def scan(
         cloudformation,
         dependencies,
         ansible,
+        azure,
     ):
         found += scanner.scan_files(files, honour_markers=honour_markers)
 

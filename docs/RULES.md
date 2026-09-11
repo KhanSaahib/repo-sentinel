@@ -296,6 +296,28 @@ jobs are scanned too: GitLab does not run them directly, but everything that
 `extends` one runs its script, so reporting the injection where it is written
 beats reporting it in each of the five jobs that inherited it.
 
+## Azure Pipelines
+
+| Rule | Finds | Severity |
+| --- | --- | --- |
+| AZ001 | Outsider-supplied variable expanded into a command | critical |
+| AZ002 | Pipeline runs on a self-hosted pool | medium |
+| AZ003 | Pipeline container image can point elsewhere tomorrow | medium |
+| AZ004 | `system.debug` writes every variable to the job log | high |
+
+The third CI system and the third appearance of the same bug. Azure expands
+`$(Build.SourceVersionMessage)` into the shell before the shell runs, exactly
+as Actions expands `${{ github.event.issue.title }}` and GitLab expands
+`$CI_COMMIT_TITLE`. AZ001 skips the fields that cannot carry an injection --
+a pull request id is a number, a commit id is hex -- for the same reason WF003
+does.
+
+AZ004 is GL004's twin: debug logging prints variable values, secret ones
+included, into a log that is often readable by anyone who can see the project.
+
+Pipelines are recognised by name or by shape, since a template can live in any
+file and be included from anywhere.
+
 ## Terraform
 
 | Rule | Finds | Severity |

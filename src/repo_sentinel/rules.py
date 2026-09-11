@@ -38,7 +38,7 @@ class Rule:
         return _CATEGORIES[self.id[:3]]
 
 
-_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose", "FN0": "filenames", "GL0": "gitlab", "CF0": "cloudformation", "SC0": "dependencies", "AN0": "ansible"}
+_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose", "FN0": "filenames", "GL0": "gitlab", "CF0": "cloudformation", "SC0": "dependencies", "AN0": "ansible", "AZ0": "azure"}
 
 
 def _rules(*entries: tuple[str, str, str, Severity]) -> "dict[str, Rule]":
@@ -119,6 +119,10 @@ RULES: "dict[str, Rule]" = _rules(
     ("AN001", "ansible-verification-off", "Task skips certificate verification", Severity.HIGH),
     ("AN002", "world-writable-mode", "Task sets a world-writable file mode", Severity.MEDIUM),
     ("AN003", "ansible-plaintext-fetch", "Task fetches over plain HTTP", Severity.MEDIUM),
+    ("AZ001", "azure-script-injection", "Outsider-supplied variable expanded into a command", Severity.CRITICAL),
+    ("AZ002", "azure-self-hosted-pool", "Pipeline runs on a self-hosted pool", Severity.MEDIUM),
+    ("AZ003", "azure-floating-container", "Pipeline container image can point elsewhere tomorrow", Severity.MEDIUM),
+    ("AZ004", "azure-debug-logging", "system.debug writes every variable to the job log", Severity.HIGH),
     ("CF001", "cfn-open-ingress", "Security group admits 0.0.0.0/0", Severity.CRITICAL),
     ("CF002", "cfn-public-bucket", "Bucket granted to the public", Severity.HIGH),
     ("CF003", "cfn-encryption-disabled", "Encryption at rest explicitly switched off", Severity.MEDIUM),

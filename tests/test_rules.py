@@ -7,6 +7,7 @@ import corpus
 from repo_sentinel import rules
 from repo_sentinel.scanners import (
     ansible,
+    azure,
     cloudformation,
     compose,
     dependencies,
@@ -20,19 +21,48 @@ from repo_sentinel.scanners import (
 )
 
 
+#: Every scanner that reads ``(path, text)`` pairs. Listed once, because a new
+#: scanner missing from this tuple would make the drift test pass by not
+#: asking -- the one way for that test to be useless.
+CONTENT_SCANNERS = (
+    ansible,
+    azure,
+    cloudformation,
+    compose,
+    dependencies,
+    dockerfiles,
+    gitlab,
+    kubernetes,
+    secrets,
+    terraform,
+    workflows,
+)
+
+
+def all_findings():
+    """Every finding the corpus produces, from every scanner there is."""
+    findings = list(filenames.scan_paths(corpus.PATHS))
+    for scanner in CONTENT_SCANNERS:
+        findings += scanner.scan_files(corpus.FILES)
+    return findings
+
+
 def emitted_rule_ids():
-    findings = secrets.scan_files(corpus.FILES)
-    findings += workflows.scan_files(corpus.FILES)
-    findings += dockerfiles.scan_files(corpus.FILES)
-    findings += terraform.scan_files(corpus.FILES)
-    findings += kubernetes.scan_files(corpus.FILES)
-    findings += compose.scan_files(corpus.FILES)
-    findings += filenames.scan_paths(corpus.PATHS)
-    findings += gitlab.scan_files(corpus.FILES)
-    findings += cloudformation.scan_files(corpus.FILES)
-    findings += dependencies.scan_files(corpus.FILES)
-    findings += ansible.scan_files(corpus.FILES)
-    return {finding.rule_id for finding in findings}
+    return {finding.rule_id for finding in all_findings()}
+
+
+class TestCoverageOfTheScanners(unittest.TestCase):
+    def test_every_scanner_module_is_asked(self):
+        # A new scanner missing from CONTENT_SCANNERS would make the drift
+        # tests pass by not asking it anything.
+        from repo_sentinel import scanners
+
+        modules = {
+            getattr(scanners, name)
+            for name in scanners.__all__
+            if name not in ("allowlist", "filenames")
+        }
+        self.assertEqual(modules, set(CONTENT_SCANNERS))
 
 
 class TestCatalogue(unittest.TestCase):
@@ -67,18 +97,7 @@ class TestCatalogue(unittest.TestCase):
         # gate needs: "TF001 is critical" has to mean it never arrives at
         # something higher. Several rules grade themselves down by context, so
         # the invariant is one-directional.
-        findings = secrets.scan_files(corpus.FILES)
-        findings += workflows.scan_files(corpus.FILES)
-        findings += dockerfiles.scan_files(corpus.FILES)
-        findings += terraform.scan_files(corpus.FILES)
-        findings += kubernetes.scan_files(corpus.FILES)
-        findings += compose.scan_files(corpus.FILES)
-        findings += gitlab.scan_files(corpus.FILES)
-        findings += cloudformation.scan_files(corpus.FILES)
-        findings += dependencies.scan_files(corpus.FILES)
-        findings += ansible.scan_files(corpus.FILES)
-        findings += filenames.scan_paths(corpus.PATHS)
-        for finding in findings:
+        for finding in all_findings():
             with self.subTest(rule=finding.rule_id):
                 self.assertLessEqual(
                     finding.severity,

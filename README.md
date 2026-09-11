@@ -153,7 +153,7 @@ repo-sentinel scan . --no-gitignore
 
 ## What it checks
 
-Ninety-six rules across eleven families. [docs/RULES.md](docs/RULES.md) is the
+One hundred rules across twelve families. [docs/RULES.md](docs/RULES.md) is the
 full list, with a paragraph on each family explaining what it is looking for
 and why; `repo-sentinel rules` prints the same catalogue from the tool.
 
@@ -164,6 +164,7 @@ and why; `repo-sentinel rules` prints the same catalogue from the tool.
 | [Dependencies](docs/RULES.md#dependencies) | SC001–SC004 | Where the rest of the build comes from |
 | [GitHub Actions](docs/RULES.md#github-actions-workflows) | WF001–WF010 | Script injection, token scope, privileged triggers |
 | [GitLab CI](docs/RULES.md#gitlab-ci) | GL001–GL004 | The same injection class, and debug tracing |
+| [Azure Pipelines](docs/RULES.md#azure-pipelines) | AZ001–AZ004 | The same injection, a third time |
 | [Dockerfiles](docs/RULES.md#dockerfiles) | DK001–DK006 | Base images, root, pipe-to-shell, layer secrets |
 | [Docker Compose](docs/RULES.md#docker-compose) | DC001–DC006 | Privilege, host mounts, ports on every interface |
 | [Terraform](docs/RULES.md#terraform) | TF001–TF007 | Open ingress, public storage, wildcard policies |

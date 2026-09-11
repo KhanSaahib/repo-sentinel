@@ -71,6 +71,8 @@ outcome than a feature nobody wanted.
       small reader that keeps them and produces the same nodes as the YAML one;
       the rules did not change at all
 - [x] Ansible playbooks and task files
+- [x] Azure Pipelines, which expands its variables into the shell exactly as
+      the other two do
 - [ ] CircleCI and Jenkinsfiles, the two remaining CI systems people actually
       have. A Jenkinsfile is Groovy, which this tool has no business parsing;
       the honest scope there is its shell steps and nothing else

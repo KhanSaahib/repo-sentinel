@@ -70,6 +70,9 @@ repository the tool can read at all: it grew from two file formats to six.
   changed to gain this.
 - **Composer** joins the dependency manifests, with its own install-time
   lifecycle scripts.
+- **Azure Pipelines** (AZ001–AZ004): `$(Build.SourceVersionMessage)` expanded
+  into a command -- the third CI system and the third appearance of the same
+  bug -- plus self-hosted pools, floating container images, and `system.debug`.
 - **Ansible** (AN001–AN003): certificate verification switched off, a
   world-writable file mode, a fetch over plain HTTP. Narrow on purpose, because
   Ansible's idioms make most "insecure" patterns ambiguous and these three are
