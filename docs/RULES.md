@@ -431,6 +431,7 @@ from it.
 | K8S008 | Container image tag can point elsewhere tomorrow | medium |
 | K8S009 | Role grants every verb on every resource | critical for a ClusterRole |
 | K8S010 | Binding grants to anonymous or all authenticated users | critical |
+| K8S011 | Container port bound on the node itself | high for a privileged port |
 
 Manifests are found by content, not by filename: a Kubernetes document is one
 with `apiVersion` and `kind` at its root, in YAML or in JSON. That beats guessing at `deploy/`,

@@ -372,6 +372,44 @@ def _values(node: "yamlish.Node | None") -> "list[str]":
     return [text.strip("\"'")] if text else []
 
 
+def _check_host_ports(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
+    """K8S011: a container port bound on the node itself.
+
+    A hostPort skips the Service and the NetworkPolicy and puts the container
+    on the node's own address, which means anything that can reach the node can
+    reach the container -- and that only one pod per node can have it, so the
+    scheduler quietly stops being able to place the workload.
+    """
+    for name, container in _containers(document):
+        ports = container.get("ports")
+        if ports is None or not ports.is_list:
+            continue
+        for entry in ports.entries():
+            node = entry.get("hostPort")
+            if node is None or not node.text.strip().strip("\"'").isdigit():
+                continue
+            port = int(node.text.strip().strip("\"'"))
+            service = wellknown.ADMIN_PORTS.get(port)
+            yield Finding(
+                rule_id="K8S011",
+                severity=Severity.HIGH if service or port < 1024 else Severity.MEDIUM,
+                title=(
+                    f"Container {name!r} binds {service or port} on the node itself"
+                    if service
+                    else f"Container {name!r} binds port {port} on the node itself"
+                ),
+                path=path,
+                line=node.line,
+                evidence=f"hostPort: {port}",
+                remediation=(
+                    "A hostPort bypasses the Service and any NetworkPolicy in "
+                    "front of it: whatever can reach the node can reach this "
+                    "container. Publish it through a Service, or through an "
+                    "ingress controller that is meant to be exposed."
+                ),
+            )
+
+
 def _check_secret_data(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
     """K8S007: a credential committed inside a Secret manifest.
 
@@ -456,6 +494,7 @@ _POSITIVE_RULES: "tuple[_Rule, ...]" = (
     _check_host_namespaces,
     _check_capabilities,
     _check_root,
+    _check_host_ports,
     _check_secret_data,
     _check_rbac_wildcards,
     _check_rbac_subjects,

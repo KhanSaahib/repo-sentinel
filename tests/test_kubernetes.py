@@ -174,6 +174,33 @@ class TestSecretManifests(unittest.TestCase):
         self.assertEqual(scan(self.manifest("data", "password", "not!base64!")), [])
 
 
+class TestHostPorts(unittest.TestCase):
+    def manifest(self, ports):
+        return (
+            "apiVersion: v1\nkind: Pod\nmetadata:\n  name: w\nspec:\n"
+            "  containers:\n    - name: app\n      image: nginx:1.25\n"
+            "      resources:\n        limits:\n          cpu: 1\n"
+            "      ports:\n" + ports
+        )
+
+    def test_a_host_port_is_reported(self):
+        findings = scan(self.manifest("        - containerPort: 8080\n          hostPort: 8080\n"))
+        self.assertEqual(findings[0].rule_id, "K8S011")
+        self.assertEqual(findings[0].severity, Severity.MEDIUM)
+
+    def test_a_privileged_or_well_known_port_is_worse(self):
+        for port in (22, 80):
+            with self.subTest(port=port):
+                findings = scan(
+                    self.manifest(f"        - containerPort: {port}\n          hostPort: {port}\n")
+                )
+                self.assertEqual(findings[0].severity, Severity.HIGH)
+
+    def test_a_container_port_alone_is_not_a_host_port(self):
+        # containerPort is documentation; hostPort is a binding on the node.
+        self.assertEqual(scan(self.manifest("        - containerPort: 8080\n")), [])
+
+
 class TestRbac(unittest.TestCase):
     """Who may do what, which is where a cluster is usually given away."""
 

@@ -175,6 +175,9 @@ spec:
       containers:
         - name: app
           image: nginx
+          ports:
+            - containerPort: 22
+              hostPort: 22
           securityContext:
             privileged: true
             runAsUser: 0
