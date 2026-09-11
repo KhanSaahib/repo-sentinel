@@ -15,6 +15,7 @@ from repo_sentinel.scanners import (
     filenames,
     gitlab,
     kubernetes,
+    providers,
     secrets,
     terraform,
     workflows,
@@ -78,7 +79,7 @@ class TestCatalogue(unittest.TestCase):
         self.assertEqual(unreachable, set(), "catalogue describes rules nothing emits")
 
     def test_the_candidate_gate_lets_every_provider_rule_through(self):
-        # secrets._CANDIDATE decides which lines are worth looking at closely,
+        # providers.CANDIDATE decides which lines are worth looking at closely,
         # and a line it rejects is never looked at again. Every line of the
         # corpus that trips a provider rule has to clear it.
         for path, text in corpus.FILES:
@@ -90,7 +91,7 @@ class TestCatalogue(unittest.TestCase):
                 ]
                 if hits:
                     with self.subTest(rule=hits[0].rule_id):
-                        self.assertIsNotNone(secrets._CANDIDATE.search(line))
+                        self.assertIsNotNone(providers.CANDIDATE.search(line))
 
     def test_no_rule_is_worse_in_practice_than_the_catalogue_says(self):
         # The catalogue lists the worst case, which is what a reader planning a
@@ -107,7 +108,7 @@ class TestCatalogue(unittest.TestCase):
                 )
 
     def test_provider_rules_agree_with_the_catalogue_on_severity(self):
-        for rule in secrets._PROVIDER_RULES:
+        for rule in providers.RULES:
             with self.subTest(rule=rule.rule_id):
                 self.assertEqual(rules.RULES[rule.rule_id].severity, rule.severity)
 

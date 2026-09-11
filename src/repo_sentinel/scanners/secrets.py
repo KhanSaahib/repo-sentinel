@@ -33,320 +33,13 @@ from typing import Optional, Union
 from .. import suppression, wellknown
 from ..findings import Confidence, Finding, Severity, redact
 from ..heuristics import is_secret_name, looks_generated, looks_like_placeholder
-from . import allowlist
+from . import allowlist, providers
 
 #: The one-line form of the suppression marker. :mod:`..suppression` owns the
 #: file-level and block-level forms, which need the whole file to interpret.
 IGNORE_MARKER = suppression.LINE_MARKER
 
 
-@dataclasses.dataclass(frozen=True)
-class ProviderRule:
-    """One credential shape, and what to say when it turns up."""
-
-    rule_id: str
-    title: str
-    severity: Severity
-    pattern: "re.Pattern[str]"
-    remediation: str
-    confidence: Confidence = Confidence.HIGH
-    #: Which group holds the credential itself. Group 0 -- the whole match --
-    #: is the common case; a named group is used where the match carries
-    #: context worth keeping in the report, such as the host a URL points at.
-    secret_group: Union[int, str] = 0
-    #: Optional second opinion, for shapes loose enough to need one.
-    reject: Optional[Callable[["re.Match[str]"], bool]] = None
-
-
-#: ``scheme://user:password@host`` is how every manual writes a connection
-#: string, so a bare lowercase word in the password position is documentation
-#: far more often than it is a credential. Real ones carry a digit, a capital
-#: or a symbol; the ones that do not are a weak-password problem rather than a
-#: leaked-password one, and this is not that tool.
-_PROSE_PASSWORD = re.compile(r"[a-z]{1,12}$")
-
-
-def _url_credential_is_noise(match: "re.Match[str]") -> bool:
-    """Filter for SEC020: most ``user:pass@host`` matches are documentation."""
-    password = match.group("password")
-    if looks_like_placeholder(password) or len(set(password)) <= 3:
-        return True
-    if _PROSE_PASSWORD.match(password):
-        return True
-    return looks_like_placeholder(match.group(0))
-
-
-_PROVIDER_RULES: tuple[ProviderRule, ...] = (
-    ProviderRule(
-        "SEC001",
-        "AWS access key id",
-        Severity.CRITICAL,
-        re.compile(r"\b(?:AKIA|ASIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA)[0-9A-Z]{16}\b"),
-        "Deactivate the key in IAM, then rotate it. Deleting the commit is not enough.",
-    ),
-    ProviderRule(
-        "SEC002",
-        "GitHub personal access token",
-        Severity.CRITICAL,
-        re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,251}\b"),
-        "Revoke the token at github.com/settings/tokens and issue a new one.",
-    ),
-    ProviderRule(
-        "SEC003",
-        "GitHub fine-grained token",
-        Severity.CRITICAL,
-        re.compile(r"\bgithub_pat_[A-Za-z0-9_]{60,}\b"),
-        "Revoke the token at github.com/settings/tokens and issue a new one.",
-    ),
-    ProviderRule(
-        "SEC004",
-        "Private key block",
-        Severity.CRITICAL,
-        re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----"),
-        "Treat the key as compromised: generate a new pair and rotate every authorized_keys entry.",
-    ),
-    ProviderRule(
-        "SEC005",
-        "Stripe live secret key",
-        Severity.CRITICAL,
-        re.compile(r"\b[sr]k_live_[A-Za-z0-9]{16,}\b"),
-        "Roll the key in the Stripe dashboard immediately.",
-    ),
-    ProviderRule(
-        "SEC006",
-        "Slack token",
-        Severity.HIGH,
-        re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}\b"),
-        "Revoke the token in the Slack app configuration.",
-    ),
-    ProviderRule(
-        "SEC007",
-        "Google API key",
-        Severity.HIGH,
-        re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"),
-        "Delete the key in the Google Cloud console and add API restrictions to its replacement.",
-    ),
-    ProviderRule(
-        "SEC008",
-        "OpenAI-style API key",
-        Severity.HIGH,
-        re.compile(r"\bsk-(?:proj-|ant-)?[A-Za-z0-9_-]{20,}\b"),
-        "Revoke the key in the provider dashboard.",
-    ),
-    ProviderRule(
-        "SEC009",
-        "JSON Web Token",
-        Severity.MEDIUM,
-        re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"),
-        "Check what the token grants; if it is a live session or service token, invalidate it.",
-    ),
-    ProviderRule(
-        "SEC010",
-        "Stripe test key",
-        Severity.LOW,
-        re.compile(r"\b[sr]k_test_[A-Za-z0-9]{16,}\b"),
-        "Test keys are low risk, but keep them out of version control anyway.",
-    ),
-    ProviderRule(
-        "SEC011",
-        "Azure storage account key",
-        Severity.CRITICAL,
-        re.compile(r"AccountKey=(?P<key>[A-Za-z0-9+/]{86}==)"),
-        "Rotate the key in the storage account, then switch clients to a SAS token or managed identity.",
-        secret_group="key",
-    ),
-    ProviderRule(
-        "SEC012",
-        "Google OAuth client secret",
-        Severity.CRITICAL,
-        re.compile(r"\bGOCSPX-[A-Za-z0-9_-]{28}\b"),
-        "Reset the client secret in the Google Cloud console credentials page.",
-    ),
-    ProviderRule(
-        "SEC013",
-        "SendGrid API key",
-        Severity.CRITICAL,
-        re.compile(r"\bSG\.[A-Za-z0-9_-]{16,32}\.[A-Za-z0-9_-]{16,64}\b"),
-        "Delete the key in SendGrid settings; it can send mail as your domain.",
-    ),
-    ProviderRule(
-        "SEC014",
-        "Twilio API key SID",
-        Severity.HIGH,
-        # Loose by nature: 32 hex characters behind a two-letter prefix. Real,
-        # but not distinctive enough to assert on its own, hence the confidence.
-        re.compile(r"\bSK[0-9a-fA-F]{32}\b"),
-        "Delete the key in the Twilio console. Its paired secret is shown only once, so treat both as lost.",
-        confidence=Confidence.MEDIUM,
-    ),
-    ProviderRule(
-        "SEC015",
-        "npm access token",
-        Severity.CRITICAL,
-        re.compile(r"\bnpm_[A-Za-z0-9]{36}\b"),
-        "Revoke the token at npmjs.com/settings/~/tokens; it can publish under your account.",
-    ),
-    ProviderRule(
-        "SEC016",
-        "PyPI upload token",
-        Severity.CRITICAL,
-        re.compile(r"\bpypi-AgEIcHlwaS5vcmc[A-Za-z0-9_-]{50,}"),
-        "Revoke the token in your PyPI account settings; it can publish releases of your project.",
-    ),
-    ProviderRule(
-        "SEC017",
-        "Docker Hub access token",
-        Severity.CRITICAL,
-        re.compile(r"\bdckr_pat_[A-Za-z0-9_-]{20,}\b"),
-        "Delete the token in Docker Hub security settings; it can push images others will run.",
-    ),
-    ProviderRule(
-        "SEC018",
-        "Slack incoming webhook URL",
-        Severity.HIGH,
-        re.compile(r"https://hooks\.slack\.com/services/T[A-Za-z0-9_/+-]{20,}"),
-        "Anyone holding the URL can post as the app. Regenerate the webhook in the Slack app configuration.",
-    ),
-    ProviderRule(
-        "SEC019",
-        "Hugging Face access token",
-        Severity.HIGH,
-        re.compile(r"\bhf_[A-Za-z0-9]{34}\b"),
-        "Revoke the token at huggingface.co/settings/tokens.",
-    ),
-    ProviderRule(
-        "SEC020",
-        "Credentials embedded in a URL",
-        Severity.HIGH,
-        re.compile(
-            r"\b(?P<scheme>[a-z][a-z0-9+.-]{1,15})://"
-            r"(?P<user>[^\s/:@]{1,64}):(?P<password>[^\s/:@]{3,128})@(?P<host>[^\s/:@]+)",
-            re.IGNORECASE,
-        ),
-        "Move the password out of the connection string; most clients accept it from the environment instead.",
-        confidence=Confidence.MEDIUM,
-        secret_group="password",
-        reject=_url_credential_is_noise,
-    ),
-    ProviderRule(
-        "SEC023",
-        "GitLab personal access token",
-        Severity.CRITICAL,
-        re.compile(r"\bglpat-[A-Za-z0-9_-]{20,}\b"),
-        "Revoke it in GitLab under Preferences, Access Tokens. It carries your own permissions.",
-    ),
-    ProviderRule(
-        "SEC024",
-        "GitLab runner registration token",
-        Severity.CRITICAL,
-        re.compile(r"\bglrt-[A-Za-z0-9_-]{20,}\b"),
-        "Reset it in the project's CI/CD settings. It lets anyone register a runner and receive jobs.",
-    ),
-    ProviderRule(
-        "SEC025",
-        "DigitalOcean personal access token",
-        Severity.CRITICAL,
-        re.compile(r"\bdop_v1_[a-f0-9]{64}\b"),
-        "Revoke it in the DigitalOcean API settings; it can create and destroy droplets.",
-    ),
-    ProviderRule(
-        "SEC026",
-        "Shopify access token",
-        Severity.CRITICAL,
-        re.compile(r"\bshp(?:at|ss|ca|pa)_[a-fA-F0-9]{32}\b"),
-        "Revoke it in the Shopify admin; depending on its scopes it can read orders and customers.",
-    ),
-    ProviderRule(
-        "SEC027",
-        "Databricks personal access token",
-        Severity.CRITICAL,
-        re.compile(r"\bdapi[a-f0-9]{32}(?:-\d+)?\b"),
-        "Revoke it in the Databricks workspace settings; it can run jobs against your data.",
-    ),
-    ProviderRule(
-        "SEC028",
-        "Doppler service token",
-        Severity.CRITICAL,
-        re.compile(r"\bdp\.(?:pt|st|sa|ct)\.[A-Za-z0-9]{40,}\b"),
-        "Revoke it in Doppler. A token to a secrets manager is every secret it holds.",
-    ),
-    ProviderRule(
-        "SEC029",
-        "Grafana service account token",
-        Severity.HIGH,
-        re.compile(r"\bgl(?:sa|c)_[A-Za-z0-9_]{32,}\b"),
-        "Revoke it in Grafana under Administration, Service accounts.",
-    ),
-    ProviderRule(
-        "SEC030",
-        "Telegram bot token",
-        Severity.HIGH,
-        re.compile(r"\b\d{8,10}:AA[A-Za-z0-9_-]{33}\b"),
-        "Revoke it with BotFather. Anyone holding it can read and send as the bot.",
-    ),
-    ProviderRule(
-        "SEC031",
-        "Postman API key",
-        Severity.HIGH,
-        re.compile(r"\bPMAK-[a-f0-9]{24}-[a-f0-9]{34}\b"),
-        "Revoke it in Postman; it can read every collection and environment in the workspace.",
-    ),
-    ProviderRule(
-        "SEC032",
-        "Linear API key",
-        Severity.HIGH,
-        re.compile(r"\blin_api_[A-Za-z0-9]{40}\b"),
-        "Revoke it in Linear under Settings, API.",
-    ),
-    ProviderRule(
-        "SEC033",
-        "Atlassian API token",
-        Severity.HIGH,
-        re.compile(r"\bATATT3x[A-Za-z0-9_\-=]{100,}"),
-        "Revoke it at id.atlassian.com under API tokens; it acts as the account that made it.",
-    ),
-    ProviderRule(
-        "SEC034",
-        "Square access token",
-        Severity.CRITICAL,
-        re.compile(r"\b(?:sq0atp-[A-Za-z0-9_-]{22}|EAAA[A-Za-z0-9_-]{56,})\b"),
-        "Revoke it in the Square dashboard; a live token can move money.",
-    ),
-)
-
-#: One alternation of every provider pattern, used only to answer "is there any
-#: point looking closer at this line". Almost no line in a repository contains a
-#: credential, and running twenty patterns over each of them to discover that is
-#: most of the time this scanner spends. Built from the rules themselves rather
-#: than hand-written, so it cannot drift away from what it is standing in for;
-#: named groups are stripped because two rules may reuse a group name and the
-#: combined pattern would not compile.
-#: A gate in front of the gate. Every provider rule needs either a long run of
-#: credential characters, a PEM header, or a URL carrying a password -- and
-#: four fifths of the lines in a repository have none of the three. Testing
-#: that first halves the cost of the pass, because one simple pattern is much
-#: cheaper for the engine than an alternation of twenty.
-#:
-#: It is a correctness risk as well as a speed win: a line this rejects is
-#: never looked at again. The corpus test asserts that every provider rule's
-#: example clears it, which is what keeps the threshold honest.
-_CANDIDATE = re.compile(r"[A-Za-z0-9+/_=-]{14}|-----BEGIN|://[^\s/]*:[^\s/]*@")
-
-_ANY_PROVIDER = re.compile(
-    "|".join(
-        "(?{flags}:{body})".format(
-            flags="i" if rule.pattern.flags & re.IGNORECASE else "",
-            body=re.sub(r"\(\?P<\w+>", "(?:", rule.pattern.pattern),
-        )
-        for rule in _PROVIDER_RULES
-    )
-)
-
-#: A run of base64 long enough to be hiding something. Encoding is not
-#: encryption, but it is enough to make a credential invisible to every rule
-#: that reads the line it sits on -- kubeconfigs, CI variables and manifests
-#: are full of them -- so SEC022 decodes these and asks the provider rules
-#: what they see.
 #: Two alphabets, scanned separately on purpose. A single class containing
 #: both would swallow the name in front of the value -- "TOKEN=QUtJ..." is one
 #: unbroken run of it -- and the joined string decodes to nothing, which is how
@@ -413,20 +106,6 @@ def has_value_positions(path: str) -> bool:
     return lowered.endswith(_VALUE_POSITION_SUFFIXES)
 
 
-def _evidence_for(match: "re.Match[str]", rule: ProviderRule) -> str:
-    """Redact the credential while keeping whatever context the match carries."""
-    if rule.secret_group == 0:
-        return redact(match.group(0))
-    start, end = match.span(rule.secret_group)
-    whole_start = match.start()
-    text = match.group(0)
-    return (
-        text[: start - whole_start]
-        + redact(match.group(rule.secret_group))
-        + text[end - whole_start :]
-    )
-
-
 def scan_line(
     path: str,
     line_number: int,
@@ -456,7 +135,7 @@ def scan_line(
 
     # Both of these need a long run of credential characters or one of the two
     # literal shapes; the entropy rules below do not, so they run either way.
-    if _CANDIDATE.search(line):
+    if providers.CANDIDATE.search(line):
         yield from _provider_findings(path, line_number, line, matched_spans, allow_examples)
         yield from _scan_encoded(path, line_number, line, matched_spans, allow_examples)
 
@@ -472,36 +151,21 @@ def _provider_findings(
     matched_spans: "list[tuple[int, int]]",
     allow_examples: bool,
 ) -> Iterator[Finding]:
-    """Every documented token shape, in one line of text.
-
-    Spans of everything matched are recorded even when the finding is
-    suppressed as a known example, so that a value the allowlist silenced
-    cannot resurface under the entropy rules below.
-    """
-    # The prefilter answers 'is there a credential shape on this line at all'
-    # in one pass. Only when it says yes is it worth asking twenty rules
-    # which one, which on a real repository is almost never.
-    if not _ANY_PROVIDER.search(line):
-        return
-    for rule in _PROVIDER_RULES:
-        for match in rule.pattern.finditer(line):
-            secret = match.group(rule.secret_group)
-            matched_spans.append(match.span(rule.secret_group))
-            if rule.reject is not None and rule.reject(match):
-                continue
-            if allow_examples and allowlist.is_known_example(secret):
-                continue
-            yield Finding(
-                rule_id=rule.rule_id,
-                severity=rule.severity,
-                title=rule.title,
-                path=path,
-                line=line_number,
-                evidence=_evidence_for(match, rule),
-                remediation=rule.remediation,
-                confidence=rule.confidence,
-                subject=redact(secret),
-            )
+    """Every documented token shape, in one line of text."""
+    for rule, _secret, evidence in providers.findings_in(
+        path, line_number, line, matched_spans, allow_examples, allowlist.is_known_example
+    ):
+        yield Finding(
+            rule_id=rule.rule_id,
+            severity=rule.severity,
+            title=rule.title,
+            path=path,
+            line=line_number,
+            evidence=evidence,
+            remediation=rule.remediation,
+            confidence=rule.confidence,
+            subject=redact(_secret),
+        )
 
 
 def _scan_assignments(
