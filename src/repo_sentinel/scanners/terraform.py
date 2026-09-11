@@ -25,29 +25,10 @@ import posixpath
 import re
 from collections.abc import Iterable, Iterator
 
-from .. import hcl, suppression
+from .. import hcl, suppression, wellknown
 from ..findings import Confidence, Finding, Severity
 
 _TERRAFORM_SUFFIXES = (".tf", ".tf.json")
-
-#: Anything reachable from here is reachable from everywhere.
-_OPEN_CIDRS = ("0.0.0.0/0", "::/0")
-
-#: Ports whose exposure to the internet is a finding on its own, not a design.
-_ADMIN_PORTS = {
-    22: "SSH",
-    23: "telnet",
-    445: "SMB",
-    1433: "SQL Server",
-    3306: "MySQL",
-    3389: "RDP",
-    5432: "PostgreSQL",
-    5984: "CouchDB",
-    6379: "Redis",
-    9200: "Elasticsearch",
-    11211: "memcached",
-    27017: "MongoDB",
-}
 
 _PUBLIC_ACLS = ("public-read", "public-read-write", "website")
 #: Grants to every AWS account anywhere, which is public with extra steps.
@@ -106,7 +87,7 @@ def _exposed_services(block: "hcl.Block") -> "list[str]":
         return []
     if low == 0 and high >= 65535:
         return ["every port"]
-    return [name for port, name in sorted(_ADMIN_PORTS.items()) if low <= port <= high]
+    return wellknown.services_in_range(low, high)
 
 
 def _open_to_the_world(block: "hcl.Block") -> "tuple[int, str] | None":
@@ -117,7 +98,7 @@ def _open_to_the_world(block: "hcl.Block") -> "tuple[int, str] | None":
             continue
         line, value = found
         for cidr in _strings(value):
-            if cidr in _OPEN_CIDRS:
+            if cidr in wellknown.OPEN_CIDRS:
                 return line, cidr
     return None
 

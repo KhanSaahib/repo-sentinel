@@ -25,7 +25,7 @@ import posixpath
 import re
 from collections.abc import Iterable, Iterator
 
-from .. import suppression, yamlish
+from .. import suppression, wellknown, yamlish
 from ..findings import Confidence, Finding, Severity, redact
 from ..heuristics import looks_generated
 from . import secrets
@@ -39,30 +39,6 @@ _HOST_NAMESPACES = {
     "hostPID": "the node's process table, where other containers' processes are visible",
     "hostIPC": "the node's shared memory",
 }
-
-#: Capabilities that hand back most of what dropping root took away.
-_DANGEROUS_CAPABILITIES = {
-    "ALL",
-    "SYS_ADMIN",
-    "SYS_PTRACE",
-    "SYS_MODULE",
-    "NET_ADMIN",
-    "NET_RAW",
-    "DAC_READ_SEARCH",
-    "SYS_BOOT",
-}
-
-#: Host paths whose exposure is equivalent to owning the node.
-_CRITICAL_HOST_PATHS = (
-    "/var/run/docker.sock",
-    "/var/run/containerd",
-    "/var/run/crio",
-    "/etc/kubernetes",
-    "/var/lib/kubelet",
-    "/root",
-    "/etc",
-    "/",  # the node's whole filesystem; matched exactly, never as a prefix
-)
 
 _CONTAINER_KEYS = ("containers", "initContainers", "ephemeralContainers")
 _IMAGE_TAG = re.compile(r"^(?P<image>[^\s@]+?)(?::(?P<tag>[^:/@]+))?(?:@(?P<digest>sha256:\w+))?$")
@@ -153,11 +129,7 @@ def _check_host_paths(path: str, document: "yamlish.Node") -> "Iterator[Finding]
         mounted = (node.get("path") or yamlish.Node("", node.line)).text.strip().strip("\"'")
         # The root entry is matched exactly: treating it as a prefix would
         # make every absolute path critical, which is the same as none of them.
-        critical = mounted == "/" or any(
-            mounted == dangerous or mounted.startswith(dangerous + "/")
-            for dangerous in _CRITICAL_HOST_PATHS
-            if dangerous != "/"
-        )
+        critical = wellknown.is_critical_host_path(mounted)
         yield Finding(
             rule_id="K8S002",
             severity=Severity.CRITICAL if critical else Severity.HIGH,
@@ -201,7 +173,7 @@ def _check_capabilities(path: str, document: "yamlish.Node") -> "Iterator[Findin
             entry.text.strip().strip("\"'").upper()
             for entry in (added.entries() if added.is_list else ())
         } or set(re.findall(r"[A-Z_]+", added.text.upper()))
-        risky = sorted(granted & _DANGEROUS_CAPABILITIES)
+        risky = sorted(granted & wellknown.DANGEROUS_CAPABILITIES)
         if not risky:
             continue
         yield Finding(

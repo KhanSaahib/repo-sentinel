@@ -30,8 +30,11 @@ from typing import Union
 
 _COMMENT_OR_BLANK = re.compile(r"^\s*(?:#.*)?$")
 _DOCUMENT_BREAK = re.compile(r"^---\s*(?:#.*)?$")
+# A colon only opens a mapping when whitespace or the end of the line follows
+# it. Without that rule "- 5432:5432" and "- /var/run/docker.sock:/srv" parse
+# as mappings, which is how a Compose port list turns into nonsense.
 _KEY = re.compile(
-    r"""^(?P<key>"[^"]*"|'[^']*'|[^:#\s][^:#]*?)\s*:\s*(?P<value>.*?)\s*$"""
+    r"""^(?P<key>"[^"]*"|'[^']*'|[^:#\s"'][^:#]*?)\s*:(?:[ \t]+(?P<value>.*?)|\s*)\s*$"""
 )
 _ITEM = re.compile(r"^-(?:\s+(?P<rest>.*?))?\s*$")
 _BLOCK_SCALAR = re.compile(r"^[|>][+-]?\d*$")

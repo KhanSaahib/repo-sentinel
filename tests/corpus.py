@@ -164,6 +164,21 @@ data:
   password: """ + _b64("Tv8nRw1YXk92mQp7Lz4T") + """
 """
 
+COMPOSE_FILE = """services:
+  db:
+    image: postgres
+    ports:
+      - "5432:5432"
+  runner:
+    image: ci:1.2
+    privileged: true
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    security_opt:
+      - seccomp:unconfined
+"""
+
 #: ``(path, text)`` pairs, in the shape :func:`iter_files` yields.
 FILES = (
     ("src/config.py", SECRETS_FILE),
@@ -173,4 +188,5 @@ FILES = (
     ("Dockerfile", DOCKERFILE),
     ("infra/main.tf", TERRAFORM_FILE),
     ("deploy/web.yaml", MANIFEST_FILE),
+    ("docker-compose.yml", COMPOSE_FILE),
 )

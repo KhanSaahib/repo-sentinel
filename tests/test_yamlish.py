@@ -74,6 +74,27 @@ class TestScalarsAndGaps(unittest.TestCase):
         self.assertFalse(document.get("e").falsy())
 
 
+class TestColonRule(unittest.TestCase):
+    """A colon only opens a mapping when whitespace follows it."""
+
+    def test_a_port_mapping_stays_a_scalar(self):
+        document = parse('ports:\n  - "5432:5432"\n')
+        entries = list(document.get("ports").entries())
+        self.assertEqual(entries[0].text, '"5432:5432"')
+
+    def test_a_bind_mount_stays_a_scalar(self):
+        document = parse("volumes:\n  - /var/run/docker.sock:/srv\n")
+        entries = list(document.get("volumes").entries())
+        self.assertEqual(entries[0].text, "/var/run/docker.sock:/srv")
+
+    def test_an_image_reference_keeps_its_tag(self):
+        self.assertEqual(parse("image: nginx:1.25\n").get("image").text, "nginx:1.25")
+
+    def test_a_real_key_still_opens_a_mapping(self):
+        document = parse("items:\n  - name: a\n")
+        self.assertEqual(next(document.get("items").entries()).get("name").text, "a")
+
+
 class TestDocuments(unittest.TestCase):
     def test_a_stream_splits_into_documents(self):
         documents = yamlish.parse("kind: A\n---\nkind: B\n")

@@ -37,7 +37,7 @@ class Rule:
         return _CATEGORIES[self.id[:3]]
 
 
-_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes"}
+_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose"}
 
 
 def _rules(*entries: tuple[str, str, str, Severity]) -> "dict[str, Rule]":
@@ -96,6 +96,12 @@ RULES: "dict[str, Rule]" = _rules(
     ("K8S006", "capability-granted", "Privilege handed back after being dropped", Severity.HIGH),
     ("K8S007", "secret-in-manifest", "Credential committed inside a Secret manifest", Severity.CRITICAL),
     ("K8S008", "floating-image", "Container image tag can point elsewhere tomorrow", Severity.MEDIUM),
+    ("DC001", "privileged-service", "Compose service runs privileged", Severity.CRITICAL),
+    ("DC002", "host-bind-mount", "Service bind-mounts a path that grants the host", Severity.CRITICAL),
+    ("DC003", "host-namespace-share", "Service shares a host namespace", Severity.HIGH),
+    ("DC004", "confinement-removed", "Capability added or confinement disabled", Severity.HIGH),
+    ("DC005", "port-on-every-interface", "Sensitive port published on every interface", Severity.HIGH),
+    ("DC006", "floating-compose-image", "Service image tag can point elsewhere tomorrow", Severity.LOW),
 )
 
 
