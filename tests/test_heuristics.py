@@ -2,7 +2,7 @@
 
 import unittest
 
-from repo_sentinel import heuristics
+from repo_sentinel import heuristics, wellknown
 
 
 class TestEntropy(unittest.TestCase):
@@ -81,12 +81,48 @@ class TestLooksGenerated(unittest.TestCase):
             # annotations assigns to names like Token and Block.
             "tuple[int, str, int]",
             "dict[str, Node]",
+            # Each of these was a real false positive, measured against the
+            # Prometheus repository: a variable name being assembled, the name
+            # of an environment variable, and a relative path.
+            "GITHUB_TOKEN_${org^^}",
+            "AZURE_FEDERATED_TOKEN_FILE",
+            "testdata/secret_key",
         ):
             with self.subTest(value=value):
                 self.assertFalse(heuristics.looks_generated(value))
 
     def test_rejects_a_repeated_pair(self):
         self.assertFalse(heuristics.looks_generated("ababababababab"))
+
+
+class TestValuesThatSurviveTheFilters(unittest.TestCase):
+    """The filters must not swallow the things they sit next to."""
+
+    def test_an_uppercase_key_without_underscores_is_still_a_key(self):
+        # AZURE_FEDERATED_TOKEN_FILE is an identifier; A1B2C3D4E5F6G7H8I9J0 is
+        # an access key, and they differ only by punctuation.
+        self.assertTrue(heuristics.looks_generated("A1B2C3D4E5F6G7H8I9J0"))
+        self.assertTrue(heuristics.looks_generated("SCW0W8NG6024YHRJ7723"))
+
+    def test_a_base64_blob_with_slashes_is_not_read_as_a_path(self):
+        self.assertTrue(heuristics.looks_generated("aG9sZFRoZUxpbmVYeVo5/cXc4bTJrN3A1"))
+
+
+class TestTestPaths(unittest.TestCase):
+    def test_fixture_trees_and_test_files_are_recognised(self):
+        for path in (
+            "config/testdata/conf.yml",
+            "discovery/vultr/mock_test.go",
+            "tests/fixtures/key.pem",
+            "spec/support/thing.rb",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(wellknown.is_test_path(path))
+
+    def test_ordinary_source_is_not(self):
+        for path in ("src/app/main.go", "cmd/server/config.py", "latest/index.html"):
+            with self.subTest(path=path):
+                self.assertFalse(wellknown.is_test_path(path))
 
 
 class TestSecretNames(unittest.TestCase):

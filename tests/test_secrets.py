@@ -138,6 +138,28 @@ class TestAdditionalProviders(unittest.TestCase):
         self.assertEqual(twilio.confidence, Confidence.MEDIUM)
 
 
+class TestFixtureTrees(unittest.TestCase):
+    """Invented credentials live in fixture directories. So do real ones."""
+
+    LINE = 'api_key = "Qq7Zx9Lm2Pv4Rt8WcY6h"'
+
+    def test_a_guess_in_a_fixture_tree_is_reported_at_lower_confidence(self):
+        ordinary = secrets.scan_text("app/config.py", self.LINE)[0]
+        fixture = secrets.scan_text("config/testdata/conf.py", self.LINE)[0]
+        self.assertEqual(ordinary.confidence, Confidence.MEDIUM)
+        self.assertEqual(fixture.confidence, Confidence.LOW)
+
+    def test_a_documented_token_shape_keeps_its_confidence_anywhere(self):
+        # The entropy rules are guessing and fixtures make the guess worse. A
+        # provider pattern is not guessing, and a real key does get committed
+        # to a fixture tree -- that one is exactly what nobody is looking for.
+        finding = secrets.scan_text(
+            "tests/fixtures/creds.py", f'k = "{fixtures.REALISTIC_AWS_KEY_ID}"'
+        )[0]
+        self.assertEqual(finding.confidence, Confidence.HIGH)
+        self.assertEqual(finding.severity, Severity.CRITICAL)
+
+
 class TestUrlCredentials(unittest.TestCase):
     def test_reports_a_password_in_a_connection_string(self):
         findings = secrets.scan_text("db.py", 'DSN = "postgres://svc:Xk92mQp7Lz4TvB8n@db.internal:5432/app"')

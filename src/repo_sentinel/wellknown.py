@@ -81,6 +81,26 @@ def is_interpolated(value: str) -> bool:
     return _INTERPOLATION.search(value) is not None
 
 
+#: Directory and file names that mean "this is not the real thing": fixtures,
+#: recorded responses, sample configuration. A credential here is usually
+#: invented -- usually, not always, which is why this lowers confidence rather
+#: than silencing anything.
+_TEST_DIRECTORIES = frozenset(
+    {"testdata", "test", "tests", "fixtures", "__fixtures__", "testing", "mocks",
+     "__mocks__", "spec", "specs", "examples", "example", "e2e", "integration"}
+)
+_TEST_NAME_MARKERS = ("_test.", "test_", ".test.", "_spec.", "mock_", "_mock.")
+
+
+def is_test_path(path: str) -> bool:
+    """True when a path is somewhere invented values are expected to live."""
+    parts = path.replace("\\", "/").split("/")
+    if {part.lower() for part in parts[:-1]} & _TEST_DIRECTORIES:
+        return True
+    name = parts[-1].lower()
+    return any(marker in name for marker in _TEST_NAME_MARKERS)
+
+
 def is_critical_host_path(path: str) -> bool:
     """True when mounting ``path`` hands over the host.
 

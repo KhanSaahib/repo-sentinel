@@ -30,7 +30,7 @@ import re
 from collections.abc import Callable, Iterable, Iterator
 from typing import Optional, Union
 
-from .. import suppression
+from .. import suppression, wellknown
 from ..findings import Confidence, Finding, Severity, redact
 from ..heuristics import is_secret_name, looks_generated, looks_like_placeholder
 from . import allowlist
@@ -337,6 +337,7 @@ def scan_line(
     *,
     allow_examples: bool = True,
     value_position: bool = False,
+    guessing_costs_less: bool = False,
 ) -> Iterator[Finding]:
     """Yield every finding in a single line of text.
 
@@ -346,6 +347,11 @@ def scan_line(
 
     ``value_position`` enables the bare-assignment rule, which only makes sense
     in the file formats :func:`has_value_positions` recognises.
+
+    ``guessing_costs_less`` lowers the confidence of the entropy rules, for the
+    directories where invented credentials are expected to live. It does not
+    silence them: a real key does get committed to a fixture tree, and the one
+    that does is exactly the one nobody is looking for.
     """
     # A marker that names no rules silences the line outright, so there is
     # nothing to look for. A marker that names rules leaves the rest of them
@@ -363,7 +369,13 @@ def scan_line(
     )
 
     yield from _scan_assignments(
-        path, line_number, line, matched_spans, allow_examples, value_position
+        path,
+        line_number,
+        line,
+        matched_spans,
+        allow_examples,
+        value_position,
+        guessing_costs_less,
     )
 
 
@@ -413,6 +425,7 @@ def _scan_assignments(
     matched_spans: list[tuple[int, int]],
     allow_examples: bool,
     value_position: bool,
+    guessing_costs_less: bool = False,
 ) -> Iterator[Finding]:
     """The two entropy rules, which differ only in how they find the value."""
     # Both rules need an assignment, and the quoted one needs a quote. Checking
@@ -467,7 +480,7 @@ def _scan_assignments(
                 "Move the value to an environment variable or secret store. "
                 f"Add a trailing '# {IGNORE_MARKER}' comment if this is a false positive."
             ),
-            confidence=Confidence.MEDIUM,
+            confidence=Confidence.LOW if guessing_costs_less else Confidence.MEDIUM,
         )
 
 
@@ -574,6 +587,7 @@ def scan_text(path: str, text: str, *, allow_examples: bool = True) -> list[Find
         return []
 
     value_position = has_value_positions(path)
+    guessing_costs_less = wellknown.is_test_path(path)
     findings = marks.filter_findings(
         finding
         for number, line in enumerate(text.splitlines(), start=1)
@@ -584,6 +598,7 @@ def scan_text(path: str, text: str, *, allow_examples: bool = True) -> list[Find
             line,
             allow_examples=allow_examples,
             value_position=value_position,
+            guessing_costs_less=guessing_costs_less,
         )
     )
 

@@ -79,6 +79,17 @@ repository the tool can read at all: it grew from two file formats to six.
 
 ### Fixed
 
+- **The YAML sequence parser was quadratic.** Parsing `- key: value` rebuilt the
+  remaining token list for every item, so a 40,000-line rules file took minutes:
+  scanning the Prometheus repository did not finish in five. It now takes 13
+  seconds. The fix splits the dash from the mapping when tokenising, which also
+  deleted the branch that was doing the copying.
+- **Four false positives, each measured against a public repository** rather than
+  imagined: `.npmrc` files holding `ignore-scripts=true`, a committed `.env` of
+  documented defaults, `"$$(cat /run/secrets/db-password)"` in a Compose
+  healthcheck, and `"GITHUB_TOKEN_${org^^}"` in a shell script. Also
+  `AZURE_FEDERATED_TOKEN_FILE` (the name of an environment variable) and
+  `testdata/secret_key` (a path).
 - In the YAML reader, a colon only opens a mapping when whitespace follows it.
   Without that, `- 5432:5432` parses as a mapping and a Compose port list turns
   into nonsense.

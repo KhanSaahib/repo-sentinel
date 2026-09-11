@@ -60,7 +60,7 @@ def scan(
         ]
     files = [(entry.path, entry.text) for entry in entries if entry.text is not None]
 
-    found = filenames.scan_paths([(entry.path, entry.readable) for entry in entries])
+    found = filenames.scan_paths([(entry.path, entry.text) for entry in entries])
     found += secrets.scan_files(files, allow_examples=allow_examples)
     found += workflows.scan_files(files)
     found += dockerfiles.scan_files(files)

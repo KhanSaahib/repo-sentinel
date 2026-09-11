@@ -80,6 +80,12 @@ too lax for the second. What generalises is the ratio: a generated credential
 lands near the ceiling of what its alphabet and length allow, and a hand-written
 value does not. The floor is 75% of that ceiling.
 
+A guess is worth less in a fixture tree, so SEC100 and SEC101 drop to low
+confidence under `testdata/`, `fixtures/`, `spec/` and in `*_test.*` files. They
+are not silenced there: a real key does get committed to a fixture directory,
+and that one is exactly what nobody is looking for. The provider rules keep
+their confidence everywhere, because they are not guessing.
+
 Placeholders are filtered before entropy is measured at all — `your-password-here`,
 `${DB_PASSWORD}`, `xxxxxxxx`, `changeme` — and so is structure that is not a
 credential: paths, URLs without a password in them, version constraints, dotted
@@ -125,14 +131,23 @@ worst things a repository can contain and the easiest for a scanner to miss, so
 the walk reports every path it reaches, readable or not, and these three rules
 work from the names.
 
-They claim less than the others, and say so through confidence. `.pem` and
-`.key` are private keys about as often as they are certificates, so FN002 fires
-only when the file could *not* be read -- if it is text, SEC004 has already
-looked inside and its answer is better than a guess about the name. Files under
-`fixtures/` or `testdata/` are reported at low confidence rather than not at
-all. And `.example`, `.sample`, `.template` and `.dist` suffixes are skipped
-everywhere: a repository documenting the shape of its `.env` is doing the right
-thing.
+They claim less than the others, and all three prefer contents to names
+wherever contents exist. `.pem` and `.key` are private keys about as often as
+they are certificates, so FN002 fires only when the file could *not* be read --
+if it is text, SEC004 has already looked inside, and its answer is better than a
+guess about the extension.
+
+FN003 splits the same way. `.netrc`, `.pgpass`, `.my.cnf`, `.dockercfg`,
+`credentials` and `kubeconfig` have no legitimate committed form, so the name is
+the finding. `.npmrc`, `.pypirc`, `.env` and `terraform.tfvars` are judged on
+what is in them: an `.npmrc` saying `ignore-scripts=true` is not a leak, and a
+committed `.env` of documented defaults is a template. Both of those were real
+false positives, measured against a public repository of Compose examples.
+
+Files under `fixtures/` or `testdata/` are reported at low confidence rather
+than not at all. And `.example`, `.sample`, `.template` and `.dist` suffixes are
+skipped everywhere: a repository documenting the shape of its `.env` is doing
+the right thing.
 
 ## GitHub Actions workflows
 

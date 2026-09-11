@@ -11,14 +11,24 @@ claims less than the others -- a name is evidence about a file, not proof of
 what is inside it -- and its confidence says so, except where the name is so
 specific that it is not really a guess.
 
-Two rules that keep it from becoming noise. Extensions shared by public and
-private material (``.pem``, ``.key``, which are just as often certificates)
-are reported at medium confidence, and only when the file was not already
-readable -- if it is text, SEC004 has looked inside it and either found a
-private key block or not, and that answer is better than this one. And the
-example suffixes (``.example``, ``.sample``, ``.template``, ``.dist``) are
-skipped throughout: a repository documenting the shape of its ``.env`` is doing
-the right thing.
+Three rules keep it from becoming noise, all of the same shape: prefer contents
+to names wherever contents exist.
+
+Extensions shared by public and private material (``.pem``, ``.key``, which are
+just as often certificates) are reported only when the file was *not* readable
+-- if it is text, SEC004 has looked inside it and either found a private key
+block or not, and that answer is better than this one.
+
+Files that sometimes hold a credential and sometimes hold configuration --
+``.npmrc``, ``.env``, ``terraform.tfvars`` -- are judged on what is in them. An
+``.npmrc`` saying ``ignore-scripts=true`` is not a leak, and a committed
+``.env`` of documented defaults is a template. Only the files that have no
+legitimate committed form at all (``.netrc``, ``.pgpass``, ``kubeconfig``) are
+reported on their name alone.
+
+And the example suffixes (``.example``, ``.sample``, ``.template``, ``.dist``)
+are skipped throughout: a repository documenting the shape of its ``.env`` is
+doing the right thing.
 """
 
 from __future__ import annotations
@@ -27,7 +37,9 @@ import posixpath
 import re
 from collections.abc import Iterable, Iterator
 
+from .. import wellknown
 from ..findings import Confidence, Finding, Severity
+from ..heuristics import is_secret_name, looks_like_placeholder
 
 #: Names that are private key material and essentially nothing else.
 _KEY_NAMES = frozenset({"id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", "identity"})
@@ -38,10 +50,9 @@ _KEYSTORE_SUFFIXES = (".p12", ".pfx", ".jks", ".keystore", ".ppk", ".pkcs12", ".
 #: Extensions that may be a private key, and may equally be a certificate.
 _AMBIGUOUS_SUFFIXES = (".pem", ".key", ".pk8", ".asc", ".gpg")
 
-#: Files whose whole purpose is to hold a credential for some tool.
-_CREDENTIAL_NAMES = {
-    ".npmrc": "an npm auth token",
-    ".pypirc": "a PyPI upload token",
+#: Files that have no legitimate committed form: the file *is* the credential,
+#: so its presence is the finding and its contents change nothing.
+_ALWAYS_CREDENTIALS = {
     ".netrc": "login credentials for any host it names",
     "_netrc": "login credentials for any host it names",
     ".pgpass": "PostgreSQL passwords",
@@ -49,9 +60,22 @@ _CREDENTIAL_NAMES = {
     ".dockercfg": "registry credentials",
     "credentials": "cloud provider credentials",
     "kubeconfig": "cluster credentials",
+}
+
+#: Files that often hold a credential and just as often hold configuration.
+#: An .npmrc saying "ignore-scripts=true" is not a leak; a committed .env of
+#: documented defaults is a template. For these the contents decide, and the
+#: name only decides when there are no contents to read.
+_MAYBE_CREDENTIALS = {
+    ".npmrc": "an npm auth token",
+    ".pypirc": "a PyPI upload token",
     ".env": "whatever the application keeps out of its source",
     "terraform.tfvars": "whatever the infrastructure needs and the code does not hard-code",
 }
+
+#: ``NAME=value`` or ``NAME: value`` -- enough to find the key in the formats
+#: this rule is asked about, all of which are flat.
+_ASSIGNMENT = re.compile(r"^[\s#-]*(?P<name>[A-Za-z0-9_./\[\]:@-]{1,120}?)\s*[:=]\s*(?P<value>.*)$")
 
 #: Suffixes that mark a file as a documented shape rather than a real one.
 _EXAMPLE_MARKERS = (".example", ".sample", ".template", ".dist", ".tpl", ".defaults")
@@ -68,12 +92,35 @@ def _is_example(name: str) -> bool:
 
 def _in_a_test_tree(path: str) -> bool:
     """Fixtures full of invented keys are the point of a fixture directory."""
-    parts = {part.lower() for part in path.split("/")[:-1]}
-    return bool(parts & {"testdata", "fixtures", "__fixtures__", "testing"})
+    return wellknown.is_test_path(path)
 
 
-def scan_name(path: str, readable: bool = False) -> "Iterator[Finding]":
-    """Yield the findings a file's name alone justifies."""
+def _holds_a_credential(text: str) -> bool:
+    """True when a flat config file carries a credential-shaped assignment.
+
+    Deliberately about the *name* on the left rather than the entropy on the
+    right: ``POSTGRES_PW=changeit`` is a template and ``_authToken=<token>`` is
+    a leak even when the token is short. Whether the value itself is a real
+    secret is SEC101's question, and it will have asked it already.
+    """
+    for line in text.splitlines():
+        match = _ASSIGNMENT.match(line)
+        if match is None:
+            continue
+        value = match.group("value").strip().strip("\"'")
+        if value and is_secret_name(match.group("name")) and not looks_like_placeholder(value):
+            return True
+    return False
+
+
+def scan_name(path: str, text: "str | None" = None) -> "Iterator[Finding]":
+    """Yield the findings a file's name -- and, where it has one, its content -- justify.
+
+    ``text`` is the file's contents, or None when the walk could not read it.
+    A name is evidence; contents, when there are any, are better evidence, and
+    the rules below prefer them wherever they exist.
+    """
+    readable = text is not None
     normalised = path.replace("\\", "/")
     name = posixpath.basename(normalised)
     lowered = name.lower()
@@ -131,9 +178,14 @@ def scan_name(path: str, readable: bool = False) -> "Iterator[Finding]":
         )
         return
 
-    holds = _CREDENTIAL_NAMES.get(lowered)
-    if holds is None and _DOT_ENV.match(lowered):
-        holds = _CREDENTIAL_NAMES[".env"]
+    holds = _ALWAYS_CREDENTIALS.get(lowered)
+    if holds is None:
+        holds = _MAYBE_CREDENTIALS.get(lowered)
+        if holds is None and _DOT_ENV.match(lowered):
+            holds = _MAYBE_CREDENTIALS[".env"]
+        # For these the contents decide, and only when there are contents.
+        if holds is not None and text is not None and not _holds_a_credential(text):
+            return
     if holds is None:
         return
     yield Finding(
@@ -153,8 +205,10 @@ def scan_name(path: str, readable: bool = False) -> "Iterator[Finding]":
     )
 
 
-def scan_paths(entries: "Iterable[tuple[str, bool]]") -> "list[Finding]":
-    """Scan ``(path, readable)`` pairs for every file the walk reached."""
-    return [
-        finding for path, readable in entries for finding in scan_name(path, readable)
-    ]
+def scan_paths(entries: "Iterable[tuple[str, str | None]]") -> "list[Finding]":
+    """Scan ``(path, text)`` pairs for every file the walk reached.
+
+    ``text`` is None for the files nothing could read, which is the case these
+    rules exist for.
+    """
+    return [finding for path, text in entries for finding in scan_name(path, text)]

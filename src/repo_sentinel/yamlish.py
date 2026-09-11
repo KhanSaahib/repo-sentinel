@@ -181,7 +181,18 @@ def _tokenise(lines: "list[str]", begin: int, end: int) -> "list[Token]":
             continue
         indent = len(line) - len(line.lstrip())
         content = line.strip()
-        tokens.append((indent, content, index + 1))
+        item = _ITEM.match(content)
+        rest = item.group("rest") if item else None
+        if rest and _KEY.match(rest):
+            # "- name: app" is a dash and a mapping that happens to share a
+            # line. Splitting it here rather than in the sequence parser keeps
+            # that parser from having to rebuild the token list for every item
+            # -- which it used to, at a cost of O(items squared) on a long
+            # list. A 1 MB rules file took minutes.
+            tokens.append((indent, "-", index + 1))
+            tokens.append((indent + len(content) - len(content.lstrip("- ")), rest, index + 1))
+        else:
+            tokens.append((indent, content, index + 1))
         if _opens_block_scalar(content):
             index = _skip_indented(lines, index + 1, end, indent)
             continue
@@ -250,20 +261,13 @@ def _parse_sequence(tokens: "list[Token]", index: int, indent: int) -> "tuple[No
             continue
         rest = match.group("rest")
         if not rest:
+            # Either a bare dash whose value is on the following lines, or the
+            # first half of a "- key: value" that :func:`_tokenise` split.
             child, index = _parse_child(tokens, index + 1, current_indent, line)
             items.append(child)
             continue
-        # "- key: value" opens a mapping whose first key shares the dash's line.
-        inline = _KEY.match(rest)
-        if inline is None:
-            items.append(Node(rest.strip(), line))
-            index += 1
-            continue
-        item_indent = current_indent + (len(content) - len(content.lstrip("- ")))
-        rewritten: "list[Token]" = [(item_indent, rest, line), *tokens[index + 1 :]]
-        child, consumed = _parse_mapping(rewritten, 0, item_indent)
-        items.append(child)
-        index += consumed
+        items.append(Node(rest.strip(), line))
+        index += 1
     return Node(items, start), index
 
 

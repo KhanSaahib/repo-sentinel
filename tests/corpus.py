@@ -218,12 +218,12 @@ FILES = (
     (".gitlab-ci.yml", PIPELINE_FILE),
 )
 
-#: ``(path, readable)`` pairs, in the shape the walk reports. The names here
-#: are the point: none of these files needs contents to be a finding, and two
-#: of them could not be read if they had any.
+#: ``(path, text)`` pairs, in the shape the walk reports, with None for the
+#: files it could not read. The names are the point here: two of these could
+#: not be read at all, and the third is judged on what is in it.
 PATHS = (
-    *((path, True) for path, _ in FILES),
-    ("deploy/id_rsa", False),
-    ("certs/server.pem", False),
-    (".npmrc", True),
+    *FILES,
+    ("deploy/id_rsa", None),
+    ("certs/server.pem", None),
+    (".npmrc", "//registry.npmjs.org/:_authToken=" + _filler(36)),
 )

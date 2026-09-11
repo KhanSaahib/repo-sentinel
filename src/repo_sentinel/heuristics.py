@@ -56,7 +56,9 @@ _PLACEHOLDER = re.compile(
            todo|fixme|none|null|nil|true|false|test|testing|foo|bar|baz)
         [_-]?\w* |
         your[_-]?.* | my[_-]?.* | some[_-]?.* | insert[_-]?.* |
-        <.*> | \{\{.*\}\} | \$\{.*\} | \$\(.*\) | %\w+% | \$[A-Za-z_]\w* |
+        # Repeated dollars are how Compose escapes interpolation, so
+        # "$$(cat /run/secrets/db-password)" is a command, not a credential.
+        <.*> | \{\{.*\}\} | \$+\{.*\} | \$+\(.*\) | %\w+% | \$+[A-Za-z_]\w* |
         .*(?:example\.com|localhost|127\.0\.0\.1).*
     )$
     """
@@ -74,6 +76,14 @@ _STRUCTURED = (
     # A quoted type expression: tuple[int, str, int], dict[str, Node]. Common
     # wherever annotations are strings, and this one caught this project out.
     re.compile(r"^[A-Za-z_][\w.]*\[[^\]]*\]$"),
+    # A screaming-snake identifier: AZURE_FEDERATED_TOKEN_FILE is the *name* of
+    # an environment variable, not its value. Real tokens in this shape do not
+    # exist; they carry mixed case, digits and punctuation.
+    re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$"),
+    # An all-lowercase relative path: "testdata/secret_key". Anchored to
+    # lowercase on purpose -- a base64 blob containing slashes has mixed case,
+    # so this does not swallow one.
+    re.compile(r"^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9._-]+)+$"),
     # Words joined by hyphens or underscores: "unstructured", "content-type",
     # "Proxy-Authorization". Generated credentials carry digits
     # or mixed case; a pure word-list slug is vocabulary. The cost is that a
@@ -134,10 +144,17 @@ def entropy_floor(value: str) -> float:
     return max(MIN_ENTROPY, ENTROPY_RATIO * ceiling)
 
 
+#: Interpolation anywhere in a value, not only at its start:
+#: ``"GITHUB_TOKEN_${org^^}"`` is a variable name being assembled.
+_EMBEDDED_INTERPOLATION = re.compile(r"\$\{|\$\(|\{\{|%\(")
+
+
 def looks_like_placeholder(value: str) -> bool:
     """True when a value is obviously a stand-in rather than a real credential."""
     stripped = value.strip()
     if not stripped or _PLACEHOLDER.match(stripped):
+        return True
+    if _EMBEDDED_INTERPOLATION.search(stripped):
         return True
     if any(pattern.match(stripped) for pattern in _STRUCTURED):
         return True
