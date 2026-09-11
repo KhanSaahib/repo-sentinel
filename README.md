@@ -32,6 +32,8 @@ repo-sentinel scan . --fail-on critical       # relax the CI gate
 repo-sentinel scan . --exclude 'fixtures'     # skip a directory (repeatable)
 repo-sentinel scan . --no-gitignore           # also scan git-ignored files
 repo-sentinel scan . --no-example-allowlist   # include documented example keys
+repo-sentinel scan . --write-baseline .repo-sentinel-baseline.json
+repo-sentinel scan . --baseline .repo-sentinel-baseline.json
 ```
 
 Exit codes: `0` clean, `1` findings at or above `--fail-on` (default `medium`),
@@ -187,6 +189,43 @@ the bottom of it.
 A block that is opened and never closed silences everything after it, so it is
 reported as SEC900 rather than trusted. Close the block, or say `ignore-file` and
 mean it.
+
+## Adopting the tool on an existing repository
+
+The first run on real code finds things that are all true and none of them
+today's problem, and a gate that is red from day one is a gate people route
+around. Record what is already there, then fail only on what arrives after it:
+
+```bash
+repo-sentinel scan . --write-baseline .repo-sentinel-baseline.json
+git add .repo-sentinel-baseline.json
+```
+
+```yaml
+- run: repo-sentinel scan . --baseline .repo-sentinel-baseline.json
+```
+
+A baselined finding is hidden from the report and cannot fail the build. Every
+run says how many it hid, and how many recorded entries matched nothing — those
+are usually findings somebody fixed, and pruning them (by regenerating the file)
+keeps the baseline honest about how much is left.
+
+An entry is keyed by rule, file path and redacted evidence — **not** by line
+number. Adding an import at the top of a file would otherwise shift every line
+below it and invalidate the whole baseline at once, and a team whose only
+practical response is to regenerate without reading is a team that will wave a
+real leak through. The same credential appearing in a *different* file is a new
+entry, because that is a new decision worth looking at.
+
+The file holds redacted evidence only, the same form that goes into a report, so
+it is safe to commit. Baselines are written at every severity regardless of
+`--min-severity`, so tightening or relaxing that flag later never resurrects an
+accepted finding. A baseline that is missing, corrupt, or written by an
+incompatible version is a hard error (exit `2`) rather than an empty baseline: a
+typo in a CI argument should not quietly turn the gate off.
+
+`--baseline` and `--write-baseline` cannot be combined — recording and gating on
+the same run would accept the very findings that were supposed to fail it.
 
 ## Development
 

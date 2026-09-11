@@ -8,6 +8,7 @@ import sys
 from collections.abc import Sequence
 
 from . import __version__
+from .baseline import Baseline, BaselineError, serialise
 from .discovery import DEFAULT_EXCLUDES, iter_files
 from .findings import Finding, Severity
 from .scanners import secrets, workflows
@@ -39,9 +40,23 @@ def scan_path(
     return sorted(found, key=lambda finding: finding.sort_key)
 
 
-def format_text(findings: Sequence[Finding], *, colour: bool) -> str:
+def _baseline_note(suppressed: int, stale: int) -> str:
+    """One line describing what a baseline hid, and what it no longer covers."""
+    note = f"{suppressed} finding(s) hidden by the baseline"
+    if stale:
+        note += (
+            f"; {stale} baseline entry(s) matched nothing and can be pruned "
+            "with --write-baseline"
+        )
+    return note + "."
+
+
+def format_text(
+    findings: Sequence[Finding], *, colour: bool, baseline_note: str = ""
+) -> str:
     if not findings:
-        return "No findings. That is not proof of safety, but it is a good sign."
+        clean = "No findings. That is not proof of safety, but it is a good sign."
+        return f"{clean}\n{baseline_note}" if baseline_note else clean
 
     lines: list[str] = []
     for finding in findings:
@@ -64,18 +79,20 @@ def format_text(findings: Sequence[Finding], *, colour: bool) -> str:
         for severity in sorted(counts, key=lambda s: -s.rank)
     )
     lines.append(f"{len(findings)} finding(s): {summary}")
+    if baseline_note:
+        lines.append(baseline_note)
     return "\n".join(lines)
 
 
-def format_json(findings: Sequence[Finding]) -> str:
-    return json.dumps(
-        {
-            "version": __version__,
-            "finding_count": len(findings),
-            "findings": [finding.to_dict() for finding in findings],
-        },
-        indent=2,
-    )
+def format_json(findings: Sequence[Finding], *, baseline: dict | None = None) -> str:
+    payload = {
+        "version": __version__,
+        "finding_count": len(findings),
+        "findings": [finding.to_dict() for finding in findings],
+    }
+    if baseline is not None:
+        payload["baseline"] = baseline
+    return json.dumps(payload, indent=2)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -108,6 +125,17 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="GLOB",
         help="extra file or directory glob to skip (repeatable)",
     )
+    recording = scan.add_mutually_exclusive_group()
+    recording.add_argument(
+        "--baseline",
+        metavar="FILE",
+        help="hide findings recorded in FILE, so CI only fails on new ones",
+    )
+    recording.add_argument(
+        "--write-baseline",
+        metavar="FILE",
+        help="record the current findings in FILE and exit without reporting them",
+    )
     scan.add_argument(
         "--no-gitignore",
         action="store_true",
@@ -133,22 +161,52 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error(str(error))
         return EXIT_ERROR  # pragma: no cover - argparse exits first
 
-    findings = [
-        finding
-        for finding in scan_path(
-            args.path,
-            DEFAULT_EXCLUDES + tuple(args.exclude),
-            allow_examples=not args.no_example_allowlist,
-            use_gitignore=not args.no_gitignore,
-        )
-        if finding.severity >= min_severity
-    ]
+    scanned = scan_path(
+        args.path,
+        DEFAULT_EXCLUDES + tuple(args.exclude),
+        allow_examples=not args.no_example_allowlist,
+        use_gitignore=not args.no_gitignore,
+    )
+
+    # Written before --min-severity is applied: a baseline records what the scan
+    # saw, not what this invocation chose to show. Otherwise a file recorded
+    # under --min-severity high would quietly stop covering its own low findings
+    # the next time someone ran the scan without that flag.
+    if args.write_baseline:
+        try:
+            with open(args.write_baseline, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(serialise(scanned))
+        except OSError as error:
+            print(f"cannot write baseline file: {error}", file=sys.stderr)
+            return EXIT_ERROR
+        print(f"Recorded {len(scanned)} finding(s) in {args.write_baseline}.")
+        return EXIT_OK
+
+    note = ""
+    baseline_report = None
+    if args.baseline:
+        try:
+            recorded = Baseline.load(args.baseline)
+        except BaselineError as error:
+            print(str(error), file=sys.stderr)
+            return EXIT_ERROR
+        remaining = recorded.filter(scanned)
+        suppressed = len(scanned) - len(remaining)
+        note = _baseline_note(suppressed, recorded.stale_count)
+        baseline_report = {
+            "path": args.baseline,
+            "suppressed": suppressed,
+            "stale_entries": recorded.stale_count,
+        }
+        scanned = remaining
+
+    findings = [finding for finding in scanned if finding.severity >= min_severity]
 
     if args.format == "json":
-        print(format_json(findings))
+        print(format_json(findings, baseline=baseline_report))
     else:
         colour = not args.no_color and sys.stdout.isatty()
-        print(format_text(findings, colour=colour))
+        print(format_text(findings, colour=colour, baseline_note=note))
 
     if any(finding.severity >= fail_on for finding in findings):
         return EXIT_FINDINGS

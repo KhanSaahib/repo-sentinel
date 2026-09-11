@@ -17,7 +17,10 @@ outcome than a feature nobody wanted.
       (`ignore-file`, `ignore-start` / `ignore-end`). The file-level marker is
       only honoured in the first 20 lines, so a document that merely mentions
       it does not go unscanned; an unterminated block is reported as SEC900
-- [ ] Baseline file: record accepted findings so CI only fails on new ones
+- [x] Baseline file: record accepted findings so CI only fails on new ones
+      (`--write-baseline` / `--baseline`). Entries are keyed by rule, path and
+      redacted evidence rather than line number, so unrelated edits do not
+      invalidate the file; entries that match nothing are reported, not dropped
 - [ ] Track the entropy floor separately per rule; 3.2 is too low for base64
       blobs and too high for short hex tokens
 - [ ] Detect secrets in `.env`, `.npmrc`, `.pypirc` and `docker-compose.yml`
