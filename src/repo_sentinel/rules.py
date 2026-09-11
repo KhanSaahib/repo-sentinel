@@ -37,7 +37,7 @@ class Rule:
         return _CATEGORIES[self.id[:3]]
 
 
-_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles"}
+_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform"}
 
 
 def _rules(*entries: tuple[str, str, str, Severity]) -> "dict[str, Rule]":
@@ -82,6 +82,12 @@ RULES: "dict[str, Rule]" = _rules(
     ("DK004", "secret-in-layer", "Credential baked into an image layer", Severity.HIGH),
     ("DK005", "add-remote-url", "ADD fetches a remote URL without verification", Severity.MEDIUM),
     ("DK006", "insecure-fetch", "Build step disables transport security", Severity.MEDIUM),
+    ("TF001", "open-ingress", "Security group admits 0.0.0.0/0", Severity.CRITICAL),
+    ("TF002", "public-storage", "Storage granted to the public or to every account", Severity.HIGH),
+    ("TF003", "encryption-disabled", "Encryption at rest explicitly switched off", Severity.MEDIUM),
+    ("TF004", "wildcard-policy", "Policy allows every action on every resource", Severity.HIGH),
+    ("TF005", "public-database", "Managed database given a public endpoint", Severity.HIGH),
+    ("TF006", "unencrypted-state", "Terraform state stored without encryption", Severity.MEDIUM),
 )
 
 

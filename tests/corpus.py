@@ -95,6 +95,39 @@ ADD https://example.invalid/app.tar.gz /opt/
 CMD ["/app"]
 """
 
+TERRAFORM_FILE = """terraform {
+  backend "s3" {
+    bucket = "tfstate"
+    key    = "prod.tfstate"
+  }
+}
+
+resource "aws_security_group" "web" {
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_s3_bucket" "assets" {
+  acl = "public-read"
+}
+
+resource "aws_db_instance" "main" {
+  publicly_accessible = true
+  storage_encrypted   = false
+}
+
+data "aws_iam_policy_document" "admin" {
+  statement {
+    actions   = ["*"]
+    resources = ["*"]
+  }
+}
+"""
+
 #: ``(path, text)`` pairs, in the shape :func:`iter_files` yields.
 FILES = (
     ("src/config.py", SECRETS_FILE),
@@ -102,4 +135,5 @@ FILES = (
     ("src/generated.py", RUNAWAY_SUPPRESSION_FILE),
     (".github/workflows/risky.yml", WORKFLOW_FILE),
     ("Dockerfile", DOCKERFILE),
+    ("infra/main.tf", TERRAFORM_FILE),
 )
