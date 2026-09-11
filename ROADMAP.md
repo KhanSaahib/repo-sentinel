@@ -138,11 +138,12 @@ outcome than a feature nobody wanted.
       fuzzing of both hand-written parsers and a time bound on hostile input
 - [x] ~~Benchmark against a large repository~~ — measured and acted on. The
       Python 3.14 standard library went from 5.1s to 1.5s and Prometheus (39 MB,
-      1,679 files) from not finishing in five minutes to 5.8s, via a quadratic
-      YAML parse and a cheap gate in front of the provider patterns. The suite
-      has scaling guards for both. Still short of "10k files in a second", and
-      the remaining cost is one regex per line, which is where a pure-Python
-      scanner ends up
+      1,679 files) from not finishing in five minutes to about 8s, via a
+      quadratic YAML parse, a cheap gate in front of the provider patterns, and
+      substring guards in front of five YAML scanners. The suite has scaling
+      guards. Still short of "10k files in a second", and the remaining cost is
+      one alternation of forty-five patterns per surviving line -- which grows
+      with every provider rule, and is where a pure-Python scanner ends up
 - [ ] Type annotations checked with mypy in CI
 - [ ] Issue templates
 - [ ] Enable CodeQL default setup and branch protection on `main`

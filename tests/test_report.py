@@ -79,6 +79,12 @@ class TestSarif(unittest.TestCase):
         self.assertEqual(first["defaultConfiguration"]["level"], "error")
         self.assertEqual(first["properties"]["security-severity"], "9.0")
 
+    def test_each_rule_links_to_the_paragraph_explaining_it(self):
+        # The Security tab shows a rule with nowhere to go unless the SARIF
+        # says where the documentation is.
+        described = self.run["tool"]["driver"]["rules"][0]
+        self.assertTrue(described["helpUri"].endswith("/docs/RULES.md#secrets"))
+
     def test_fingerprints_survive_a_reformatted_file(self):
         moved = json.loads(
             report.format_sarif([Finding(**{**CRITICAL.__dict__, "line": 400})], version="0.2.0")

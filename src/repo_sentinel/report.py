@@ -270,19 +270,27 @@ def format_sarif(findings: Sequence[Finding], *, version: str) -> str:
     return json.dumps(document, indent=2)
 
 
+#: Where a reader of the Security tab can find out what a rule is for. The
+#: anchor is the family's heading, because that is where the paragraph
+#: explaining the rule lives; a per-rule anchor would point at a table row.
+_DOCUMENTATION = "https://github.com/KhanSaahib/repo-sentinel/blob/main/docs/RULES.md"
+
+
 def _sarif_rule(rule_id: str, findings: Sequence[Finding]) -> dict:
     catalogued = rules.get(rule_id)
     example = next(finding for finding in findings if finding.rule_id == rule_id)
     severity = catalogued.severity if catalogued else example.severity
+    category = catalogued.category if catalogued else "other"
     return {
         "id": rule_id,
         "name": catalogued.name if catalogued else rule_id,
         "shortDescription": {"text": catalogued.summary if catalogued else example.title},
         "fullDescription": {"text": example.remediation or example.title},
         "help": {"text": example.remediation or example.title},
+        "helpUri": f"{_DOCUMENTATION}#{category.replace(' ', '-')}",
         "defaultConfiguration": {"level": _SARIF_LEVELS[severity]},
         "properties": {
-            "tags": ["security", catalogued.category if catalogued else "other"],
+            "tags": ["security", category],
             "security-severity": _SECURITY_SEVERITY[severity],
         },
     }
