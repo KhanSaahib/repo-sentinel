@@ -48,6 +48,19 @@ For what the severity and confidence columns mean, see
 | SEC032 | Linear API key | high | high |
 | SEC033 | Atlassian API token | high | high |
 | SEC034 | Square access token | critical | high |
+| SEC035 | Slack app-level token | high | high |
+| SEC036 | Discord bot token | critical | high |
+| SEC037 | Mailgun API key | high | high |
+| SEC038 | Mailchimp API key | high | high |
+| SEC039 | New Relic API key | high | high |
+| SEC040 | Sentry DSN | medium | medium |
+| SEC041 | Asana personal access token | high | high |
+| SEC042 | Dropbox access token | critical | high |
+| SEC043 | Figma personal access token | high | high |
+| SEC044 | Airtable personal access token | high | high |
+| SEC045 | JFrog Artifactory token | critical | high |
+| SEC046 | Terraform Cloud API token | critical | high |
+| SEC047 | Firebase Cloud Messaging server key | high | high |
 | SEC100 | High-entropy value in a quoted assignment | high | medium |
 | SEC101 | High-entropy value in an unquoted config value | high | medium |
 | SEC900 | Suppression block opened and never closed | medium | high |
@@ -55,9 +68,10 @@ For what the severity and confidence columns mean, see
 SEC900 is not a class of secret; it reports a suppression block that was opened
 and never closed. See [Suppressing a false positive](#suppressing-a-false-positive).
 
-SEC001–SEC034 match on documented token structure. A token to a secrets
+SEC001–SEC047 match on documented token structure. A token to a secrets
 manager (SEC028) is rated as what it opens rather than as one credential, and
-a payment token (SEC034) as what it can move. Two of them are looser than
+a payment token (SEC034) as what it can move, and a Terraform Cloud token
+(SEC046) as the state it can read -- which holds every secret a plan touched. Two of them are looser than
 the rest and say so through their confidence: SEC014 is a two-letter prefix in
 front of 32 hex characters, and SEC020 is any `scheme://user:password@host`.
 

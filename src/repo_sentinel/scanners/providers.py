@@ -295,6 +295,126 @@ RULES: tuple[ProviderRule, ...] = (
         re.compile(r"\b(?:sq0atp-[A-Za-z0-9_-]{22}|EAAA[A-Za-z0-9_-]{56,})\b"),
         "Revoke it in the Square dashboard; a live token can move money.",
     ),
+    ProviderRule(
+        "SEC035",
+        "Slack app-level token",
+        Severity.HIGH,
+        re.compile(r"\bxapp-\d-[A-Z0-9]+-\d+-[a-f0-9]{32,}\b"),
+        "Regenerate it in the Slack app configuration; it authenticates the app itself.",
+    ),
+    ProviderRule(
+        "SEC036",
+        "Discord bot token",
+        Severity.CRITICAL,
+        re.compile(r"\b[MNO][A-Za-z\d_-]{23,25}\.[\w-]{6}\.[\w-]{27,}\b"),
+        "Regenerate it in the Discord developer portal; it can act as the bot in every guild.",
+    ),
+    ProviderRule(
+        "SEC037",
+        "Mailgun API key",
+        Severity.HIGH,
+        re.compile(r"\bkey-[0-9a-f]{32}\b"),
+        "Rotate it in the Mailgun dashboard; it can send mail as your domain.",
+    ),
+    ProviderRule(
+        "SEC038",
+        "Mailchimp API key",
+        Severity.HIGH,
+        re.compile(r"\b[0-9a-f]{32}-us\d{1,2}\b"),
+        "Revoke it in the Mailchimp account settings; it reaches your whole audience list.",
+    ),
+    ProviderRule(
+        "SEC039",
+        "New Relic API key",
+        Severity.HIGH,
+        re.compile(r"\bNRAK-[A-Z0-9]{27}\b|\b[a-f0-9]{40}NRAL\b"),
+        "Revoke it in the New Relic API keys page.",
+    ),
+    ProviderRule(
+        "SEC040",
+        "Sentry DSN",
+        Severity.MEDIUM,
+        re.compile(r"https://[0-9a-f]{32}@[\w.-]+/\d+"),
+        "A DSN lets anyone send events as your project, which is enough to fill a quota or bury a real alert.",
+        confidence=Confidence.MEDIUM,
+    ),
+    ProviderRule(
+        "SEC041",
+        "Asana personal access token",
+        Severity.HIGH,
+        re.compile(r"\b1/\d{16}:[0-9a-f]{32}\b"),
+        "Revoke it in Asana under My Settings, Apps.",
+    ),
+    ProviderRule(
+        "SEC042",
+        "Dropbox access token",
+        Severity.CRITICAL,
+        re.compile(r"\bsl\.[A-Za-z0-9_-]{130,}"),
+        "Revoke it in the Dropbox app console; it reads and writes the account's files.",
+    ),
+    ProviderRule(
+        "SEC043",
+        "Figma personal access token",
+        Severity.HIGH,
+        re.compile(r"\bfigd_[A-Za-z0-9_-]{40,}\b"),
+        "Revoke it in Figma under Settings, Personal access tokens.",
+    ),
+    ProviderRule(
+        "SEC044",
+        "Airtable personal access token",
+        Severity.HIGH,
+        re.compile(r"\bpat[A-Za-z0-9]{14}\.[0-9a-f]{64}\b"),
+        "Revoke it in the Airtable builder hub; it reads every base the token was scoped to.",
+    ),
+    ProviderRule(
+        "SEC045",
+        "JFrog Artifactory token",
+        Severity.CRITICAL,
+        re.compile(r"\bAKCp8[A-Za-z0-9]{60,}\b"),
+        "Revoke it in Artifactory; it can publish artifacts that your builds will install.",
+    ),
+    ProviderRule(
+        "SEC046",
+        "Terraform Cloud API token",
+        Severity.CRITICAL,
+        re.compile(r"\b[A-Za-z0-9]{14}\.atlasv1\.[A-Za-z0-9_-]{40,}"),
+        "Revoke it in Terraform Cloud; it can read state, which holds every secret a plan touched.",
+    ),
+    ProviderRule(
+        "SEC047",
+        "Firebase Cloud Messaging server key",
+        Severity.HIGH,
+        re.compile(r"\bAAAA[A-Za-z0-9_-]{7}:APA91b[A-Za-z0-9_-]{130,}"),
+        "Rotate it in the Firebase console; it can push notifications to every installed app.",
+    ),
+)
+
+#: One alternation of every provider pattern, used only to answer "is there any
+#: point looking closer at this line". Almost no line in a repository contains a
+#: credential, and running twenty patterns over each of them to discover that is
+#: most of the time this scanner spends. Built from the rules themselves rather
+#: than hand-written, so it cannot drift away from what it is standing in for;
+#: named groups are stripped because two rules may reuse a group name and the
+#: combined pattern would not compile.
+#: A gate in front of the gate. Every provider rule needs either a long run of
+#: credential characters, a PEM header, or a URL carrying a password -- and
+#: four fifths of the lines in a repository have none of the three. Testing
+#: that first halves the cost of the pass, because one simple pattern is much
+#: cheaper for the engine than an alternation of twenty.
+#:
+#: It is a correctness risk as well as a speed win: a line this rejects is
+#: never looked at again. The corpus test asserts that every provider rule's
+#: example clears it, which is what keeps the threshold honest.
+_CANDIDATE = re.compile(r"[A-Za-z0-9+/_=-]{14}|-----BEGIN|://[^\s/]*:[^\s/]*@")
+
+_ANY_PROVIDER = re.compile(
+    "|".join(
+        "(?{flags}:{body})".format(
+            flags="i" if rule.pattern.flags & re.IGNORECASE else "",
+            body=re.sub(r"\(\?P<\w+>", "(?:", rule.pattern.pattern),
+        )
+        for rule in RULES
+    )
 )
 
 #: One alternation of every provider pattern, used only to answer "is there any

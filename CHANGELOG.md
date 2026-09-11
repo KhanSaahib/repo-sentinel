@@ -51,10 +51,13 @@ repository the tool can read at all: it grew from two file formats to six.
   is real. In a fixture tree only the guessing rules drop, because the classic
   way a real key reaches a repository is a test that once talked to a real
   service. Nothing is silenced either way.
-- **Twelve more provider rules** (SEC023–SEC034): GitLab personal access and
+- **Twenty-five more provider rules** (SEC023–SEC047): GitLab personal access and
   runner registration tokens, DigitalOcean, Shopify, Databricks, Doppler,
-  Grafana, Telegram, Postman, Linear, Atlassian and Square. All documented
-  shapes, so all high confidence.
+  Grafana, Telegram, Postman, Linear, Atlassian, Square, Slack app tokens,
+  Discord, Mailgun, Mailchimp, New Relic, Sentry DSNs, Asana, Dropbox, Figma,
+  Airtable, JFrog Artifactory, Terraform Cloud and Firebase Cloud Messaging.
+  All documented shapes, so all high confidence bar the Sentry DSN, which is
+  semi-public by design.
 - **FN004**: files that hold secrets as a byproduct rather than by purpose --
   Terraform state (which records every value Terraform read, in plain text), a
   state backup, a `.kubeconfig`, a shell or database client history.

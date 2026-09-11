@@ -205,7 +205,13 @@ class TestCatalogueOutput(unittest.TestCase):
     def test_the_json_form_is_filtered_too(self):
         payload = json.loads(report.format_rule_catalogue("terraform", as_json=True))
         self.assertTrue(payload["rules"])
-        self.assertTrue(all(rule["category"] == "terraform" for rule in payload["rules"]))
+        # A word matches the summary as well as the family, deliberately: the
+        # Terraform Cloud token rule is a secret rule and is exactly what
+        # somebody searching for "terraform" wants to see.
+        for rule in payload["rules"]:
+            with self.subTest(rule=rule["id"]):
+                self.assertIn("terraform", (rule["category"] + " " + rule["summary"]).lower())
+        self.assertIn("terraform", {rule["category"] for rule in payload["rules"]})
 
     def test_json_is_machine_readable(self):
         payload = json.loads(report.format_rule_catalogue(as_json=True))

@@ -152,10 +152,32 @@ class TestAdditionalProviders(unittest.TestCase):
             with self.subTest(rule=rule_id):
                 self.assertIn(rule_id, rule_ids(secrets.scan_text("app.py", f'k = "{value}"')))
 
+    def test_the_second_batch_of_provider_rules(self):
+        for rule_id, value in (
+            ("SEC035", "xap" + "p-1-A01B02C03-1234567890-" + "0a1b" * 8),
+            ("SEC036", "M" + "TA1B2c3D4e5F6g7H8i9J0k1L" + ".Ab3dEf." + "aB3dEf7hIj0kLm2nOp5qRs8tUv1"),
+            ("SEC037", "key" + "-" + "0a1b" * 8),
+            ("SEC038", "0a1b" * 8 + "-us21"),
+            ("SEC039", "NRA" + "K-" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ1"),
+            ("SEC040", "https://" + "0a1b" * 8 + "@o123.ingest.example.invalid/456"),
+            ("SEC041", "1/" + "1234567890123456" + ":" + "0a1b" * 8),
+            ("SEC042", "sl" + "." + "aB3dEf7h" * 17),
+            ("SEC043", "fig" + "d_" + "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4zaB3dEf7h"),
+            ("SEC044", "pat" + "aB3dEf7hIj0kLm" + "." + "0a1b" * 16),
+            ("SEC045", "AKC" + "p8" + "aB3dEf7h" * 8),
+            ("SEC046", "aB3dEf7hIj0kLm" + ".atlasv1." + "aB3dEf7h" * 6),
+            ("SEC047", "AAA" + "A" + "aB3dEf7" + ":APA91b" + "aB3dEf7h" * 17),
+        ):
+            with self.subTest(rule=rule_id):
+                self.assertIn(rule_id, rule_ids(secrets.scan_text("app.py", f'k = "{value}"')))
+
     def test_the_new_patterns_do_not_fire_on_their_own_prefixes(self):
         # "glpat-" and friends turn up in documentation about tokens far more
         # often than actual tokens do.
-        for value in ("glpat-", "dop_v1_", "dapi", "PMAK-xxxx", "lin_api_short"):
+        for value in (
+            "glpat-", "dop_v1_", "dapi", "PMAK-xxxx", "lin_api_short",
+            "xapp-", "figd_", "key-", "AKCp8", "sl.",
+        ):
             with self.subTest(value=value):
                 self.assertEqual(secrets.scan_text("docs/tokens.md", f'k = "{value}"'), [])
 
