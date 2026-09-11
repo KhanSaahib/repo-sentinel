@@ -166,6 +166,15 @@ class TestSarifOutput(unittest.TestCase):
         self.assertTrue(document["runs"][0]["results"])
 
 
+class TestMarkdownOutput(unittest.TestCase):
+    def test_emits_a_table_for_a_pull_request_comment(self):
+        with sample_repo() as root:
+            code, output = run(["scan", root, "--format", "markdown"])
+        self.assertEqual(code, cli.EXIT_FINDINGS)
+        self.assertIn("### repo-sentinel:", output)
+        self.assertIn("| --- |", output)
+
+
 class TestConfidenceFilter(unittest.TestCase):
     def test_min_confidence_hides_the_heuristics(self):
         with tempfile.TemporaryDirectory() as root:

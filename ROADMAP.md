@@ -90,6 +90,7 @@ outcome than a feature nobody wanted.
       reason for it and does not silently cover rules added later
 - [ ] Per-path rule configuration: "K8S004 is fine in examples/, not in
       deploy/". Needs a shape that does not turn into a policy language
+- [x] Markdown output for a pull request comment
 - [ ] Publish to PyPI so `pipx run repo-sentinel` works
 - [x] `--quiet` for CI logs that only need the summary line, and `--sort path`
       for reading a report top to bottom
@@ -109,11 +110,14 @@ outcome than a feature nobody wanted.
       body pasted without one is missed
 - [ ] Helm templates, where `{{ .Values.x }}` makes every structural rule guess
 - [ ] Coverage measurement in CI with a floor
-- [ ] Property-based tests for the entropy and redaction functions
+- [x] Property-based tests for the entropy and redaction functions, plus seeded
+      fuzzing of both hand-written parsers and a time bound on hostile input
 - [ ] Benchmark against a large repository; the walk should stay under a second
-      for 10k files. Measured today over the Python 3.14 standard library: 631
-      files, ~305k lines, 3.4s. Most of it is one combined regex per line, so
-      the win to find is a cheaper way to reject a line outright
+      for 10k files. Measured over the Python 3.14 standard library: 631 files,
+      ~305k lines, 3.4s. Most of it is one combined regex per line, so the win
+      to find is a cheaper way to reject a line outright. The suite has a
+      scaling guard at 1000 files, generous by two orders of magnitude, which
+      catches an accidental O(n^2) without policing the constant factor
 - [ ] Type annotations checked with mypy in CI
 - [ ] Issue templates
 - [ ] Enable CodeQL default setup and branch protection on `main`

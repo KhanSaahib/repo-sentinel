@@ -94,6 +94,48 @@ class TestSarif(unittest.TestCase):
         self.assertEqual(empty["runs"][0]["tool"]["driver"]["rules"], [])
 
 
+class TestMarkdown(unittest.TestCase):
+    def setUp(self):
+        self.text = report.format_markdown([CRITICAL, GUESS])
+
+    def test_a_table_row_per_finding(self):
+        self.assertIn("| `SEC001` | `terraform/main.tf:14` |", self.text)
+        self.assertIn("| `SEC100` | `app.py:2` |", self.text)
+
+    def test_the_heading_carries_the_summary(self):
+        self.assertTrue(self.text.startswith("### repo-sentinel: 2 finding(s)"))
+
+    def test_confidence_is_shown_only_when_it_is_not_certain(self):
+        self.assertEqual(self.text.count("confidence"), 1)
+
+    def test_fixes_appear_once_per_rule_not_once_per_finding(self):
+        doubled = report.format_markdown([CRITICAL, CRITICAL])
+        self.assertEqual(doubled.count("Deactivate the key in IAM."), 1)
+
+    def test_a_pipe_in_a_title_cannot_break_the_table(self):
+        awkward = Finding(
+            rule_id="WF003",
+            severity=Severity.CRITICAL,
+            title="Untrusted input a | b interpolated",
+            path="a.yml",
+            line=1,
+        )
+        row = report.format_markdown([awkward]).splitlines()[3]
+        self.assertEqual(row.count("|"), 5)
+
+    def test_a_long_report_is_truncated_rather_than_endless(self):
+        many = [CRITICAL] * 120
+        text = report.format_markdown(many, limit=10)
+        self.assertIn("...and 110 more", text)
+        self.assertLess(text.count("terraform/main.tf"), 12)
+
+    def test_a_clean_run_still_says_something(self):
+        self.assertIn("not proof of safety", report.format_markdown([]))
+
+    def test_notes_are_kept(self):
+        self.assertIn("_3 accepted._", report.format_markdown([CRITICAL], notes=["3 accepted."]))
+
+
 class TestCatalogueOutput(unittest.TestCase):
     def test_text_lists_every_rule_under_its_category(self):
         text = report.format_rule_catalogue()

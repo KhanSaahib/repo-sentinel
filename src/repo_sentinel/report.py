@@ -1,12 +1,14 @@
 """Turning findings into something a person, a pipeline or GitHub can read.
 
-Three formats, for three readers:
+Four formats, for four readers:
 
 * **text**, for the person who just ran the command. Worst first, with the fix
   attached to the problem, because a finding without a next action is a nag.
 * **json**, for anything that wants to post-process the run.
 * **sarif**, for GitHub's code scanning tab, which turns a CI run into
   annotations on the pull request that introduced the line.
+* **markdown**, for a comment posted onto the pull request itself, where the
+  people arguing about the change are already looking.
 
 Formatting lives here rather than in the CLI so that the CLI is only argument
 handling, and so that a new format is a function rather than a branch inside a
@@ -107,6 +109,69 @@ def format_json(findings: Sequence[Finding], *, version: str, notes: Sequence[st
     if notes:
         payload["notes"] = list(notes)
     return json.dumps(payload, indent=2)
+
+
+#: A coloured dot reads faster than a word in a table, and GitHub renders these
+#: wherever a comment can appear.
+_MARKERS = {
+    Severity.CRITICAL: "\U0001f534",
+    Severity.HIGH: "\U0001f7e0",
+    Severity.MEDIUM: "\U0001f7e1",
+    Severity.LOW: "\U0001f535",
+}
+
+#: Rows beyond this are summarised rather than listed. A pull request comment
+#: that needs scrolling past four hundred rows is one nobody reads at all.
+MARKDOWN_ROW_LIMIT = 50
+
+
+def _escape(text: str) -> str:
+    """Make a value safe to put inside a Markdown table cell."""
+    return text.replace("|", "\\|").replace("\n", " ")
+
+
+def format_markdown(
+    findings: Sequence[Finding], *, notes: Sequence[str] = (), limit: int = MARKDOWN_ROW_LIMIT
+) -> str:
+    """A report that can be pasted into a pull request and read at a glance.
+
+    The table carries what triage needs -- how bad, which rule, where -- and the
+    fixes go underneath, once per rule rather than once per finding. A comment
+    that repeats the same three-line remediation forty times is one people
+    learn to collapse without reading.
+    """
+    if not findings:
+        return "\n".join(["### repo-sentinel", "", _CLEAN, *(f"_{note}_" for note in notes)])
+
+    lines = [f"### repo-sentinel: {summarise(findings)}", ""]
+    lines.append("| | Rule | Location | Finding |")
+    lines.append("| --- | --- | --- | --- |")
+    for finding in findings[:limit]:
+        marker = f"{_MARKERS[finding.severity]} {finding.severity.value}"
+        detail = _escape(finding.title)
+        if finding.confidence < Confidence.HIGH:
+            detail += f" _({finding.confidence.value} confidence)_"
+        lines.append(
+            f"| {marker} | `{finding.rule_id}` | `{finding.path}:{finding.line}` | {detail} |"
+        )
+
+    if len(findings) > limit:
+        lines.append(f"| | | | _...and {len(findings) - limit} more_ |")
+
+    remedies: "dict[str, str]" = {}
+    for finding in findings:
+        if finding.remediation and finding.rule_id not in remedies:
+            remedies[finding.rule_id] = finding.remediation
+
+    if remedies:
+        lines.extend(["", "<details>", "<summary>What to do</summary>", ""])
+        for rule_id, remediation in remedies.items():
+            lines.append(f"- **{rule_id}** -- {remediation}")
+        lines.extend(["", "</details>"])
+
+    if notes:
+        lines.extend(["", *(f"_{note}_" for note in notes)])
+    return "\n".join(lines)
 
 
 def format_sarif(findings: Sequence[Finding], *, version: str) -> str:

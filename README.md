@@ -33,6 +33,7 @@ repo-sentinel rules                           # what does this thing check for?
 
 repo-sentinel scan . --format json            # machine-readable output
 repo-sentinel scan . --format sarif --output results.sarif
+repo-sentinel scan . --format markdown         # a pull request comment
 repo-sentinel scan . --min-severity high      # only show what matters most
 repo-sentinel scan . --min-confidence high    # only show what it is sure of
 repo-sentinel scan . --fail-on critical       # relax the CI gate
@@ -430,6 +431,27 @@ calcifying. It is a list of debts, not a list of exemptions.
 
 An unreadable or corrupt baseline is an error, not an empty baseline. Failing
 open would mean a truncated file silently accepts everything.
+
+## Posting the result onto a pull request
+
+`--format markdown` writes a table meant to be pasted into a comment, where the
+people arguing about the change are already looking:
+
+```yaml
+- id: scan
+  run: repo-sentinel scan . --format markdown --output report.md
+  continue-on-error: true
+- uses: actions/github-script@<sha>
+  with:
+    script: |
+      const body = require("fs").readFileSync("report.md", "utf8");
+      github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+```
+
+The table carries what triage needs -- how bad, which rule, where -- and the
+fixes go underneath in a collapsed block, once per rule rather than once per
+finding. Long reports are truncated with a count: a comment that needs scrolling
+past four hundred rows is one nobody reads.
 
 ## Reporting to the GitHub Security tab
 

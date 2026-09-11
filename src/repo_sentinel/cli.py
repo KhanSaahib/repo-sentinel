@@ -35,7 +35,10 @@ def build_parser() -> argparse.ArgumentParser:
     scan_parser = subparsers.add_parser("scan", help="scan a directory or file")
     scan_parser.add_argument("path", nargs="?", default=".", help="path to scan (default: .)")
     scan_parser.add_argument(
-        "--format", choices=("text", "json", "sarif"), default="text", help="output format"
+        "--format",
+        choices=("text", "json", "sarif", "markdown"),
+        default="text",
+        help="output format",
     )
     scan_parser.add_argument(
         "--output",
@@ -270,7 +273,7 @@ def _run_scan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     if args.sort == "path":
         findings.sort(key=lambda finding: (finding.path, finding.line, finding.rule_id))
 
-    if args.format == "text":
+    if args.format in ("text", "markdown"):
         notes.append(_scan_note(result))
 
     exit_code = _emit(_render(args, findings, notes), args.output)
@@ -288,6 +291,8 @@ def _render(
         return report.format_json(findings, version=__version__, notes=notes)
     if args.format == "sarif":
         return report.format_sarif(findings, version=__version__)
+    if args.format == "markdown":
+        return report.format_markdown(findings, notes=notes)
     colour = not args.no_color and args.output is None and sys.stdout.isatty()
     if args.quiet:
         return report.format_summary(findings, notes=notes)
