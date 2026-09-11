@@ -146,6 +146,11 @@ Two invariants hold across all of it:
 
 - **The command line always wins.** A config file can never stop somebody
   auditing their own repository more strictly than the project usually does.
+- **A gap in the scan is reported, not swallowed.** A directory the process
+  cannot open is skipped -- a scanner that dies on one permission error is
+  useless in CI -- but the run says how many paths that happened to. "No
+  findings" from a tree that was never read is the most dangerous answer this
+  tool can give.
 - **Silence is always counted, and can always be read past.** A disabled rule,
   a baselined finding, a suppressed line: each is reported as a number in the
   output, and each has a flag that ignores it -- `--disable` is answered by the

@@ -71,6 +71,10 @@ class ScanReport:
     #: invisibly is worse than no scanner.
     suppressed_lines: int = 0
     suppressed_files: int = 0
+    #: Paths the walk could not open. Skipped, as they have to be, but counted,
+    #: because "no findings" from a tree that was never read is the most
+    #: dangerous answer this tool can give.
+    unreadable: "tuple[str, ...]" = ()
 
 
 def scan(
@@ -90,8 +94,11 @@ def scan(
     file.
     """
     started = time.monotonic()
+    unreadable: "list[str]" = []
     if only_paths is None:
-        entries = list(walk(path, excludes=excludes, use_gitignore=use_gitignore))
+        entries = list(
+            walk(path, excludes=excludes, use_gitignore=use_gitignore, unreadable=unreadable)
+        )
     else:
         entries = [
             walk_entry
@@ -116,6 +123,7 @@ def scan(
         duration=time.monotonic() - started,
         suppressed_lines=sum(marked),
         suppressed_files=sum(1 for count in marked if count),
+        unreadable=tuple(unreadable),
     )
 
 

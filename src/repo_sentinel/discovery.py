@@ -91,6 +91,7 @@ def walk(
     max_bytes: int = MAX_FILE_BYTES,
     *,
     use_gitignore: bool = True,
+    unreadable: "list[str] | None" = None,
 ) -> "Iterator[Entry]":
     """Yield an :class:`Entry` for every file under ``root`` worth considering.
 
@@ -101,6 +102,12 @@ def walk(
     permission error is useless in CI, and a file that silently disappears from
     the walk is one the name rules never get to see.
 
+    Pass ``unreadable`` to learn what the walk could not open -- a directory
+    without permission, a file that vanished mid-scan. Those are skipped
+    either way, because a scanner that dies on one permission error is useless
+    in CI, but skipping them silently means a tree can be reported clean when
+    most of it was never read.
+
     With ``use_gitignore`` the walk honours every ``.gitignore`` in the tree,
     each governing its own subtree. Set it to ``False`` to audit what git was
     told to hide - useful when you suspect an ignore rule was added to silence
@@ -109,14 +116,18 @@ def walk(
     root = os.path.abspath(root)
 
     if os.path.isfile(root):
-        yield Entry(os.path.basename(root), _read_text(root, max_bytes))
+        yield Entry(os.path.basename(root), _read_text(root, max_bytes, unreadable))
         return
 
     # Each directory inherits the stack of its parent, so rules are consulted
     # outermost first and an entry is dropped as soon as its parent is visited.
     stacks: dict[str, GitIgnoreStack] = {root: GitIgnoreStack()}
 
-    for dirpath, dirnames, filenames in os.walk(root):
+    def note(error: OSError) -> None:
+        if unreadable is not None:
+            unreadable.append(_relative_dir(str(error.filename or root), root).rstrip("/"))
+
+    for dirpath, dirnames, filenames in os.walk(root, onerror=note):
         stack = stacks.pop(dirpath, GitIgnoreStack())
         prefix = _relative_dir(dirpath, root)
 
@@ -147,7 +158,7 @@ def walk(
             if os.path.splitext(filename)[1].lower() in BINARY_SUFFIXES:
                 yield Entry(relative)
                 continue
-            yield Entry(relative, _read_text(absolute, max_bytes))
+            yield Entry(relative, _read_text(absolute, max_bytes, unreadable))
 
 
 def read_listed(
@@ -202,13 +213,24 @@ def _relative_dir(dirpath: str, root: str) -> str:
     return os.path.relpath(dirpath, root).replace(os.sep, "/") + "/"
 
 
-def _read_text(path: str, max_bytes: int) -> str | None:
+def _read_text(
+    path: str, max_bytes: int, unreadable: "list[str] | None" = None
+) -> "str | None":
+    """The file's text, or None when it is too large, binary, or unopenable.
+
+    Only the last of those is worth telling anyone about, which is what
+    ``unreadable`` collects: a file over the size limit and a file full of NUL
+    bytes are both deliberate skips, and a file the process cannot open is a
+    gap in the scan.
+    """
     try:
         if os.path.getsize(path) > max_bytes:
             return None
         with open(path, "rb") as handle:
             raw = handle.read()
     except OSError:
+        if unreadable is not None:
+            unreadable.append(path)
         return None
     if is_probably_binary(raw[:8192]):
         return None

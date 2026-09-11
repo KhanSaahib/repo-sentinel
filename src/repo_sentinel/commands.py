@@ -183,6 +183,11 @@ def _scan_note(result) -> str:
     if result.file_count == 0:
         return "Scanned 0 files. Check the path, the excludes and your .gitignore."
     note = f"Scanned {result.file_count} file(s) in {result.duration:.2f}s."
+    if result.unreadable:
+        note += (
+            f" {len(result.unreadable)} path(s) could not be opened and were not "
+            f"scanned, starting with {result.unreadable[0]!r}."
+        )
     if result.suppressed_lines:
         note += (
             f" {result.suppressed_lines} line(s) in {result.suppressed_files} file(s) "

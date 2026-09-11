@@ -374,6 +374,21 @@ class TestRunSummary(unittest.TestCase):
             _, output = run(["scan", root])
         self.assertIn("file(s) in", output)
 
+    def test_a_directory_that_could_not_be_read_is_named(self):
+        import stat
+
+        with tempfile.TemporaryDirectory() as root:
+            locked = os.path.join(root, "locked")
+            os.makedirs(locked)
+            with open(os.path.join(locked, "app.py"), "w", encoding="utf-8") as handle:
+                handle.write("x = 1\n")
+            os.chmod(locked, 0)
+            try:
+                _, output = run(["scan", root])
+            finally:
+                os.chmod(locked, stat.S_IRWXU)
+        self.assertIn("could not be opened", output)
+
     def test_an_empty_scan_says_so_rather_than_looking_clean(self):
         with tempfile.TemporaryDirectory() as root:
             _, output = run(["scan", root])
