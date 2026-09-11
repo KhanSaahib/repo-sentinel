@@ -142,7 +142,7 @@ def _check_injection(path: str, name: str, job: "yamlish.Node") -> "Iterator[Fin
 def _check_pipe_to_shell(path: str, name: str, job: "yamlish.Node") -> "Iterator[Finding]":
     """GL003: a build step that trusts a URL with its shell."""
     for line_number, line in _script_lines(job):
-        if not wellknown.PIPE_TO_SHELL.search(line):
+        if not wellknown.downloads_and_runs(line):
             continue
         yield Finding(
             rule_id="GL003",

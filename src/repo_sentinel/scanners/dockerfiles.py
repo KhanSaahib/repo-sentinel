@@ -112,7 +112,7 @@ def _check_base_image(path: str, line: int, argument: str) -> Iterator[Finding]:
 
 def _check_run(path: str, line: int, command: str) -> Iterator[Finding]:
     """DK003 and DK006: what a build step trusts the network to hand it."""
-    if wellknown.PIPE_TO_SHELL.search(command):
+    if wellknown.downloads_and_runs(command):
         yield Finding(
             rule_id="DK003",
             severity=Severity.HIGH,

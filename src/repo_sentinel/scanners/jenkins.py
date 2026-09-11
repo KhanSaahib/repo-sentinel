@@ -109,7 +109,7 @@ def _check_injection(path: str, text: str) -> "Iterator[Finding]":
 def _check_pipe_to_shell(path: str, text: str) -> "Iterator[Finding]":
     """JK003: a build step that trusts a URL with the agent's shell."""
     for line, _quote, body in _shell_steps(text):
-        if not wellknown.PIPE_TO_SHELL.search(body):
+        if not wellknown.downloads_and_runs(body):
             continue
         yield Finding(
             rule_id="JK003",

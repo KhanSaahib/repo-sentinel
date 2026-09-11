@@ -231,7 +231,7 @@ def _check_npm_scripts(path: str, text: str) -> "Iterator[Finding]":
             continue
         for step in node.entries() if node.is_list else (node,):
             command = step.text
-            if not command or not wellknown.PIPE_TO_SHELL.search(command):
+            if not command or not wellknown.downloads_and_runs(command):
                 continue
             yield Finding(
                 rule_id="SC002",

@@ -83,7 +83,7 @@ def _is_comment(line: str) -> bool:
 def _check_downloads(path: str, text: str) -> "Iterator[Finding]":
     """SH001: code fetched and executed in one step."""
     for number, line in _lines(text):
-        if _is_comment(line) or not wellknown.PIPE_TO_SHELL.search(line):
+        if _is_comment(line) or not wellknown.downloads_and_runs(line):
             continue
         yield Finding(
             rule_id="SH001",

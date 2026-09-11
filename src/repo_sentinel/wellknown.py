@@ -104,6 +104,48 @@ PIPE_TO_SHELL = re.compile(
     re.IGNORECASE,
 )
 
+#: Commands that print their argument rather than running it. A README's worth
+#: of install instructions is usually an echo, and the line that tells somebody
+#: how to install Rust is not the line that installs it.
+_PRINTS = re.compile(r"\b(?:echo|printf|print|cat)\b")
+
+
+def downloads_and_runs(line: str) -> "re.Match[str] | None":
+    """The match where a line fetches code and executes it, or None.
+
+    The pattern is the easy half. The hard half is that a script telling a
+    human how to install something looks exactly like a script installing it,
+    and the difference is that one of them is inside a quoted string being
+    echoed. So a match that sits inside an unclosed quote, on a line that is
+    printing, does not count -- while ``sh -c "curl ... | sh"`` still does,
+    because that line is not printing anything.
+    """
+    match = PIPE_TO_SHELL.search(line)
+    if match is None:
+        return None
+    prefix = line[: match.start()]
+    if _PRINTS.search(prefix) and _inside_quotes(prefix):
+        return None
+    return match
+
+
+def _inside_quotes(prefix: str) -> bool:
+    """True when ``prefix`` leaves a quote open, so what follows is text."""
+    quote = None
+    index = 0
+    while index < len(prefix):
+        character = prefix[index]
+        if character == "\\":
+            index += 2
+            continue
+        if quote is None and character in "\"'":
+            quote = character
+        elif character == quote:
+            quote = None
+        index += 1
+    return quote is not None
+
+
 #: Switches that turn off certificate verification while fetching.
 SKIPS_VERIFICATION = re.compile(
     r"\bcurl\b[^|;]*\s(?:-k|--insecure)\b"
