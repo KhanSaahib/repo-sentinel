@@ -290,5 +290,7 @@ def _uses_gitlab(root: str) -> bool:
 
 
 def rules_command(args: argparse.Namespace) -> int:
-    """Print the catalogue, which needs no repository and no scan."""
-    return _emit(report.format_rule_catalogue(as_json=args.format == "json"), None)
+    """Print the catalogue, or the part of it somebody asked about."""
+    return _emit(
+        report.format_rule_catalogue(args.pattern, as_json=args.format == "json"), None
+    )

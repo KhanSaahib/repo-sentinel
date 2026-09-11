@@ -152,6 +152,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     rules_parser = subparsers.add_parser("rules", help="list every rule the scanner knows")
+    rules_parser.add_argument(
+        "pattern",
+        nargs="?",
+        help="show only rules matching an id, a family, or a word in the summary",
+    )
     rules_parser.add_argument("--format", choices=("text", "json"), default="text")
     # Kept for the second parse in main(), where a config file supplies
     # defaults that explicit flags then override.

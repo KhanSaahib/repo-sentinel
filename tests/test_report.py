@@ -184,6 +184,29 @@ class TestCatalogueOutput(unittest.TestCase):
         for rule_id in rules.RULES:
             self.assertIn(rule_id, text)
 
+    def test_a_pattern_can_name_a_family_an_id_or_a_word(self):
+        # One argument, three meanings: somebody typing "rules kubernetes"
+        # should not have to learn which of the three it was.
+        for pattern, expected in (("kubernetes", "K8S001"), ("SEC02", "SEC020"), ("bucket", "CF002")):
+            with self.subTest(pattern=pattern):
+                self.assertIn(expected, report.format_rule_catalogue(pattern))
+
+    def test_a_pattern_excludes_what_it_does_not_match(self):
+        text = report.format_rule_catalogue("dockerfiles")
+        self.assertIn("DK001", text)
+        self.assertNotIn("SEC001", text)
+        self.assertIn(f"of {len(rules.RULES)}", text)
+
+    def test_a_pattern_matching_nothing_suggests_what_might(self):
+        text = report.format_rule_catalogue("nonsense")
+        self.assertIn("No rule matches", text)
+        self.assertIn("kubernetes", text)
+
+    def test_the_json_form_is_filtered_too(self):
+        payload = json.loads(report.format_rule_catalogue("terraform", as_json=True))
+        self.assertTrue(payload["rules"])
+        self.assertTrue(all(rule["category"] == "terraform" for rule in payload["rules"]))
+
     def test_json_is_machine_readable(self):
         payload = json.loads(report.format_rule_catalogue(as_json=True))
         self.assertEqual(len(payload["rules"]), len(rules.RULES))

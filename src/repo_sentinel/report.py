@@ -316,8 +316,31 @@ def _sarif_message(finding: Finding) -> str:
     return " ".join(parts)
 
 
-def format_rule_catalogue(*, as_json: bool = False) -> str:
+def _matching_rules(pattern: "str | None") -> "list[rules.Rule]":
+    """The catalogue, or the part of it somebody asked about.
+
+    A pattern matches a rule id or its prefix (``SEC``, ``k8s001``), a family
+    name (``terraform``), or any word in the summary (``bucket``). One
+    argument, three meanings, because a person typing "repo-sentinel rules
+    kubernetes" does not want to learn which of the three it was.
+    """
+    catalogue = list(rules.RULES.values())
+    if not pattern:
+        return catalogue
+    needle = pattern.strip().lower()
+    return [
+        rule
+        for rule in catalogue
+        if rule.id.lower().startswith(needle)
+        or rule.category.startswith(needle)
+        or needle in rule.summary.lower()
+        or needle in rule.name
+    ]
+
+
+def format_rule_catalogue(pattern: "str | None" = None, *, as_json: bool = False) -> str:
     """Print what the scanner checks for, without needing something to find."""
+    matched = _matching_rules(pattern)
     if as_json:
         return json.dumps(
             {
@@ -329,17 +352,28 @@ def format_rule_catalogue(*, as_json: bool = False) -> str:
                         "severity": rule.severity.value,
                         "category": rule.category,
                     }
-                    for rule in rules.RULES.values()
+                    for rule in matched
                 ]
             },
             indent=2,
         )
 
+    if not matched:
+        return (
+            f"No rule matches {pattern!r}. "
+            "Try a family (secrets, kubernetes, terraform), an id, or a word."
+        )
+
+    grouped: "dict[str, list[rules.Rule]]" = {}
+    for rule in matched:
+        grouped.setdefault(rule.category, []).append(rule)
+
     lines: list[str] = []
-    for category, catalogued in rules.by_category().items():
+    for category, catalogued in grouped.items():
         lines.append(f"{category}:")
         for rule in catalogued:
             lines.append(f"  {rule.id}  {rule.severity.value:<8}  {rule.summary}")
         lines.append("")
-    lines.append(f"{len(rules.RULES)} rules.")
+    total = f"{len(matched)} rule(s)"
+    lines.append(total + "." if pattern is None else f"{total} of {len(rules.RULES)}.")
     return "\n".join(lines)

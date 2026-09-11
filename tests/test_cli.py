@@ -213,6 +213,12 @@ class TestRulesCommand(unittest.TestCase):
         self.assertIn("SEC001", output)
         self.assertIn("DK003", output)
 
+    def test_a_pattern_narrows_the_list(self):
+        code, output = run(["rules", "compose"])
+        self.assertEqual(code, cli.EXIT_OK)
+        self.assertIn("DC001", output)
+        self.assertNotIn("SEC001", output)
+
     def test_json_form_is_parseable(self):
         _, output = run(["rules", "--format", "json"])
         self.assertTrue(json.loads(output)["rules"])

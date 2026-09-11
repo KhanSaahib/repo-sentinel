@@ -49,6 +49,7 @@ Then, day to day:
 repo-sentinel scan .                          # scan the working directory
 repo-sentinel scan ../other-project           # scan somewhere else
 repo-sentinel rules                           # what does this thing check for?
+repo-sentinel rules kubernetes                # ...or just that family
 repo-sentinel init .                          # set a repository up
 
 repo-sentinel scan . --format json            # machine-readable output
