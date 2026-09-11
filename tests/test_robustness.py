@@ -20,24 +20,49 @@ import time
 import unittest
 from pathlib import Path
 
-from repo_sentinel import hcl, heuristics, yamlish
+from repo_sentinel import hcl, heuristics, jsonish, yamlish
 from repo_sentinel.findings import redact
-from repo_sentinel.scanners import (
-    compose,
-    dockerfiles,
-    kubernetes,
-    secrets,
-    terraform,
-    workflows,
-)
+from repo_sentinel.scanners import secrets
+def _scanner_modules():
+    """Every scanner that takes files, discovered rather than listed.
 
-SCANNERS = (
-    ("secrets", lambda path, text: secrets.scan_text(path, text)),
-    ("workflows", lambda path, text: workflows.scan_workflow(".github/workflows/a.yml", text)),
-    ("dockerfiles", lambda path, text: dockerfiles.scan_dockerfile("Dockerfile", text)),
-    ("terraform", lambda path, text: terraform.scan_terraform("main.tf", text)),
-    ("kubernetes", lambda path, text: kubernetes.scan_manifest("deploy/a.yaml", text)),
-    ("compose", lambda path, text: compose.scan_compose("docker-compose.yml", text)),
+    Derived from the package so that a new scanner is fuzzed the day it lands.
+    The alternative is a hand-written list, and the six scanners added after
+    this module was written were all missing from the one it used to have --
+    which is exactly how a robustness test quietly stops covering anything.
+    """
+    from repo_sentinel import scanners
+
+    return [
+        (name, getattr(scanners, name))
+        for name in scanners.__all__
+        if hasattr(getattr(scanners, name), "scan_files")
+        and name != "filenames"
+    ]
+
+
+SCANNERS = [
+    (name, lambda path, text, module=module: module.scan_files([(path, text)]))
+    for name, module in _scanner_modules()
+]
+
+#: The paths each scanner is most likely to claim, so that hostile input
+#: reaches the rules rather than being filtered out by a name check.
+CLAIMED_PATHS = (
+    "a.txt",
+    ".github/workflows/ci.yml",
+    "Dockerfile",
+    "main.tf",
+    "deploy/manifest.yaml",
+    "docker-compose.yml",
+    ".gitlab-ci.yml",
+    "azure-pipelines.yml",
+    ".circleci/config.yml",
+    "infra/stack.yaml",
+    "playbooks/site.yml",
+    "package.json",
+    ".npmrc",
+    "requirements.txt",
 )
 
 #: Shapes chosen to break a hand-written parser: unbalanced delimiters, a
@@ -69,9 +94,10 @@ HOSTILE = (
 class TestHostileInput(unittest.TestCase):
     def test_no_scanner_raises_on_a_hostile_document(self):
         for name, scan in SCANNERS:
-            for index, text in enumerate(HOSTILE):
-                with self.subTest(scanner=name, case=index):
-                    scan("a.txt", text)  # must not raise
+            for path in CLAIMED_PATHS:
+                for index, text in enumerate(HOSTILE):
+                    with self.subTest(scanner=name, path=path, case=index):
+                        scan(path, text)  # must not raise
 
     def test_no_scanner_hangs_on_a_hostile_document(self):
         # Catastrophic backtracking would show up here as a test that never
@@ -79,8 +105,9 @@ class TestHostileInput(unittest.TestCase):
         # the build, and tight enough that an exponential blowup cannot pass.
         for name, scan in SCANNERS:
             started = time.monotonic()
-            for text in HOSTILE:
-                scan("a.txt", text)
+            for path in CLAIMED_PATHS:
+                for text in HOSTILE:
+                    scan(path, text)
             elapsed = time.monotonic() - started
             with self.subTest(scanner=name):
                 self.assertLess(elapsed, 10.0, f"{name} took {elapsed:.1f}s on hostile input")
@@ -143,14 +170,16 @@ class TestFuzz(unittest.TestCase):
 
     def test_scanners_survive_random_text(self):
         for name, scan in SCANNERS:
-            for document in self.documents(seed=20260911):
-                with self.subTest(scanner=name):
-                    scan("a.txt", document)
+            for path in CLAIMED_PATHS:
+                for document in self.documents(seed=20260911, count=40):
+                    with self.subTest(scanner=name, path=path):
+                        scan(path, document)
 
     def test_parsers_survive_random_text(self):
         for document in self.documents(seed=1234):
             hcl.parse(document)
             yamlish.parse(document)
+            jsonish.parse(document)
 
     def test_parsers_survive_structured_noise(self):
         # Random text rarely produces a brace or a colon in the right place.
@@ -165,6 +194,7 @@ class TestFuzz(unittest.TestCase):
             document = "\n".join(rng.choice(fragments) for _ in range(rng.randint(1, 40)))
             hcl.parse(document)
             yamlish.parse(document)
+            jsonish.parse(document)
             for _name, scan in SCANNERS:
                 scan("a.txt", document)
 

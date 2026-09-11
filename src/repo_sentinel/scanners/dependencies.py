@@ -132,6 +132,49 @@ def _check_plaintext_sources(path: str, kind: str, text: str) -> "Iterator[Findi
             )
 
 
+#: Fields of a JSON manifest that name somewhere packages are fetched from.
+#: Everything else that holds a URL -- repository, bugs, homepage, funding --
+#: is metadata about the project, and npm has never downloaded anything from
+#: it. Reporting "repository": "http://github.com/..." as a supply chain is a
+#: false positive fourteen times over in one repository, which is how it was
+#: found.
+_JSON_SOURCES = (
+    ("publishConfig", "registry"),
+    ("config", "registry"),
+)
+
+
+def _check_json_sources(path: str, kind: str, text: str) -> "Iterator[Finding]":
+    """SC001 for the manifests that are JSON, where the field can be checked."""
+    document = jsonish.parse(text)
+    if document is None or not document.is_map:
+        return
+
+    candidates = [document.get(*keys) for keys in _JSON_SOURCES]
+    repositories = document.get("repositories")
+    if repositories is not None and repositories.is_list:
+        candidates.extend(entry.get("url") for entry in repositories.entries())
+
+    for node in candidates:
+        if node is None or not node.text:
+            continue
+        match = _HTTP_URL.match(node.text.strip())
+        if match is None or match.group("host").split(":")[0].lower() in _LOCAL_HOSTS:
+            continue
+        yield Finding(
+            rule_id="SC001",
+            severity=Severity.HIGH,
+            title=f"{kind} fetches packages from {match.group('host')} over plain HTTP",
+            path=path,
+            line=node.line,
+            evidence=node.text.strip()[:120],
+            remediation=(
+                "Anything on the path can replace what this downloads, and a "
+                "package manager runs what it downloads. Use https."
+            ),
+        )
+
+
 def _looks_like_a_source(kind: str, line: str) -> bool:
     """True when an http:// URL on this line is somewhere packages come from.
 
@@ -287,13 +330,18 @@ def scan_manifest(
     if marks.whole_file:
         return []
 
-    findings = list(_check_plaintext_sources(path, kind, text))
-    findings += _check_verification(path, kind, text)
-    if posixpath.basename(path.replace("\\", "/")).lower() in ("package.json", "composer.json"):
+    name = posixpath.basename(path.replace("\\", "/")).lower()
+    if name in ("package.json", "composer.json"):
+        # Structure is available here, so use it: a URL in a JSON manifest is
+        # only a supply chain when it sits in a field packages come from.
+        findings = list(_check_json_sources(path, kind, text))
         findings += _check_npm_scripts(path, text)
         findings += _check_npm_dependencies(path, text)
-    elif kind == "pip" and "requirement" in posixpath.basename(path).lower():
-        findings += _check_requirement_urls(path, text)
+    else:
+        findings = list(_check_plaintext_sources(path, kind, text))
+        if kind == "pip" and name.startswith("requirement"):
+            findings += _check_requirement_urls(path, text)
+    findings += _check_verification(path, kind, text)
     return marks.filter_findings(findings)
 
 

@@ -66,6 +66,35 @@ class TestPlaintextSources(unittest.TestCase):
         self.assertEqual(len(scan(".npmrc", text)), 1)
 
 
+class TestJsonManifestSources(unittest.TestCase):
+    """In a JSON manifest the field is available, so the field decides."""
+
+    def test_repository_metadata_is_not_a_package_source(self):
+        # npm has never downloaded anything from "repository". This was a
+        # false positive fourteen times over in one repository.
+        text = (
+            '{\n  "name": "app",\n'
+            '  "repository": {"type": "git", "url": "http://github.invalid/acme/app.git"},\n'
+            '  "homepage": "http://acme.invalid",\n'
+            '  "bugs": {"url": "http://acme.invalid/issues"}\n}'
+        )
+        self.assertEqual(scan("package.json", text), [])
+
+    def test_a_publish_registry_is_a_package_source(self):
+        text = '{\n  "name": "app",\n  "publishConfig": {"registry": "http://registry.internal/"}\n}'
+        findings = scan("package.json", text)
+        self.assertEqual(findings[0].rule_id, "SC001")
+        self.assertEqual(findings[0].line, 3)
+
+    def test_composer_repositories_are_package_sources(self):
+        text = '{\n  "repositories": [\n    {"type": "composer", "url": "http://packages.internal"}\n  ]\n}'
+        self.assertIn("SC001", rule_ids(scan("composer.json", text)))
+
+    def test_https_sources_are_fine(self):
+        text = '{\n  "publishConfig": {"registry": "https://registry.npmjs.org/"}\n}'
+        self.assertEqual(scan("package.json", text), [])
+
+
 class TestVerification(unittest.TestCase):
     def test_the_several_ways_to_switch_it_off(self):
         for path, line in (
