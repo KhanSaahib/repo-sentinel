@@ -3,8 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
+  # Every pull request, not only those aimed at main: a branch stacked on
+  # another branch is exactly where a regression is easiest to miss.
   pull_request:
-    branches: [main]
 
 # Least privilege by default; no job here needs to write anything.
 permissions:
