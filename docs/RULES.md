@@ -35,7 +35,7 @@ For what the severity and confidence columns mean, see
 | SEC019 | Hugging Face access token | high | high |
 | SEC020 | Credentials embedded in a URL | high | medium |
 | SEC021 | Google service account key file | critical | high |
-| SEC022 | Provider credential hidden inside base64 | varies | high |
+| SEC022 | Provider credential hidden inside base64 | up to critical, as the rule it decodes to | high |
 | SEC023 | GitLab personal access token | critical | high |
 | SEC024 | GitLab runner registration token | critical | high |
 | SEC025 | DigitalOcean personal access token | critical | high |

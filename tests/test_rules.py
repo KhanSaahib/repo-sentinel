@@ -128,6 +128,29 @@ class TestCatalogue(unittest.TestCase):
         )
         self.assertEqual(undocumented, [], "rules missing from docs/RULES.md")
 
+    def test_the_documented_severity_matches_the_catalogue(self):
+        # The tables carry a severity column, and a column nobody checks drifts
+        # from the code it describes. Several rows qualify the answer ("critical
+        # to an admin port, otherwise high"), so the assertion is that the
+        # catalogue's word appears in the row, not that the row is only that.
+        root = pathlib.Path(__file__).resolve().parents[1]
+        documentation = (root / "docs" / "RULES.md").read_text(encoding="utf-8")
+        rows = {
+            line.split("|")[1].strip(): line
+            for line in documentation.splitlines()
+            if line.startswith("| ") and line.count("|") >= 4
+        }
+        for rule_id, rule in rules.RULES.items():
+            with self.subTest(rule=rule_id):
+                row = rows.get(rule_id)
+                self.assertIsNotNone(row, f"{rule_id} has no table row")
+                self.assertIn(
+                    rule.severity.value,
+                    row.lower(),
+                    f"{rule_id} is {rule.severity.value} in the catalogue but the "
+                    f"table says: {row.strip()}",
+                )
+
     def test_the_readme_summary_counts_the_rules_correctly(self):
         # The README quotes a total. A number in prose is a number that rots.
         root = pathlib.Path(__file__).resolve().parents[1]
