@@ -5,12 +5,11 @@ not care which tool describes them: a security group admitting 0.0.0.0/0 to
 port 22 is the same security group whether it was written in HCL or YAML, and
 a repository that uses both should not have to choose which half gets audited.
 
-One honest limitation, stated here because a user cannot see it from the
-output: **JSON templates are not read.** The YAML reader this is built on keeps
-flow collections as text, and a JSON template is flow collections all the way
-down, so it parses to nothing and reports nothing. YAML templates -- which is
-what people write by hand -- are read in full. Generated JSON is usually the
-output of something this scanner should be reading instead.
+Both spellings are read. YAML templates go through the YAML reader; JSON ones
+go through :mod:`..jsonish`, which produces the same nodes, so the rules below
+never learn which they are looking at. That mattered more than it sounds: the
+alternative was a second set of rules for JSON, which would have drifted from
+these within a release.
 
 Intrinsic functions come through as text, which is the behaviour worth having:
 ``CidrIp: !Ref AllowedRange`` is a value decided at deploy time, so no rule
@@ -23,10 +22,10 @@ import posixpath
 import re
 from collections.abc import Iterable, Iterator
 
-from .. import suppression, wellknown, yamlish
+from .. import jsonish, suppression, wellknown, yamlish
 from ..findings import Finding, Severity
 
-_YAML_SUFFIXES = (".yaml", ".yml", ".template")
+_TEMPLATE_SUFFIXES = (".yaml", ".yml", ".json", ".template")
 
 _PUBLIC_ACLS = ("PublicRead", "PublicReadWrite", "AuthenticatedRead")
 _PUBLIC_ACCESS_BLOCK = (
@@ -39,8 +38,9 @@ _ENCRYPTION_KEYS = ("StorageEncrypted", "Encrypted", "EncryptionEnabled")
 _RESOURCE_TYPE = re.compile(r"^(?:AWS|Alexa|Custom)::")
 
 
-def is_yaml_path(path: str) -> bool:
-    return posixpath.basename(path.replace("\\", "/")).lower().endswith(_YAML_SUFFIXES)
+def is_template_path(path: str) -> bool:
+    """True for the extensions a CloudFormation template is written with."""
+    return posixpath.basename(path.replace("\\", "/")).lower().endswith(_TEMPLATE_SUFFIXES)
 
 
 def is_template(document: "yamlish.Node") -> bool:
@@ -265,8 +265,9 @@ def scan_template(path: str, text: str) -> "list[Finding]":
     if marks.whole_file:
         return []
 
+    documents = jsonish.parse_documents(text) if jsonish.looks_like_json(text) else yamlish.parse(text)
     findings: "list[Finding]" = []
-    for document in yamlish.parse(text):
+    for document in documents:
         if not is_template(document):
             continue
         for name, kind, resource in _resources(document):
@@ -280,6 +281,6 @@ def scan_files(files: "Iterable[tuple[str, str]]") -> "list[Finding]":
     return [
         finding
         for path, text in files
-        if is_yaml_path(path)
+        if is_template_path(path)
         for finding in scan_template(path, text)
     ]

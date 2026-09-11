@@ -19,12 +19,11 @@ because the mistakes worth reporting are visible in the text.
 
 from __future__ import annotations
 
-import json
 import posixpath
 import re
 from collections.abc import Iterable, Iterator
 
-from .. import suppression, wellknown
+from .. import jsonish, suppression, wellknown
 from ..findings import Confidence, Finding, Severity
 
 #: Hosts reached over plain HTTP. Localhost is excluded: a registry on the
@@ -86,10 +85,17 @@ def manifest_kind(path: str) -> "str | None":
     return None
 
 
-def _line_of(text: str, needle: str, default: int = 1) -> int:
-    """The line a fragment first appears on, for a finding that can be found."""
-    index = text.find(needle)
-    return text.count("\n", 0, index) + 1 if index >= 0 else default
+def _line_of(document: "jsonish.Node | None", *path: str) -> int:
+    """The line a key sits on, or 1 when the document could not be read.
+
+    Searching the raw text for a quoted key finds the wrong one whenever the
+    same name appears twice -- "install" in both scripts and dependencies, say
+    -- so the reader that knows the structure answers this instead.
+    """
+    if document is None:
+        return 1
+    node = document.get(*path)
+    return node.line if node is not None else 1
 
 
 def _check_plaintext_sources(path: str, kind: str, text: str) -> "Iterator[Finding]":
@@ -168,17 +174,15 @@ def _check_npm_scripts(path: str, text: str) -> "Iterator[Finding]":
     runner that installs the package, which is a different proposition from
     the same line inside ``build``.
     """
-    try:
-        document = json.loads(text)
-    except (ValueError, TypeError):
-        return
-    if not isinstance(document, dict):
+    document = jsonish.parse(text)
+    if document is None or not document.is_map:
         return
     scripts = document.get("scripts")
-    if not isinstance(scripts, dict):
+    if scripts is None or not scripts.is_map:
         return
-    for name, command in scripts.items():
-        if name not in _INSTALL_SCRIPTS or not isinstance(command, str):
+    for name, node in scripts.items():
+        command = node.text
+        if name not in _INSTALL_SCRIPTS or not command:
             continue
         if not _PIPE_TO_SHELL.search(command):
             continue
@@ -187,7 +191,7 @@ def _check_npm_scripts(path: str, text: str) -> "Iterator[Finding]":
             severity=Severity.HIGH,
             title=f"The {name!r} script downloads a script and runs it",
             path=path,
-            line=_line_of(text, f'"{name}"'),
+            line=node.line,
             evidence=command[:120],
             remediation=(
                 "npm runs this on every install, on every machine, without "
@@ -200,18 +204,16 @@ def _check_npm_scripts(path: str, text: str) -> "Iterator[Finding]":
 
 def _check_npm_dependencies(path: str, text: str) -> "Iterator[Finding]":
     """SC003: a dependency that is a place rather than a version."""
-    try:
-        document = json.loads(text)
-    except (ValueError, TypeError):
-        return
-    if not isinstance(document, dict):
+    document = jsonish.parse(text)
+    if document is None or not document.is_map:
         return
     for section in ("dependencies", "devDependencies", "optionalDependencies"):
         block = document.get(section)
-        if not isinstance(block, dict):
+        if block is None or not block.is_map:
             continue
-        for name, specifier in block.items():
-            if not isinstance(specifier, str) or not _VCS_DEPENDENCY.match(specifier):
+        for name, node in block.items():
+            specifier = node.text
+            if not specifier or not _VCS_DEPENDENCY.match(specifier):
                 continue
             if _PINNED_REF.search(specifier):
                 continue
@@ -220,7 +222,7 @@ def _check_npm_dependencies(path: str, text: str) -> "Iterator[Finding]":
                 severity=Severity.MEDIUM,
                 title=f"Dependency {name!r} comes from a source that can move",
                 path=path,
-                line=_line_of(text, f'"{name}"'),
+                line=node.line,
                 evidence=f"{name}: {specifier[:100]}",
                 remediation=(
                     "A dependency on a branch or a bare URL installs whatever "

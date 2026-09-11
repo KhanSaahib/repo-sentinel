@@ -67,9 +67,9 @@ outcome than a feature nobody wanted.
 - [x] GitLab CI: script injection from outsider-supplied variables, floating
       job images, pipe-to-shell, and CI_DEBUG_TRACE
 - [x] CloudFormation, as the Terraform rules in AWS's other vocabulary
-- [ ] CloudFormation in JSON, which the YAML reader cannot see: a JSON template
-      is flow collections all the way down. Needs a JSON parse that keeps line
-      numbers, which `json` does not offer
+- [x] CloudFormation in JSON. `json` throws away positions, so there is now a
+      small reader that keeps them and produces the same nodes as the YAML one;
+      the rules did not change at all
 - [x] Ansible playbooks and task files
 - [ ] CircleCI and Jenkinsfiles, the two remaining CI systems people actually
       have. A Jenkinsfile is Groovy, which this tool has no business parsing;

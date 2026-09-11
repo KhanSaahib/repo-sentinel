@@ -38,6 +38,39 @@ class TestRecognition(unittest.TestCase):
         self.assertEqual(scan(text, "deploy/pod.yaml"), [])
 
 
+class TestJsonTemplates(unittest.TestCase):
+    """The same rules, through the reader that keeps JSON's line numbers."""
+
+    TEMPLATE = """{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Resources": {
+    "Web": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "SecurityGroupIngress": [
+          {"IpProtocol": "tcp", "FromPort": 22, "ToPort": 22, "CidrIp": "0.0.0.0/0"}
+        ]
+      }
+    },
+    "Assets": {"Type": "AWS::S3::Bucket", "Properties": {"AccessControl": "PublicRead"}}
+  }
+}"""
+
+    def test_the_rules_do_not_learn_which_reader_produced_the_nodes(self):
+        findings = scan(self.TEMPLATE, "infra/stack.json")
+        self.assertEqual(rule_ids(findings), {"CF001", "CF002"})
+
+    def test_findings_point_at_the_right_line(self):
+        finding = next(f for f in scan(self.TEMPLATE, "infra/stack.json") if f.rule_id == "CF001")
+        self.assertEqual(finding.line, 8)
+
+    def test_a_malformed_template_reports_nothing(self):
+        self.assertEqual(scan('{"Resources": {', "stack.json"), [])
+
+    def test_json_files_that_are_not_templates_are_left_alone(self):
+        self.assertEqual(scan('{"name": "app", "version": "1.0.0"}', "package.json"), [])
+
+
 class TestIngress(unittest.TestCase):
     def group(self, rule):
         return template(

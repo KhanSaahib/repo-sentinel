@@ -69,7 +69,8 @@ repository the tool can read at all: it grew from two file formats to six.
 - **CloudFormation** (CF001–CF005): open security groups, public buckets,
   encryption switched off, wildcard policies, public databases. The Terraform
   rules in AWS's other vocabulary, since the mistakes do not care which tool
-  describes them. YAML templates only, and the documentation says so.
+  describes them. Both YAML and JSON templates, through readers that produce
+  the same nodes, so the rules never learn which they are looking at.
 - **K8S009 and K8S010**, the RBAC pair: a Role or ClusterRole granting every
   verb on every resource, and a binding whose subject is `system:anonymous`,
   `system:unauthenticated` or `system:authenticated` -- the last of which is

@@ -78,7 +78,14 @@ def _make_tracer(executed: "set[tuple[str, int]]", prefix: str):
 
 
 def run_suite(executed: "set[tuple[str, int]]") -> bool:
-    """Run the whole suite under the tracer. Returns True if it passed."""
+    """Run the whole suite under the tracer. Returns True if it passed.
+
+    A caveat worth knowing when a number here drops without explanation:
+    CPython silently clears the trace function if a RecursionError is raised
+    while tracing, so everything after that test runs unmeasured. If coverage
+    falls by fifteen points and no code changed, look for a test that recurses
+    deeply rather than for a test that stopped running.
+    """
     sys.path[:0] = [SOURCE, TESTS]
     runner = unittest.TextTestRunner(verbosity=0, stream=open(os.devnull, "w"))
 

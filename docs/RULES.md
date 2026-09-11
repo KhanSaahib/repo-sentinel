@@ -365,13 +365,12 @@ care which tool describes them -- a security group admitting `0.0.0.0/0` to
 port 22 is the same security group in HCL or in YAML -- and a repository using
 both should not have to choose which half gets audited.
 
-One limitation worth stating, because the output cannot show it: **JSON
-templates are not read.** The YAML reader keeps flow collections as text, and a
-JSON template is flow collections all the way down, so it parses to nothing and
-reports nothing. YAML templates, which is what people write by hand, are read
-in full. Intrinsic functions come through as text, which is the behaviour worth
-having: `CidrIp: !Ref AllowedRange` is decided at deploy time, so no rule draws
-a conclusion from it.
+Both spellings are read. YAML templates go through the YAML reader, JSON ones
+through a small JSON reader that keeps line numbers, and both produce the same
+nodes -- so the rules never learn which they are looking at. Intrinsic
+functions come through as text, which is the behaviour worth having: `CidrIp:
+!Ref AllowedRange` is decided at deploy time, so no rule draws a conclusion
+from it.
 
 ## Kubernetes
 
