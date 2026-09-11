@@ -9,6 +9,8 @@ Four formats, for four readers:
   annotations on the pull request that introduced the line.
 * **markdown**, for a comment posted onto the pull request itself, where the
   people arguing about the change are already looking.
+* **github**, the workflow-command form, which makes findings appear as
+  annotations on the diff without needing the permission SARIF upload does.
 
 Formatting lives here rather than in the CLI so that the CLI is only argument
 handling, and so that a new format is a function rather than a branch inside a
@@ -171,6 +173,57 @@ def format_markdown(
 
     if notes:
         lines.extend(["", *(f"_{note}_" for note in notes)])
+    return "\n".join(lines)
+
+
+#: GitHub's annotation levels. Criticals and highs both have to stop a review.
+_ANNOTATION_LEVELS = {
+    Severity.CRITICAL: "error",
+    Severity.HIGH: "error",
+    Severity.MEDIUM: "warning",
+    Severity.LOW: "notice",
+}
+
+#: Characters GitHub's workflow command parser reads as structure.
+_ANNOTATION_ESCAPES = (("%", "%25"), ("\r", "%0D"), ("\n", "%0A"), (":", "%3A"), (",", "%2C"))
+
+
+def _annotation_escape(text: str, *, in_property: bool) -> str:
+    """Escape a value for a workflow command, which is a line-oriented format."""
+    for character, replacement in _ANNOTATION_ESCAPES:
+        if character in (":", ",") and not in_property:
+            continue
+        text = text.replace(character, replacement)
+    return text
+
+
+def format_github(findings: Sequence[Finding], *, notes: Sequence[str] = ()) -> str:
+    """Workflow commands, so findings land on the pull request's diff.
+
+    SARIF is the better destination, but uploading it needs
+    ``security-events: write``, which a workflow triggered by a fork's pull
+    request does not have. Annotations need no permission at all: they are
+    lines on stdout that the runner interprets. Same findings, worse home, far
+    fewer prerequisites.
+    """
+    lines = []
+    for finding in findings:
+        level = _ANNOTATION_LEVELS[finding.severity]
+        title = _annotation_escape(
+            f"{finding.rule_id} {finding.severity.value}", in_property=True
+        )
+        location = (
+            f"file={_annotation_escape(finding.path, in_property=True)},"
+            f"line={max(finding.line, 1)},title={title}"
+        )
+        message = finding.title
+        if finding.remediation:
+            message = f"{message} — {finding.remediation}"
+        lines.append(f"::{level} {location}::{_annotation_escape(message, in_property=False)}")
+
+    lines.extend(f"::notice::{_annotation_escape(note, in_property=False)}" for note in notes)
+    if not findings:
+        lines.append(f"::notice::{_CLEAN}")
     return "\n".join(lines)
 
 

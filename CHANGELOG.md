@@ -72,6 +72,9 @@ repository the tool can read at all: it grew from two file formats to six.
   keystore, an `.npmrc` or `.env` that exists to hold a credential. The walk now
   reports every path it reaches, readable or not, which closes a blind spot:
   binary key material was being skipped before any rule saw it.
+- **`--format github`**, workflow commands that become annotations on the pull
+  request diff. SARIF needs `security-events: write`, which a fork's pull
+  request does not have; annotations need no permission at all.
 - **`--format markdown`**, a table meant to be posted as a pull request comment,
   with fixes collapsed underneath once per rule and long reports truncated.
 - **`.repo-sentinel.json`**, a project config file supplying defaults for the

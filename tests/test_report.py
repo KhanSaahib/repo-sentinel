@@ -136,6 +136,46 @@ class TestMarkdown(unittest.TestCase):
         self.assertIn("_3 accepted._", report.format_markdown([CRITICAL], notes=["3 accepted."]))
 
 
+class TestGitHubAnnotations(unittest.TestCase):
+    def test_one_workflow_command_per_finding(self):
+        lines = report.format_github([CRITICAL, GUESS]).splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(lines[0].startswith("::error file=terraform/main.tf,line=14,"))
+        self.assertTrue(lines[1].startswith("::error file=app.py,line=2,"))
+
+    def test_severity_maps_to_an_annotation_level(self):
+        levels = [
+            report.format_github([Finding("R", severity, "t", "a.py", 1)]).split(" ")[0]
+            for severity in (Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW)
+        ]
+        self.assertEqual(levels, ["::error", "::error", "::warning", "::notice"])
+
+    def test_the_message_carries_the_fix(self):
+        self.assertIn("Deactivate the key in IAM.", report.format_github([CRITICAL]))
+
+    def test_structural_characters_are_escaped(self):
+        # A workflow command is line-oriented: a colon or a newline in the
+        # wrong place ends the annotation early and the rest becomes log noise.
+        awkward = Finding(
+            rule_id="WF003",
+            severity=Severity.CRITICAL,
+            title="Untrusted input in run: block",
+            path="a b,c.yml",
+            line=1,
+            remediation="Line one\nline two",
+        )
+        line = report.format_github([awkward])
+        self.assertEqual(len(line.splitlines()), 1)
+        self.assertIn("file=a b%2Cc.yml", line)
+        self.assertIn("%0A", line)
+
+    def test_a_clean_run_still_says_something(self):
+        self.assertIn("::notice::", report.format_github([]))
+
+    def test_notes_become_notices(self):
+        self.assertIn("::notice::3 accepted.", report.format_github([CRITICAL], notes=["3 accepted."]))
+
+
 class TestCatalogueOutput(unittest.TestCase):
     def test_text_lists_every_rule_under_its_category(self):
         text = report.format_rule_catalogue()

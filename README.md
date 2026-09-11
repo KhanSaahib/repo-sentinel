@@ -54,6 +54,7 @@ repo-sentinel init .                          # set a repository up
 repo-sentinel scan . --format json            # machine-readable output
 repo-sentinel scan . --format sarif --output results.sarif
 repo-sentinel scan . --format markdown         # a pull request comment
+repo-sentinel scan . --format github          # annotations on the diff
 repo-sentinel scan . --min-severity high      # only show what matters most
 repo-sentinel scan . --min-confidence high    # only show what it is sure of
 repo-sentinel scan . --fail-on critical       # relax the CI gate
@@ -277,6 +278,19 @@ The table carries what triage needs -- how bad, which rule, where -- and the
 fixes go underneath in a collapsed block, once per rule rather than once per
 finding. Long reports are truncated with a count: a comment that needs scrolling
 past four hundred rows is one nobody reads.
+
+### Annotations, without asking for a permission
+
+`--format sarif` needs `security-events: write`, which a workflow triggered by
+a fork's pull request does not have. `--format github` writes the same findings
+as workflow commands, which the runner turns into annotations on the diff and
+which need no permission at all:
+
+```yaml
+- run: repo-sentinel scan . --format github
+```
+
+Same findings, worse home, far fewer prerequisites.
 
 ## Reporting to the GitHub Security tab
 

@@ -247,6 +247,14 @@ class TestMarkdownOutput(unittest.TestCase):
         self.assertIn("| --- |", output)
 
 
+class TestGitHubOutput(unittest.TestCase):
+    def test_emits_annotations_the_runner_understands(self):
+        with sample_repo() as root:
+            code, output = run(["scan", root, "--format", "github"])
+        self.assertEqual(code, cli.EXIT_FINDINGS)
+        self.assertTrue(any(line.startswith("::error ") for line in output.splitlines()))
+
+
 class TestConfidenceFilter(unittest.TestCase):
     def test_min_confidence_hides_the_heuristics(self):
         with tempfile.TemporaryDirectory() as root:
