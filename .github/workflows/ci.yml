@@ -62,6 +62,30 @@ jobs:
       - name: Measure line coverage
         run: python tools/coverage.py --show-missing
 
+  types:
+    name: type check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.13"
+
+      # mypy is the one tool here that is not standard library. It runs in CI
+      # rather than being required of a contributor, so the zero-install
+      # promise still holds for anyone working offline.
+      - name: Install mypy
+        run: python -m pip install --quiet "mypy==1.14.1"
+
+      - name: Check types
+        run: mypy --python-version 3.9 --ignore-missing-imports src/repo_sentinel
+
   self-scan:
     name: scan own source
     runs-on: ubuntu-latest
