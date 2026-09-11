@@ -212,4 +212,8 @@ def _read_text(path: str, max_bytes: int) -> str | None:
         return None
     if is_probably_binary(raw[:8192]):
         return None
-    return raw.decode("utf-8", errors="replace")
+    # utf-8-sig rather than utf-8: an editor on Windows writes a byte-order
+    # mark, and a leading \ufeff makes the first key of a YAML document
+    # something no rule is looking for -- which is a file silently unscanned
+    # rather than a file reported clean.
+    return raw.decode("utf-8-sig", errors="replace")

@@ -45,6 +45,22 @@ class TestWalk(unittest.TestCase):
         self.assertEqual([path for path, _ in discovery.iter_files(root)], ["app.py"])
 
 
+class TestEncodings(unittest.TestCase):
+    def test_a_byte_order_mark_is_not_part_of_the_first_line(self):
+        # An editor on Windows writes one, and a leading \ufeff makes the
+        # first key of a YAML document something no rule is looking for --
+        # which is a file silently unscanned rather than a file reported clean.
+        root = tree({"pod.yaml": "\ufeffapiVersion: v1\n".encode("utf-8")})
+        entry = next(iter(discovery.walk(root)))
+        self.assertTrue(entry.text.startswith("apiVersion"))
+
+    def test_undecodable_bytes_do_not_stop_a_scan(self):
+        root = tree({"mixed.txt": b"caf\xe9 latte\n"})
+        entry = next(iter(discovery.walk(root)))
+        self.assertTrue(entry.readable)
+        self.assertIn("caf", entry.text)
+
+
 class TestReadListed(unittest.TestCase):
     def paths(self, root, listing, **kwargs):
         return [path for path, _ in discovery.read_listed(root, listing, **kwargs)]

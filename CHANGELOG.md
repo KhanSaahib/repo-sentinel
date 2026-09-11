@@ -172,6 +172,10 @@ repository the tool can read at all: it grew from two file formats to six.
   Docker has no inline comments, so the marker became part of the image
   reference and the rule found nothing to parse: suppression by accident rather
   than by decision.
+- **A byte-order mark made a file invisible.** Editors on Windows write one,
+  and a leading `\ufeff` turns `apiVersion` into a key no rule is looking for:
+  the manifest was reported clean rather than reported unscanned. Files are
+  decoded as `utf-8-sig` now.
 - **The YAML sequence parser was quadratic.** Parsing `- key: value` rebuilt the
   remaining token list for every item, so a 40,000-line rules file took minutes:
   scanning the Prometheus repository did not finish in five. It now takes 13
