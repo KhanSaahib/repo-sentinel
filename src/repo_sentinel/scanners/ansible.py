@@ -91,11 +91,11 @@ def _tasks(document: "yamlish.Node") -> "Iterator[yamlish.Node]":
     for entry in document.entries():
         if not entry.is_map:
             continue
-        sections = [
-            entry.get(section)
-            for section in _TASK_SECTIONS
-            if entry.get(section) is not None
-        ]
+        sections = []
+        for name in _TASK_SECTIONS:
+            section = entry.get(name)
+            if section is not None:
+                sections.append(section)
         if not sections:
             yield entry  # a task file: the entry is the task
             continue
