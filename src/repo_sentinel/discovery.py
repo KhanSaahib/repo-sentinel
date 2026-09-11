@@ -95,8 +95,11 @@ def walk(
     """Yield an :class:`Entry` for every file under ``root`` worth considering.
 
     Paths are yielded with forward slashes so reports read the same on every
-    platform. Unreadable files are skipped rather than raising: a scanner that
-    dies on one permission error is useless in CI.
+    platform. A file that cannot be read as text -- a binary, something over
+    the size limit, something the process has no permission for -- is yielded
+    with no text rather than raising or vanishing: a scanner that dies on one
+    permission error is useless in CI, and a file that silently disappears from
+    the walk is one the name rules never get to see.
 
     With ``use_gitignore`` the walk honours every ``.gitignore`` in the tree,
     each governing its own subtree. Set it to ``False`` to audit what git was
@@ -172,6 +175,9 @@ def read_listed(
         if not candidate or candidate.startswith("#"):
             continue
         absolute = candidate if os.path.isabs(candidate) else os.path.join(root, candidate)
+        # Normalised before the duplicate check: "a.py" and "./a.py" are the
+        # same file, and a diff list produced by two tools can contain both.
+        absolute = os.path.normpath(absolute)
         if absolute in seen or not os.path.isfile(absolute):
             continue
         seen.add(absolute)

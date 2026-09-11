@@ -99,7 +99,12 @@ answer to "what do I write here" should not depend on where here is.
 
 ```bash
 PYTHONPATH=src python -m unittest discover -s tests -v
+python3 tools/coverage.py --show-missing
 ```
+
+Coverage has a floor, enforced in CI. Raise it when the suite earns it; never
+lower it to make a build pass, which is the one thing a coverage gate exists to
+prevent.
 
 No test may contain a credential that was ever issued. Fake ones are assembled
 from pieces at import time, for the reason `tests/fixtures.py` explains: a

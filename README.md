@@ -566,8 +566,18 @@ forgets.
 PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
-CI runs the suite on Python 3.9, 3.11 and 3.13, scans this repository with the
-tool itself, and publishes the result to the Security tab.
+CI runs the suite on Python 3.9, 3.11 and 3.13, holds a line-coverage floor,
+scans this repository with the tool itself, and publishes the result to the
+Security tab.
+
+```bash
+python3 tools/coverage.py --show-missing
+```
+
+The coverage tool is standard library only, like everything else here. Writing
+one is a strange thing to do when a good one exists; the reason is that the
+promise "this pulls nothing into your environment" should hold for the tests
+too, so a contributor with no network can still check the floor.
 
 The test suite includes a corpus that trips **every** rule in the catalogue, and
 asserts in three directions: no scanner may emit a rule the catalogue does not

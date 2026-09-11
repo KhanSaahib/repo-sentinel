@@ -114,7 +114,8 @@ outcome than a feature nobody wanted.
       Solved by splitting the Kubernetes rules into those that read a value the
       chart contains, which run, and those that reason from a value's absence,
       which cannot and do not
-- [ ] Coverage measurement in CI with a floor
+- [x] Coverage measurement in CI with a floor, measured by a standard
+      library tool so the suite needs nothing installed either
 - [x] Property-based tests for the entropy and redaction functions, plus seeded
       fuzzing of both hand-written parsers and a time bound on hostile input
 - [ ] Benchmark against a large repository; the walk should stay under a second
