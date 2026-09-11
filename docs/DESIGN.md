@@ -86,13 +86,17 @@ Two consequences worth knowing before touching a rule:
 If you find yourself lowering a severity because a rule is unreliable, lower
 the confidence instead. That is what it is for.
 
-## Four CI systems, one bug
+## Five CI systems, one bug
 
 GitHub expands `${{ github.event.issue.title }}`, GitLab expands
 `$CI_COMMIT_TITLE`, Azure expands `$(Build.SourceVersionMessage)`, CircleCI
-expands `$CIRCLE_BRANCH` -- each into the command line, before the shell parses
-it, each from a value an outside contributor writes. The syntax differs; the
-bug does not.
+expands `$CIRCLE_BRANCH`, and Groovy expands `${env.BRANCH_NAME}` -- each into
+the command line, before the shell parses it, each from a value an outside
+contributor writes. The syntax differs; the bug does not.
+
+Jenkins is the one that does not share the machinery, because its pipelines are
+Groovy rather than YAML, and it earns its own rule anyway: there the *quoting*
+decides whether the interpolation happens at all.
 
 `scanners/ci.py` holds the parts that do not depend on syntax: finding the
 shell lines in a step, and the list of fields that cannot carry an injection.

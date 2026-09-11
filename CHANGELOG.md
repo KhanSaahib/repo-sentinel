@@ -75,6 +75,11 @@ repository the tool can read at all: it grew from two file formats to six.
   changed to gain this.
 - **Composer** joins the dependency manifests, with its own install-time
   lifecycle scripts.
+- **Jenkins** (JK001–JK003): the shell steps of a Jenkinsfile, as far as is
+  honest without parsing Groovy. JK001 turns on Groovy's quoting, which decides
+  whether an interpolation is a bug at all: `sh "echo ${env.BRANCH_NAME}"` is
+  substituted by Groovy before the shell sees it, and `sh 'echo $BRANCH_NAME'`
+  is expanded by the shell and never parsed as code.
 - **CircleCI** (CC001–CC004): the same injection a fourth time, plus orbs
   pinned to `@volatile` or `@dev:`, which the registry is documented to move.
   What the four CI scanners share now lives in one module: finding the shell

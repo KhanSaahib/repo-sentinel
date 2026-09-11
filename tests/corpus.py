@@ -333,6 +333,21 @@ jobs:
       - run: curl -sSL https://get.example.invalid/i.sh | sh
 """
 
+JENKINSFILE = """pipeline {
+  agent {
+    docker { image 'node:latest' }
+  }
+  stages {
+    stage('Build') {
+      steps {
+        sh "echo Building ${env.BRANCH_NAME}"
+        sh 'curl -sSL https://get.example.invalid/i.sh | sh'
+      }
+    }
+  }
+}
+"""
+
 #: ``(path, text)`` pairs, in the shape :func:`iter_files` yields.
 FILES = (
     ("src/config.py", SECRETS_FILE),
@@ -351,6 +366,7 @@ FILES = (
     ("playbooks/web.yml", PLAYBOOK_FILE),
     ("azure-pipelines.yml", AZURE_PIPELINE_FILE),
     (".circleci/config.yml", CIRCLECI_FILE),
+    ("Jenkinsfile", JENKINSFILE),
 )
 
 #: ``(path, text)`` pairs, in the shape the walk reports, with None for the

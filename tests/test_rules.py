@@ -15,6 +15,7 @@ from repo_sentinel.scanners import (
     dockerfiles,
     filenames,
     gitlab,
+    jenkins,
     kubernetes,
     providers,
     secrets,
@@ -36,6 +37,7 @@ CONTENT_SCANNERS = (
     dependencies,
     dockerfiles,
     gitlab,
+    jenkins,
     kubernetes,
     secrets,
     terraform,
@@ -147,6 +149,8 @@ class TestCatalogue(unittest.TestCase):
             101: "One hundred and one", 102: "One hundred and two",
             103: "One hundred and three", 104: "One hundred and four",
             105: "One hundred and five", 106: "One hundred and six",
+            107: "One hundred and seven", 108: "One hundred and eight",
+            109: "One hundred and nine", 110: "One hundred and ten",
         }
         spelled = words.get(len(rules.RULES))
         self.assertIsNotNone(spelled, "extend the number words in this test")

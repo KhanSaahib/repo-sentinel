@@ -74,8 +74,8 @@ outcome than a feature nobody wanted.
 - [x] Azure Pipelines, which expands its variables into the shell exactly as
       the other two do
 - [x] CircleCI, including orbs pinned to a reference the registry moves
-- [ ] Jenkinsfiles. Groovy, which this tool has no business parsing; the honest
-      scope there is its shell steps and nothing else
+- [x] Jenkinsfiles, scoped to their shell steps, as promised. The quoting
+      distinction turned out to be the most interesting rule in the family
 
 - [x] Dockerfile checks: running as root, `curl | sh`, unpinned base images,
       secrets in `ARG`/`ENV`, `ADD` from a URL, disabled TLS verification

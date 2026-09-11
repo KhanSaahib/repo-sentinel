@@ -19,6 +19,7 @@ from .scanners import (
     dockerfiles,
     filenames,
     gitlab,
+    jenkins,
     kubernetes,
     secrets,
     terraform,
@@ -90,6 +91,7 @@ def scan(
         ansible,
         azure,
         circleci,
+        jenkins,
     ):
         found += scanner.scan_files(files, honour_markers=honour_markers)
 

