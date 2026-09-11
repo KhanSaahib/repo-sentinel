@@ -27,8 +27,7 @@ import binascii
 import dataclasses
 import posixpath
 import re
-from collections.abc import Callable, Iterable, Iterator
-from typing import Optional, Union
+from collections.abc import Iterable, Iterator
 
 from .. import suppression, wellknown
 from ..findings import Confidence, Finding, Severity, redact
