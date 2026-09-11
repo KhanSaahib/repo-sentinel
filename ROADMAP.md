@@ -70,6 +70,7 @@ outcome than a feature nobody wanted.
 - [ ] CloudFormation in JSON, which the YAML reader cannot see: a JSON template
       is flow collections all the way down. Needs a JSON parse that keeps line
       numbers, which `json` does not offer
+- [x] Ansible playbooks and task files
 - [ ] CircleCI and Jenkinsfiles, the two remaining CI systems people actually
       have. A Jenkinsfile is Groovy, which this tool has no business parsing;
       the honest scope there is its shell steps and nothing else

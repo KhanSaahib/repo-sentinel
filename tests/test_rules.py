@@ -6,6 +6,7 @@ import unittest
 import corpus
 from repo_sentinel import rules
 from repo_sentinel.scanners import (
+    ansible,
     cloudformation,
     compose,
     dependencies,
@@ -30,6 +31,7 @@ def emitted_rule_ids():
     findings += gitlab.scan_files(corpus.FILES)
     findings += cloudformation.scan_files(corpus.FILES)
     findings += dependencies.scan_files(corpus.FILES)
+    findings += ansible.scan_files(corpus.FILES)
     return {finding.rule_id for finding in findings}
 
 
@@ -74,6 +76,7 @@ class TestCatalogue(unittest.TestCase):
         findings += gitlab.scan_files(corpus.FILES)
         findings += cloudformation.scan_files(corpus.FILES)
         findings += dependencies.scan_files(corpus.FILES)
+        findings += ansible.scan_files(corpus.FILES)
         findings += filenames.scan_paths(corpus.PATHS)
         for finding in findings:
             with self.subTest(rule=finding.rule_id):

@@ -151,7 +151,7 @@ repo-sentinel scan . --no-gitignore
 
 ## What it checks
 
-Ninety-three rules across ten families. [docs/RULES.md](docs/RULES.md) is the
+Ninety-six rules across eleven families. [docs/RULES.md](docs/RULES.md) is the
 full list, with a paragraph on each family explaining what it is looking for
 and why; `repo-sentinel rules` prints the same catalogue from the tool.
 
@@ -165,6 +165,7 @@ and why; `repo-sentinel rules` prints the same catalogue from the tool.
 | [Dockerfiles](docs/RULES.md#dockerfiles) | DK001–DK006 | Base images, root, pipe-to-shell, layer secrets |
 | [Docker Compose](docs/RULES.md#docker-compose) | DC001–DC006 | Privilege, host mounts, ports on every interface |
 | [Terraform](docs/RULES.md#terraform) | TF001–TF007 | Open ingress, public storage, wildcard policies |
+| [Ansible](docs/RULES.md#ansible) | AN001–AN003 | Decisions applied to every host at once |
 | [CloudFormation](docs/RULES.md#cloudformation) | CF001–CF005 | The same, in AWS's other vocabulary |
 | [Kubernetes](docs/RULES.md#kubernetes) | K8S001–K8S010 | Container escape routes, secrets in manifests |
 

@@ -326,6 +326,30 @@ variable, a `for_each` over a map of rules, a module whose defaults live
 somewhere else: all invisible. A clean report means the literal, obvious form
 of each mistake is absent.
 
+## Ansible
+
+| Rule | Finds | Severity |
+| --- | --- | --- |
+| AN001 | Task skips certificate verification | high |
+| AN002 | Task sets a world-writable file mode | medium |
+| AN003 | Task fetches over plain HTTP | medium |
+
+Ansible is where a decision made once is applied to every host, which cuts both
+ways: a task that skips certificate verification skips it fleet-wide, and a
+mode of `0777` is world-writable on every machine the play touches.
+
+Three rules, narrow on purpose. Ansible's idioms make most "insecure" patterns
+ambiguous -- `become: yes` is how the tool works, and templating a variable
+into a shell command is usually fine because the variable came from the
+inventory rather than from a stranger. What is left is the small set of things
+that are wrong wherever they appear.
+
+Playbooks are recognised by shape, since Ansible imposes no naming convention
+worth trusting: a list of mappings carrying plays or tasks, with a vocabulary
+check, because a list of mappings is also what a Compose override, a Kustomize
+patch and half of CI configuration look like. Findings name the task they
+belong to, including inside a `block`.
+
 ## CloudFormation
 
 | Rule | Finds | Severity |

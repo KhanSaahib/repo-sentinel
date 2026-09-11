@@ -283,6 +283,23 @@ PACKAGE_JSON = """{
 
 NPMRC_FILE = "registry=http://registry.example.invalid/\nstrict-ssl=false\n"
 
+PLAYBOOK_FILE = """---
+- name: Configure web servers
+  hosts: web
+  tasks:
+    - name: Install the vendor agent
+      get_url:
+        url: http://downloads.example.invalid/agent.tar.gz
+        dest: /tmp/agent.tar.gz
+        validate_certs: no
+
+    - name: Drop a helper script
+      copy:
+        src: helper.sh
+        dest: /usr/local/bin/helper
+        mode: "0777"
+"""
+
 #: ``(path, text)`` pairs, in the shape :func:`iter_files` yields.
 FILES = (
     ("src/config.py", SECRETS_FILE),
@@ -298,6 +315,7 @@ FILES = (
     ("infra/stack.yaml", TEMPLATE_FILE),
     ("package.json", PACKAGE_JSON),
     ("web/.npmrc", NPMRC_FILE),
+    ("playbooks/web.yml", PLAYBOOK_FILE),
 )
 
 #: ``(path, text)`` pairs, in the shape the walk reports, with None for the

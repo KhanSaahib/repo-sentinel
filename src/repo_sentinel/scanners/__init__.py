@@ -7,6 +7,7 @@ it is about have no text to read.
 
 from . import (
     allowlist,
+    ansible,
     cloudformation,
     compose,
     dependencies,
@@ -21,6 +22,7 @@ from . import (
 
 __all__ = [
     "allowlist",
+    "ansible",
     "cloudformation",
     "compose",
     "dependencies",

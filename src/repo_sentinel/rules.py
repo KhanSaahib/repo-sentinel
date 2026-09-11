@@ -38,7 +38,7 @@ class Rule:
         return _CATEGORIES[self.id[:3]]
 
 
-_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose", "FN0": "filenames", "GL0": "gitlab", "CF0": "cloudformation", "SC0": "dependencies"}
+_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose", "FN0": "filenames", "GL0": "gitlab", "CF0": "cloudformation", "SC0": "dependencies", "AN0": "ansible"}
 
 
 def _rules(*entries: tuple[str, str, str, Severity]) -> "dict[str, Rule]":
@@ -116,6 +116,9 @@ RULES: "dict[str, Rule]" = _rules(
     ("SC002", "install-script-executes-download", "Install-time script downloads code and runs it", Severity.HIGH),
     ("SC003", "unpinned-source-dependency", "Dependency comes from a source that can move", Severity.MEDIUM),
     ("SC004", "package-verification-disabled", "Package manager skips certificate verification", Severity.HIGH),
+    ("AN001", "ansible-verification-off", "Task skips certificate verification", Severity.HIGH),
+    ("AN002", "world-writable-mode", "Task sets a world-writable file mode", Severity.MEDIUM),
+    ("AN003", "ansible-plaintext-fetch", "Task fetches over plain HTTP", Severity.MEDIUM),
     ("CF001", "cfn-open-ingress", "Security group admits 0.0.0.0/0", Severity.CRITICAL),
     ("CF002", "cfn-public-bucket", "Bucket granted to the public", Severity.HIGH),
     ("CF003", "cfn-encryption-disabled", "Encryption at rest explicitly switched off", Severity.MEDIUM),

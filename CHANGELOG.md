@@ -61,6 +61,11 @@ repository the tool can read at all: it grew from two file formats to six.
   `package.json`, `.npmrc`, `requirements*.txt`, `pip.conf`, `Gemfile` and
   `pom.xml` -- the question of where the rest of the build comes from, which
   every other family leaves unasked.
+- **Ansible** (AN001–AN003): certificate verification switched off, a
+  world-writable file mode, a fetch over plain HTTP. Narrow on purpose, because
+  Ansible's idioms make most "insecure" patterns ambiguous and these three are
+  wrong wherever they appear. Playbooks are recognised by vocabulary, and
+  findings name the task they belong to, including inside a `block`.
 - **CloudFormation** (CF001–CF005): open security groups, public buckets,
   encryption switched off, wildcard policies, public databases. The Terraform
   rules in AWS's other vocabulary, since the mistakes do not care which tool
