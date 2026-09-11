@@ -272,6 +272,9 @@ def scan_compose(
     if marks.whole_file:
         return []
 
+    if "services" not in text:
+        return []
+
     findings: "list[Finding]" = []
     for document in yamlish.parse(text):
         if not is_compose(document):

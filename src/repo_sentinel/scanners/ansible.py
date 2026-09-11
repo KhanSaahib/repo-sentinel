@@ -230,6 +230,11 @@ def scan_playbook(
     if marks.whole_file:
         return []
 
+    # Every playbook and task file is a list, so a document with no list item
+    # in it cannot be one. The check costs nothing and skips the parse.
+    if "\n-" not in text and not text.lstrip().startswith("-"):
+        return []
+
     source = yamlish.strip_templates(text) if "{{" in text else text
     findings: "list[Finding]" = []
     for document in yamlish.parse(source):

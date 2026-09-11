@@ -481,6 +481,13 @@ def scan_manifest(
         return []
 
     active: "tuple[_Rule, ...]"
+    # Nothing without an apiVersion can be a manifest, and parsing a file to
+    # learn that is most of what this scanner used to spend its time on. Five
+    # scanners read the same YAML files; each now refuses in a substring test
+    # what it used to refuse after a parse.
+    if "apiVersion" not in text:
+        return []
+
     if jsonish.looks_like_json(text):
         # `kubectl get -o json` and anything that generates manifests. Same
         # rules, same nodes, a different reader.

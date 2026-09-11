@@ -87,7 +87,7 @@ def scan(
     ):
         found += scanner.scan_files(files, honour_markers=honour_markers)
 
-    marked = [len(suppression.parse(text).marked_lines) for _, text in files]
+    marked = [_count_markers(text) for _, text in files]
 
     return ScanReport(
         findings=sorted(collapse(found), key=lambda finding: finding.sort_key),
@@ -96,6 +96,19 @@ def scan(
         suppressed_lines=sum(marked),
         suppressed_files=sum(1 for count in marked if count),
     )
+
+
+def _count_markers(text: str) -> int:
+    """How many lines carry a suppression directive.
+
+    The directives themselves, not the lines a block covers -- that is what
+    the number in the report claims, and a count that means something else is
+    worse than no count. The substring test in front skips the whole per-line
+    pass for the files that have no marker at all, which is almost all of them.
+    """
+    if "repo-sentinel" not in text:
+        return 0
+    return sum(1 for line in text.splitlines() if suppression.marker(line) is not None)
 
 
 def _entries_for(

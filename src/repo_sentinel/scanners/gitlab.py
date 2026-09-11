@@ -228,6 +228,11 @@ def scan_pipeline(
     if marks.whole_file:
         return []
 
+    # A pipeline is either named like one or has jobs with scripts in it.
+    # Anything else is somebody else's YAML.
+    if not is_named_pipeline(path) and "script:" not in text:
+        return []
+
     source = yamlish.strip_templates(text) if yamlish.is_templated(text) else text
     findings: "list[Finding]" = []
     for document in yamlish.parse(source):

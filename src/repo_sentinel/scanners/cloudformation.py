@@ -267,6 +267,9 @@ def scan_template(
     if marks.whole_file:
         return []
 
+    if "Resources" not in text:
+        return []
+
     documents = jsonish.parse_documents(text) if jsonish.looks_like_json(text) else yamlish.parse(text)
     findings: "list[Finding]" = []
     for document in documents:
