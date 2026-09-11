@@ -177,10 +177,14 @@ inside that trust boundary.
 WF002 is asked per job rather than per file. A job that declares its own
 `permissions:` block is already explicit, and warning about it because the file
 has no top-level block is the kind of finding that teaches people to skip the
-output. WF007 is asked per step, and only for actions outside the `actions/` and
-`github/` namespaces: an action can read every input it is given, so handing one
-a secret extends that secret's blast radius to that action's supply chain. It is
-often necessary and often fine — hence medium — but it should be a decision.
+output. WF007 is asked per step, for actions outside the `actions/` and `github/`
+namespaces **that are not pinned to a commit SHA**. An action reads every input
+it is given, so handing one a secret extends that secret's blast radius to the
+action's supply chain — which is often necessary, since pushing an image needs a
+registry password. What the rule actually asks is whether the recipient can
+change under you: a commit SHA is code somebody chose and can review, a tag is
+whatever its owner moves it to tomorrow. WF001 says the tag is mutable; WF007
+says what is being trusted to it.
 
 WF009 is scoped on purpose. `actions/checkout` leaves the job's token in the
 working copy unless told otherwise, which is tolerable on a workflow that only

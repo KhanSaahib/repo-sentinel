@@ -389,12 +389,18 @@ def _check_runners(path: str, lines: list[str]) -> Iterator[Finding]:
 
 
 def _check_secret_handoff(path: str, jobs: list[Job]) -> Iterator[Finding]:
-    """WF007: a secret passed as an input to an action nobody here maintains.
+    """WF007: a secret passed to a third-party action that is not pinned.
 
     An action's inputs are visible to the action's own code, so handing one a
-    secret extends the blast radius of that action's supply chain to that
-    secret. It is often necessary and often fine -- hence medium severity --
-    but it should be a decision rather than an accident.
+    secret extends that secret's blast radius to the action's supply chain.
+    That is often necessary -- pushing an image needs a registry password --
+    so what the rule actually asks is whether the recipient can change under
+    you. An action pinned to a commit SHA is code somebody chose and can
+    review; an action pinned to a tag is whatever its owner moves the tag to
+    tomorrow, and handing that a secret is the combination worth reporting.
+
+    Both halves matter: WF001 already says the tag is mutable, and this says
+    what is being trusted to it.
     """
     for job in jobs:
         for step in _iter_steps(job.body):
@@ -410,6 +416,9 @@ def _check_secret_handoff(path: str, jobs: list[Job]) -> Iterator[Finding]:
                 continue
             if _action_owner(uses) in _FIRST_PARTY_OWNERS:
                 continue
+            _, _, version = uses.partition("@")
+            if _SHA_PIN.match(version):
+                continue
             for number, text in step:
                 match = _SECRET_REFERENCE.search(text)
                 if match is None:
@@ -417,14 +426,18 @@ def _check_secret_handoff(path: str, jobs: list[Job]) -> Iterator[Finding]:
                 yield Finding(
                     rule_id="WF007",
                     severity=Severity.MEDIUM,
-                    title=f"Secret {match.group('name')!r} is passed to third-party action {uses!r}",
+                    title=(
+                        f"Secret {match.group('name')!r} is passed to unpinned "
+                        f"third-party action {uses!r}"
+                    ),
                     path=path,
                     line=number,
                     evidence=text.strip(),
                     remediation=(
-                        "The action can read every input it is given. Pin it to a "
-                        "commit SHA, review what it does with the value, and prefer "
-                        "a scoped token over a long-lived secret."
+                        "The action reads every input it is given, and its owner "
+                        "can move this tag to new code whenever they like. Pin it "
+                        "to a commit SHA, review what that commit does with the "
+                        "value, and prefer a scoped token over a long-lived secret."
                     ),
                     confidence=Confidence.MEDIUM,
                 )

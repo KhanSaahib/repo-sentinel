@@ -290,6 +290,16 @@ class TestSecretHandoff(unittest.TestCase):
         handoff = next(f for f in findings if f.rule_id == "WF007")
         self.assertIn("DEPLOY_TOKEN", handoff.title)
 
+    def test_a_pinned_action_is_code_somebody_chose(self):
+        # The pin is the review. An action at a commit SHA cannot become
+        # something else tomorrow, which is the risk this rule is about.
+        text = workflow_with_jobs(
+            "  build:\n    steps:\n"
+            f"      - uses: some-vendor/deploy@{SHA}\n"
+            "        with:\n          token: ${{ secrets.DEPLOY_TOKEN }}\n"
+        )
+        self.assertNotIn("WF007", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
     def test_first_party_actions_are_not_third_parties(self):
         text = workflow_with_jobs(
             "  build:\n    steps:\n"
