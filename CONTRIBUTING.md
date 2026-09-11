@@ -131,6 +131,11 @@ Coverage has a floor, enforced in CI. Raise it when the suite earns it; never
 lower it to make a build pass, which is the one thing a coverage gate exists to
 prevent.
 
+CI also runs mypy. It is the only tool here that is not standard library, so it
+is not asked of you locally -- but the build will tell you, and the errors it
+finds are usually worth having. Its first run found a port-range helper doing
+arithmetic on two values it had just admitted might be None.
+
 No test may contain a credential that was ever issued. Fake ones are assembled
 from pieces at import time, for the reason `tests/fixtures.py` explains: a
 well-formed token written as a single literal is rejected by GitHub's push

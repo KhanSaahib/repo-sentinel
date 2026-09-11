@@ -174,6 +174,19 @@ def _iter_steps(body: "Block") -> Iterator["Block"]:
         yield current
 
 
+def _step_action(step: "Block") -> "str | None":
+    """The action a step uses, or None for a step that runs a command.
+
+    Written once because two rules ask it, and because the obvious inline
+    version runs the pattern twice per line -- once to test and once to read.
+    """
+    for _, text in step:
+        match = _USES.match(text)
+        if match is not None:
+            return match.group("ref")
+    return None
+
+
 def _iter_run_lines(lines: list[str]) -> Iterator[tuple[int, str]]:
     """Yield ``(line_number, text)`` for every line inside a ``run:`` block."""
     index = 0
@@ -404,14 +417,7 @@ def _check_secret_handoff(path: str, jobs: list[Job]) -> Iterator[Finding]:
     """
     for job in jobs:
         for step in _iter_steps(job.body):
-            uses = next(
-                (
-                    _USES.match(text).group("ref")  # type: ignore[union-attr]
-                    for _, text in step
-                    if _USES.match(text)
-                ),
-                None,
-            )
+            uses = _step_action(step)
             if uses is None or _LOCAL_ACTION.match(uses):
                 continue
             if _action_owner(uses) in _FIRST_PARTY_OWNERS:
@@ -467,14 +473,7 @@ def _check_persisted_credentials(path: str, lines: list[str], jobs: list[Job]) -
 
     for job in jobs:
         for step in _iter_steps(job.body):
-            uses = next(
-                (
-                    _USES.match(text).group("ref")  # type: ignore[union-attr]
-                    for _, text in step
-                    if _USES.match(text)
-                ),
-                None,
-            )
+            uses = _step_action(step)
             if uses is None or not uses.startswith("actions/checkout"):
                 continue
             setting = next(
