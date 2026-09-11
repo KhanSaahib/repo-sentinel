@@ -61,6 +61,26 @@ class TestScan(unittest.TestCase):
         self.assertEqual(engine.scan_path(root), engine.scan(root).findings)
 
 
+class TestScale(unittest.TestCase):
+    """A guard against accidental quadratic behaviour in the walk."""
+
+    def test_a_thousand_files_stay_well_under_a_second_each(self):
+        import time
+
+        files = {
+            f"pkg{index // 50}/module{index}.py": "def f():\n    return 1\n" * 10
+            for index in range(1000)
+        }
+        root = repository(files)
+        started = time.monotonic()
+        result = engine.scan(root)
+        elapsed = time.monotonic() - started
+        self.assertEqual(result.file_count, 1000)
+        # Generous by two orders of magnitude: this is here to catch an O(n^2)
+        # walk or a per-file re-read, not to police the constant factor.
+        self.assertLess(elapsed, 20.0, f"1000 files took {elapsed:.1f}s")
+
+
 class TestCollapse(unittest.TestCase):
     """Scanners overlap on purpose; reports should not."""
 
