@@ -267,6 +267,31 @@ calcifying. It is a list of debts, not a list of exemptions.
 An unreadable or corrupt baseline is an error, not an empty baseline. Failing
 open would mean a truncated file silently accepts everything.
 
+## The JSON output
+
+`--format json` is the one to build on. Each finding carries:
+
+```json
+{
+  "rule_id": "SEC001",
+  "severity": "critical",
+  "confidence": "high",
+  "title": "AWS access key id",
+  "path": "terraform/main.tf",
+  "line": 14,
+  "evidence": "AKIA************LM3D",
+  "remediation": "Deactivate the key in IAM, then rotate it. ...",
+  "fingerprint": "8f120d646369be74"
+}
+```
+
+The `fingerprint` is the same identity a baseline uses: a hash of the rule, the
+path and the already-redacted evidence, with no line number in it, so it
+survives reformatting and changes when the value does. Paths always use forward
+slashes, on every platform, so a report reads the same wherever it was
+produced. `repo-sentinel rules --format json` describes the rules themselves,
+including the CWE each one reports.
+
 ## Posting the result onto a pull request
 
 `--format markdown` writes a table meant to be pasted into a comment, where the
