@@ -458,15 +458,23 @@ RULES: tuple[ProviderRule, ...] = (
 #: example clears it, which is what keeps the threshold honest.
 CANDIDATE = re.compile(r"[A-Za-z0-9+/_=-]{14}|-----BEGIN|://[^\s/]*:[^\s/]*@")
 
-#: Every rule's hints, flattened. Checked as one pass before the per-rule loop,
-#: because the loop builds a generator per rule and that allocation costs more
-#: than the searching does: a line with no hint at all is the common case by a
-#: wide margin, and it should cost one pass rather than forty-five.
-ALL_HINTS = tuple({hint for rule in RULES for hint in rule.hints})
+#: Hint -> the rules that hint belongs to, so that finding a hint in a line
+#: selects the two or three patterns worth running rather than asking all
+#: forty-five whether they are interested. Several hints are common enough to
+#: appear on ordinary lines -- "://" and "1/" and "pat" -- and the difference
+#: between "some rule might match" and "these rules might match" is the
+#: difference between a hundred and thirty substring tests per line and sixty.
+_RULES_BY_HINT: "dict[str, tuple[int, ...]]" = {}
+for _index, _rule in enumerate(RULES):
+    for _hint in _rule.hints:
+        _RULES_BY_HINT[_hint] = _RULES_BY_HINT.get(_hint, ()) + (_index,)
+
+#: Every hint, for tests and for anything that wants to know what is looked for.
+ALL_HINTS = tuple(_RULES_BY_HINT)
 
 #: Rules with no literal to hint at, which therefore run on every candidate
 #: line. One shape in forty-five is worth that; a habit of it would not be.
-ALWAYS_RUN = tuple(rule for rule in RULES if not rule.hints)
+ALWAYS_RUN = tuple(index for index, rule in enumerate(RULES) if not rule.hints)
 
 
 def evidence_for(match: "re.Match[str]", rule: ProviderRule) -> str:
@@ -503,14 +511,19 @@ def findings_in(
     """
     if not CANDIDATE.search(line):
         return
-    if not (ALWAYS_RUN or any(hint in line for hint in ALL_HINTS)):
+
+    # The hints are why a large repository finishes scanning. Each is searched
+    # for once, and the ones present select the handful of patterns worth
+    # running; on an ordinary line that is none of them.
+    selected = set(ALWAYS_RUN)
+    for hint, indices in _RULES_BY_HINT.items():
+        if hint in line:
+            selected.update(indices)
+    if not selected:
         return
-    for rule in RULES:
-        # The hints are why a large repository finishes scanning: one
-        # substring search per rule, and nine candidate lines in ten carry
-        # none of them, so the patterns themselves are almost never run.
-        if rule.hints and not any(hint in line for hint in rule.hints):
-            continue
+
+    for index in sorted(selected):
+        rule = RULES[index]
         for match in rule.pattern.finditer(line):
             secret = match.group(rule.secret_group)
             matched_spans.append(match.span(rule.secret_group))
