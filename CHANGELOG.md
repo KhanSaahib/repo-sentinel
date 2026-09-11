@@ -48,6 +48,9 @@ repository the tool can read at all: it grew from two file formats to six.
   medium confidence drops to low in fixture trees and in documentation. The
   provider rules keep theirs everywhere. On the GitLab runner repository this
   takes `--min-confidence medium` from 70 findings to 27.
+- **FN004**: files that hold secrets as a byproduct rather than by purpose --
+  Terraform state (which records every value Terraform read, in plain text), a
+  state backup, a `.kubeconfig`, a shell or database client history.
 - **Dependency manifests** (SC001–SC004): a registry over plain HTTP,
   certificate verification switched off, a dependency on a branch somebody can
   move, and an install-time script that downloads code and runs it. Covers

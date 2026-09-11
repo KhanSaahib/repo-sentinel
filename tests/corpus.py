@@ -296,4 +296,5 @@ PATHS = (
     ("deploy/id_rsa", None),
     ("certs/server.pem", None),
     (".npmrc", "//registry.npmjs.org/:_authToken=" + _filler(36)),
+    ("infra/terraform.tfstate", '{"version": 4, "resources": []}'),
 )

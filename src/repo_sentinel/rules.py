@@ -127,6 +127,7 @@ RULES: "dict[str, Rule]" = _rules(
     ("FN001", "committed-key-file", "A file that is private key material by name", Severity.CRITICAL),
     ("FN002", "unreadable-key-candidate", "A key-shaped file nothing could read", Severity.MEDIUM),
     ("FN003", "committed-credential-file", "A file whose purpose is to hold a credential", Severity.MEDIUM),
+    ("FN004", "secret-bearing-byproduct", "A file that records secrets as a side effect", Severity.CRITICAL),
     ("DC006", "floating-compose-image", "Service image tag can point elsewhere tomorrow", Severity.LOW),
 )
 

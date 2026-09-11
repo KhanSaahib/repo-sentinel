@@ -85,6 +85,35 @@ class TestCredentialFiles(unittest.TestCase):
                 self.assertEqual(scan(name, self.SECRET), [])
 
 
+class TestByproducts(unittest.TestCase):
+    """Files that hold secrets as a side effect of what they are."""
+
+    def test_terraform_state_is_critical(self):
+        finding = scan("infra/terraform.tfstate", '{"version": 4}')[0]
+        self.assertEqual(finding.rule_id, "FN004")
+        self.assertEqual(finding.severity, Severity.CRITICAL)
+
+    def test_a_state_backup_counts_too(self):
+        self.assertIn("FN004", rule_ids(scan("terraform.tfstate.backup", "{}")))
+
+    def test_a_kubeconfig_by_suffix(self):
+        self.assertIn("FN004", rule_ids(scan("clusters/prod.kubeconfig", "apiVersion: v1\n")))
+
+    def test_shell_and_client_histories(self):
+        for name in (".bash_history", ".zsh_history", ".psql_history", ".mysql_history"):
+            with self.subTest(name=name):
+                finding = scan(name, "ls -la\n")[0]
+                self.assertEqual(finding.severity, Severity.MEDIUM)
+
+    def test_an_example_state_file_is_still_an_example(self):
+        self.assertEqual(scan("terraform.tfstate.example", "{}"), [])
+
+    def test_ordinary_files_are_not_byproducts(self):
+        for name in ("main.tf", "state.py", "history.md"):
+            with self.subTest(name=name):
+                self.assertEqual(scan(name, "x\n"), [])
+
+
 class TestScanPaths(unittest.TestCase):
     def test_aggregates_over_the_walk(self):
         findings = filenames.scan_paths(

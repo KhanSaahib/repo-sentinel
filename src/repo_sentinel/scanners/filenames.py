@@ -11,6 +11,13 @@ claims less than the others -- a name is evidence about a file, not proof of
 what is inside it -- and its confidence says so, except where the name is so
 specific that it is not really a guess.
 
+Four rules, and the fourth is about a different thing: files that are not
+credentials but end up holding them as a byproduct of what they are. A
+Terraform state file records every value Terraform read, generated passwords
+included, in plain text. A shell history records every password that was passed
+on a command line. Nobody writes a secret into either on purpose, which is
+exactly why nobody remembers they are there.
+
 Three rules keep it from becoming noise, all of the same shape: prefer contents
 to names wherever contents exist.
 
@@ -76,6 +83,32 @@ _MAYBE_CREDENTIALS = {
 #: ``NAME=value`` or ``NAME: value`` -- enough to find the key in the formats
 #: this rule is asked about, all of which are flat.
 _ASSIGNMENT = re.compile(r"^[\s#-]*(?P<name>[A-Za-z0-9_./\[\]:@-]{1,120}?)\s*[:=]\s*(?P<value>.*)$")
+
+#: Files that are not credentials but end up holding them as a side effect of
+#: what they are. Nobody writes a secret into these on purpose, which is
+#: exactly why nobody remembers they are there.
+_BYPRODUCTS = {
+    ".tfstate": (
+        Severity.CRITICAL,
+        "Terraform state records every value Terraform read, including generated "
+        "passwords and private keys, in plain text",
+    ),
+    ".tfstate.backup": (
+        Severity.CRITICAL,
+        "a Terraform state backup, which holds the same plaintext values as the state",
+    ),
+    ".kubeconfig": (Severity.HIGH, "cluster credentials"),
+    ".dump": (Severity.MEDIUM, "whatever was in the database when it was taken"),
+}
+
+#: Shell and client histories, which record the commands somebody typed --
+#: including the ones with a password on the command line.
+_HISTORY_NAMES = frozenset(
+    {
+        ".bash_history", ".zsh_history", ".sh_history", ".history",
+        ".mysql_history", ".psql_history", ".rediscli_history", ".node_repl_history",
+    }
+)
 
 #: Suffixes that mark a file as a documented shape rather than a real one.
 _EXAMPLE_MARKERS = (".example", ".sample", ".template", ".dist", ".tpl", ".defaults")
@@ -175,6 +208,43 @@ def scan_name(path: str, text: "str | None" = None) -> "Iterator[Finding]":
                 "so nothing looked inside it. Check it by hand."
             ),
             confidence=Confidence.LOW if _in_a_test_tree(normalised) else Confidence.MEDIUM,
+        )
+        return
+
+    byproduct = next(
+        ((suffix, fact) for suffix, fact in _BYPRODUCTS.items() if lowered.endswith(suffix)),
+        None,
+    )
+    if byproduct is not None:
+        severity, what = byproduct[1]
+        yield Finding(
+            rule_id="FN004",
+            severity=severity,
+            title=f"{name} is committed, and it holds {what.split(',')[0]}",
+            path=normalised,
+            line=1,
+            evidence=f"file named {name!r}",
+            remediation=(
+                f"This file holds {what}. Nobody writes a secret into one on "
+                "purpose, which is why nobody remembers it is there. Rotate "
+                "what it contains, remove it, and add it to .gitignore."
+            ),
+        )
+        return
+
+    if lowered in _HISTORY_NAMES:
+        yield Finding(
+            rule_id="FN004",
+            severity=Severity.MEDIUM,
+            title=f"{name} is committed, and it records the commands somebody typed",
+            path=normalised,
+            line=1,
+            evidence=f"file named {name!r}",
+            remediation=(
+                "A shell or client history includes every password that was "
+                "passed on a command line. Remove it, and rotate anything the "
+                "commands in it used."
+            ),
         )
         return
 

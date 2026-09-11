@@ -111,6 +111,10 @@ class TestCatalogue(unittest.TestCase):
             72: "Seventy-two", 73: "Seventy-three", 74: "Seventy-four",
             75: "Seventy-five", 76: "Seventy-six", 77: "Seventy-seven",
             78: "Seventy-eight", 79: "Seventy-nine", 80: "Eighty",
+            81: "Eighty-one", 82: "Eighty-two", 83: "Eighty-three",
+            84: "Eighty-four", 85: "Eighty-five", 86: "Eighty-six",
+            87: "Eighty-seven", 88: "Eighty-eight", 89: "Eighty-nine",
+            90: "Ninety",
         }
         spelled = words.get(len(rules.RULES))
         self.assertIsNotNone(spelled, "extend the number words in this test")

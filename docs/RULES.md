@@ -129,6 +129,7 @@ auditing what the scanner chose not to tell you.
 | FN001 | A file that is private key material by name | critical for `id_rsa`, high for a keystore |
 | FN002 | A key-shaped file nothing could read | medium |
 | FN003 | A file whose purpose is to hold a credential | medium |
+| FN004 | A file that records secrets as a side effect | critical for Terraform state |
 
 Every other rule here reads text, which makes them all blind to the files that
 have none. A committed `id_rsa` has no line to match; a `.p12`, a `.jks`, a
