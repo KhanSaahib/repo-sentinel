@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import fnmatch
 import os
 from collections.abc import Iterable, Iterator
@@ -52,6 +53,25 @@ def is_probably_binary(chunk: bytes) -> bool:
     return b"\x00" in chunk
 
 
+@dataclasses.dataclass(frozen=True)
+class Entry:
+    """One file the walk reached, whether or not its contents were read.
+
+    ``text`` is None for a file that was skipped -- a binary, something over
+    the size limit, something unreadable. The path is still reported, because
+    a name can be a finding on its own: nothing inside ``id_rsa`` or a
+    ``.p12`` keystore is text, and a scanner that only ever sees text would
+    never mention either of them.
+    """
+
+    path: str
+    text: "str | None" = None
+
+    @property
+    def readable(self) -> bool:
+        return self.text is not None
+
+
 def iter_files(
     root: str,
     excludes: tuple[str, ...] = DEFAULT_EXCLUDES,
@@ -59,7 +79,20 @@ def iter_files(
     *,
     use_gitignore: bool = True,
 ) -> Iterator[tuple[str, str]]:
-    """Yield ``(relative_path, text)`` for every scannable file under ``root``.
+    """Yield ``(relative_path, text)`` for every scannable file under ``root``."""
+    for entry in walk(root, excludes, max_bytes, use_gitignore=use_gitignore):
+        if entry.text is not None:
+            yield entry.path, entry.text
+
+
+def walk(
+    root: str,
+    excludes: tuple[str, ...] = DEFAULT_EXCLUDES,
+    max_bytes: int = MAX_FILE_BYTES,
+    *,
+    use_gitignore: bool = True,
+) -> "Iterator[Entry]":
+    """Yield an :class:`Entry` for every file under ``root`` worth considering.
 
     Paths are yielded with forward slashes so reports read the same on every
     platform. Unreadable files are skipped rather than raising: a scanner that
@@ -73,9 +106,7 @@ def iter_files(
     root = os.path.abspath(root)
 
     if os.path.isfile(root):
-        text = _read_text(root, max_bytes)
-        if text is not None:
-            yield os.path.basename(root), text
+        yield Entry(os.path.basename(root), _read_text(root, max_bytes))
         return
 
     # Each directory inherits the stack of its parent, so rules are consulted
@@ -105,17 +136,15 @@ def iter_files(
 
         for filename in sorted(filenames):
             absolute = os.path.join(dirpath, filename)
-            if os.path.splitext(filename)[1].lower() in BINARY_SUFFIXES:
-                continue
             if any(fnmatch.fnmatch(filename, pattern) for pattern in excludes):
                 continue
             relative = f"{prefix}{filename}"
             if stack and stack.is_ignored(relative, False):
                 continue
-            text = _read_text(absolute, max_bytes)
-            if text is None:
+            if os.path.splitext(filename)[1].lower() in BINARY_SUFFIXES:
+                yield Entry(relative)
                 continue
-            yield relative, text
+            yield Entry(relative, _read_text(absolute, max_bytes))
 
 
 def read_listed(

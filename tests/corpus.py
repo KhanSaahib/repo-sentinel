@@ -204,3 +204,13 @@ FILES = (
     ("deploy/web.yaml", MANIFEST_FILE),
     ("docker-compose.yml", COMPOSE_FILE),
 )
+
+#: ``(path, readable)`` pairs, in the shape the walk reports. The names here
+#: are the point: none of these files needs contents to be a finding, and two
+#: of them could not be read if they had any.
+PATHS = (
+    *((path, True) for path, _ in FILES),
+    ("deploy/id_rsa", False),
+    ("certs/server.pem", False),
+    (".npmrc", True),
+)

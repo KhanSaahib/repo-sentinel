@@ -233,6 +233,30 @@ A token that fails to decode is reported, not allowlisted.
 Pass `--no-example-allowlist` to see these findings anyway — useful when
 auditing what the scanner chose not to tell you.
 
+### File names
+
+| Rule | Finds | Severity |
+| --- | --- | --- |
+| FN001 | A file that is private key material by name | critical for `id_rsa`, high for a keystore |
+| FN002 | A key-shaped file nothing could read | medium |
+| FN003 | A file whose purpose is to hold a credential | medium |
+
+Every other rule here reads text, which makes them all blind to the files that
+have none. A committed `id_rsa` has no line to match; a `.p12`, a `.jks`, a
+`.pfx` are binary and skipped before any rule sees them. These are among the
+worst things a repository can contain and the easiest for a scanner to miss, so
+the walk reports every path it reaches, readable or not, and these three rules
+work from the names.
+
+They claim less than the others, and say so through confidence. `.pem` and
+`.key` are private keys about as often as they are certificates, so FN002 fires
+only when the file could *not* be read -- if it is text, SEC004 has already
+looked inside and its answer is better than a guess about the name. Files under
+`fixtures/` or `testdata/` are reported at low confidence rather than not at
+all. And `.example`, `.sample`, `.template` and `.dist` suffixes are skipped
+everywhere: a repository documenting the shape of its `.env` is doing the right
+thing.
+
 ### GitHub Actions workflows
 
 | Rule | Finds | Severity |

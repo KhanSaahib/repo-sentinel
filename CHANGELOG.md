@@ -34,6 +34,10 @@ repository the tool can read at all: it grew from two file formats to six.
 - **`--paths-from FILE`** (`-` for stdin) to scan only the files a pull request
   touched, **`--quiet`** for the summary alone, and **`--sort path`** for
   reading a report rather than triaging it.
+- **File-name rules** (FN001–FN003): a committed `id_rsa`, a `.p12` or `.jks`
+  keystore, an `.npmrc` or `.env` that exists to hold a credential. The walk now
+  reports every path it reaches, readable or not, which closes a blind spot:
+  binary key material was being skipped before any rule saw it.
 - **`--format markdown`**, a table meant to be posted as a pull request comment,
   with fixes collapsed underneath once per rule and long reports truncated.
 - **`.repo-sentinel.json`**, a project config file supplying defaults for the

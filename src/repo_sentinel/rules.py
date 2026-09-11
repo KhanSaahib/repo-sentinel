@@ -38,7 +38,7 @@ class Rule:
         return _CATEGORIES[self.id[:3]]
 
 
-_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose"}
+_CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose", "FN0": "filenames"}
 
 
 def _rules(*entries: tuple[str, str, str, Severity]) -> "dict[str, Rule]":
@@ -106,6 +106,9 @@ RULES: "dict[str, Rule]" = _rules(
     ("DC003", "host-namespace-share", "Service shares a host namespace", Severity.HIGH),
     ("DC004", "confinement-removed", "Capability added or confinement disabled", Severity.HIGH),
     ("DC005", "port-on-every-interface", "Sensitive port published on every interface", Severity.HIGH),
+    ("FN001", "committed-key-file", "A file that is private key material by name", Severity.CRITICAL),
+    ("FN002", "unreadable-key-candidate", "A key-shaped file nothing could read", Severity.MEDIUM),
+    ("FN003", "committed-credential-file", "A file whose purpose is to hold a credential", Severity.MEDIUM),
     ("DC006", "floating-compose-image", "Service image tag can point elsewhere tomorrow", Severity.LOW),
 )
 

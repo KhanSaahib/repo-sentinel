@@ -8,6 +8,7 @@ from repo_sentinel import rules
 from repo_sentinel.scanners import (
     compose,
     dockerfiles,
+    filenames,
     kubernetes,
     secrets,
     terraform,
@@ -22,6 +23,7 @@ def emitted_rule_ids():
     findings += terraform.scan_files(corpus.FILES)
     findings += kubernetes.scan_files(corpus.FILES)
     findings += compose.scan_files(corpus.FILES)
+    findings += filenames.scan_paths(corpus.PATHS)
     return {finding.rule_id for finding in findings}
 
 

@@ -106,6 +106,8 @@ outcome than a feature nobody wanted.
 - [x] CONTRIBUTING.md
 - [x] README tables asserted against the rule catalogue, so documentation
       cannot fall behind the rules
+- [x] Findings about a file's name rather than its contents, so binary key
+      material stops being invisible (FN001-FN003)
 - [ ] Multi-line PEM bodies: a private key is caught by its header line, so a
       body pasted without one is missed
 - [ ] Helm templates, where `{{ .Values.x }}` makes every structural rule guess

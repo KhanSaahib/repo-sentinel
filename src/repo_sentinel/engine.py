@@ -6,9 +6,17 @@ import dataclasses
 import time
 from collections.abc import Iterable
 
-from .discovery import DEFAULT_EXCLUDES, iter_files, read_listed
+from .discovery import DEFAULT_EXCLUDES, Entry, read_listed, walk
 from .findings import Finding
-from .scanners import compose, dockerfiles, kubernetes, secrets, terraform, workflows
+from .scanners import (
+    compose,
+    dockerfiles,
+    filenames,
+    kubernetes,
+    secrets,
+    terraform,
+    workflows,
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -43,11 +51,16 @@ def scan(
     """
     started = time.monotonic()
     if only_paths is None:
-        files = list(iter_files(path, excludes=excludes, use_gitignore=use_gitignore))
+        entries = list(walk(path, excludes=excludes, use_gitignore=use_gitignore))
     else:
-        files = list(read_listed(path, only_paths, excludes=excludes))
+        entries = [
+            walk_entry
+            for walk_entry in _entries_for(path, only_paths, excludes)
+        ]
+    files = [(entry.path, entry.text) for entry in entries if entry.text is not None]
 
-    found = secrets.scan_files(files, allow_examples=allow_examples)
+    found = filenames.scan_paths([(entry.path, entry.readable) for entry in entries])
+    found += secrets.scan_files(files, allow_examples=allow_examples)
     found += workflows.scan_files(files)
     found += dockerfiles.scan_files(files)
     found += terraform.scan_files(files)
@@ -56,9 +69,16 @@ def scan(
 
     return ScanReport(
         findings=sorted(collapse(found), key=lambda finding: finding.sort_key),
-        file_count=len(files),
+        file_count=len(entries),
         duration=time.monotonic() - started,
     )
+
+
+def _entries_for(
+    path: str, only_paths: "Iterable[str]", excludes: "tuple[str, ...]"
+) -> "list[Entry]":
+    """Explicit paths as walk entries, so the name rules see them too."""
+    return [Entry(name, text) for name, text in read_listed(path, only_paths, excludes=excludes)]
 
 
 def collapse(findings: "Iterable[Finding]") -> "list[Finding]":
