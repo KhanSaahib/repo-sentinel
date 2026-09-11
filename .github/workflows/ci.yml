@@ -17,13 +17,20 @@ concurrency:
 
 jobs:
   test:
-    name: tests (python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    name: tests (${{ matrix.os }}, python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         python-version: ["3.9", "3.11", "3.13"]
+        # Every path this tool reports goes through a backslash-to-slash
+        # normalisation, and until now nothing had ever run it on the platform
+        # that produces backslashes.
+        include:
+          - os: windows-latest
+            python-version: "3.13"
     steps:
       # Actions are pinned to commit SHAs: tags are mutable and can be
       # repointed at new code by whoever controls the action repository.
