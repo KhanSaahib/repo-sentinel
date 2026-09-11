@@ -19,7 +19,7 @@ here, and every rule described here is one a scanner can emit.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Sequence
+from collections.abc import Iterable
 
 from .findings import Severity
 
@@ -144,7 +144,7 @@ RULES: "dict[str, Rule]" = _rules(
 )
 
 
-def matcher(patterns: "Sequence[str]"):
+def matcher(patterns: "Iterable[str]"):
     """Build a predicate over rule ids, for the places a person names rules.
 
     Patterns are rule ids or a family prefix ending in ``*`` -- ``K8S004``,
@@ -156,10 +156,9 @@ def matcher(patterns: "Sequence[str]"):
     Sharing the syntax means the answer to "what do I write here" is the same
     in both places.
     """
-    exact = {pattern.strip().upper() for pattern in patterns if not pattern.strip().endswith("*")}
-    prefixes = tuple(
-        pattern.strip()[:-1].upper() for pattern in patterns if pattern.strip().endswith("*")
-    )
+    cleaned = [pattern.strip() for pattern in patterns]
+    exact = {pattern.upper() for pattern in cleaned if not pattern.endswith("*")}
+    prefixes = tuple(pattern[:-1].upper() for pattern in cleaned if pattern.endswith("*"))
 
     def matches(rule_id: str) -> bool:
         upper = rule_id.upper()

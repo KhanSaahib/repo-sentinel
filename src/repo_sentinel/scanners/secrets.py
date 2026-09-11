@@ -532,14 +532,14 @@ def _scan_assignments(
             )
 
     if value_position:
-        match = _BARE_ASSIGNMENT.match(line)
-        if match is not None and is_secret_name(match.group("name")):
+        bare = _BARE_ASSIGNMENT.match(line)
+        if bare is not None and is_secret_name(bare.group("name")):
             candidates.append(
                 (
                     "SEC101",
-                    match.group("name"),
-                    match.span("value"),
-                    match.group("value"),
+                    bare.group("name"),
+                    bare.span("value"),
+                    bare.group("value"),
                     Severity.HIGH,
                 )
             )

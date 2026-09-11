@@ -26,7 +26,7 @@ from __future__ import annotations
 import dataclasses
 import re
 from collections.abc import Iterator
-from typing import Union
+from typing import Tuple, Union
 
 _COMMENT_OR_BLANK = re.compile(r"^\s*(?:#.*)?$")
 _DOCUMENT_BREAK = re.compile(r"^---\s*(?:#.*)?$")
@@ -167,12 +167,15 @@ def parse_one(text: str) -> "Node | None":
     return documents[0] if documents else None
 
 
-Token = "tuple[int, str, int]"  # indent, content, line number
+#: One tokenised line: its indent, its content, and the line it came from.
+#: Spelled with typing.Tuple rather than the builtin so that it is a type alias
+#: a checker can follow on 3.9 as well as a comment a reader can.
+Token = Tuple[int, str, int]
 
 
-def _tokenise(lines: "list[str]", begin: int, end: int) -> "list[Token]":
+def _tokenise(lines: "list[str]", begin: int, end: int) -> 'list[Token]':
     """Drop blanks and comments, and fold block scalars into one token."""
-    tokens: "list[Token]" = []
+    tokens: 'list[Token]' = []
     index = begin
     while index < end:
         line = lines[index]
@@ -214,7 +217,7 @@ def _skip_indented(lines: "list[str]", index: int, end: int, indent: int) -> int
     return index
 
 
-def _parse_block(tokens: "list[Token]", index: int, indent: int) -> "tuple[Node, int]":
+def _parse_block(tokens: 'list[Token]', index: int, indent: int) -> "tuple[Node, int]":
     """Parse the mapping or sequence that starts at ``tokens[index]``."""
     if index >= len(tokens):
         return Node("", 0), index
@@ -223,7 +226,7 @@ def _parse_block(tokens: "list[Token]", index: int, indent: int) -> "tuple[Node,
     return _parse_mapping(tokens, index, indent)
 
 
-def _parse_mapping(tokens: "list[Token]", index: int, indent: int) -> "tuple[Node, int]":
+def _parse_mapping(tokens: 'list[Token]', index: int, indent: int) -> "tuple[Node, int]":
     mapping: "dict[str, Node]" = {}
     start = tokens[index][2]
     while index < len(tokens):
@@ -248,7 +251,7 @@ def _parse_mapping(tokens: "list[Token]", index: int, indent: int) -> "tuple[Nod
     return Node(mapping, start), index
 
 
-def _parse_sequence(tokens: "list[Token]", index: int, indent: int) -> "tuple[Node, int]":
+def _parse_sequence(tokens: 'list[Token]', index: int, indent: int) -> "tuple[Node, int]":
     items: "list[Node]" = []
     start = tokens[index][2]
     while index < len(tokens):
@@ -272,7 +275,7 @@ def _parse_sequence(tokens: "list[Token]", index: int, indent: int) -> "tuple[No
 
 
 def _parse_child(
-    tokens: "list[Token]", index: int, indent: int, line: int
+    tokens: 'list[Token]', index: int, indent: int, line: int
 ) -> "tuple[Node, int]":
     """The value of a key that had nothing after its colon."""
     if index >= len(tokens) or tokens[index][0] <= indent:

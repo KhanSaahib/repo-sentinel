@@ -115,11 +115,13 @@ def _exposed_services(block: "hcl.Block") -> "list[str]":
         return ["every port"]
     if low is None and high is None:
         return []
-    low = high if low is None else low
-    high = low if high is None else high
-    if low == 0 and high >= 65535:
+    # A rule may name only one end of the range; the other is the same port.
+    first = low if low is not None else high
+    last = high if high is not None else low
+    assert first is not None and last is not None
+    if first == 0 and last >= 65535:
         return ["every port"]
-    return wellknown.services_in_range(low, high)
+    return wellknown.services_in_range(first, last)
 
 
 def _open_to_the_world(block: "hcl.Block") -> "tuple[int, str] | None":

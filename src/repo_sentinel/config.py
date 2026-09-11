@@ -24,7 +24,7 @@ import json
 import os
 
 from . import gitignore, rules
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 
 #: Looked for beside the scanned tree when ``--config`` is not given.
 DEFAULT_PATH = ".repo-sentinel.json"
@@ -158,7 +158,7 @@ def path_scopes(settings: dict) -> "list[PathScope]":
     ]
 
 
-def disabled_matcher(patterns: Sequence[str]):
+def disabled_matcher(patterns: 'Iterable[str]'):
     """The predicate for rules a project has switched off.
 
     The syntax is :func:`repo_sentinel.rules.matcher`'s, shared with the
