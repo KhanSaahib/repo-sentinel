@@ -40,6 +40,10 @@ repository the tool can read at all: it grew from two file formats to six.
 - **Per-path configuration**: a `paths` table switches rules off under one glob
   rather than everywhere, using the `.gitignore` dialect matched by the same
   code that reads `.gitignore`.
+- **Scanning is roughly three times faster**: a cheap gate in front of the
+  provider patterns rejects four fifths of lines before the expensive pass
+  runs. With the quadratic YAML fix, the Python standard library went from 5.1s
+  to 1.5s and Prometheus from not finishing in five minutes to 5.8s.
 - **Confidence is weighed by where a file sits**: a secret rule already at
   medium confidence drops to low in fixture trees and in documentation. The
   provider rules keep theirs everywhere. On the GitLab runner repository this

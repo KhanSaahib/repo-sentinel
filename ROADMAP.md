@@ -126,12 +126,13 @@ outcome than a feature nobody wanted.
       library tool so the suite needs nothing installed either
 - [x] Property-based tests for the entropy and redaction functions, plus seeded
       fuzzing of both hand-written parsers and a time bound on hostile input
-- [ ] Benchmark against a large repository; the walk should stay under a second
-      for 10k files. Measured over the Python 3.14 standard library: 631 files,
-      ~305k lines, 3.4s. Most of it is one combined regex per line, so the win
-      to find is a cheaper way to reject a line outright. The suite has a
-      scaling guard at 1000 files, generous by two orders of magnitude, which
-      catches an accidental O(n^2) without policing the constant factor
+- [x] ~~Benchmark against a large repository~~ — measured and acted on. The
+      Python 3.14 standard library went from 5.1s to 1.5s and Prometheus (39 MB,
+      1,679 files) from not finishing in five minutes to 5.8s, via a quadratic
+      YAML parse and a cheap gate in front of the provider patterns. The suite
+      has scaling guards for both. Still short of "10k files in a second", and
+      the remaining cost is one regex per line, which is where a pure-Python
+      scanner ends up
 - [ ] Type annotations checked with mypy in CI
 - [ ] Issue templates
 - [ ] Enable CodeQL default setup and branch protection on `main`

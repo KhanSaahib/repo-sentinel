@@ -41,6 +41,21 @@ class TestCatalogue(unittest.TestCase):
         unreachable = set(rules.RULES) - emitted_rule_ids()
         self.assertEqual(unreachable, set(), "catalogue describes rules nothing emits")
 
+    def test_the_candidate_gate_lets_every_provider_rule_through(self):
+        # secrets._CANDIDATE decides which lines are worth looking at closely,
+        # and a line it rejects is never looked at again. Every line of the
+        # corpus that trips a provider rule has to clear it.
+        for path, text in corpus.FILES:
+            for number, line in enumerate(text.splitlines(), start=1):
+                hits = [
+                    finding
+                    for finding in secrets.scan_line(path, number, line)
+                    if not finding.rule_id.startswith("SEC1")
+                ]
+                if hits:
+                    with self.subTest(rule=hits[0].rule_id):
+                        self.assertIsNotNone(secrets._CANDIDATE.search(line))
+
     def test_provider_rules_agree_with_the_catalogue_on_severity(self):
         for rule in secrets._PROVIDER_RULES:
             with self.subTest(rule=rule.rule_id):

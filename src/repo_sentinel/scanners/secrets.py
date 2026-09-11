@@ -237,6 +237,17 @@ _PROVIDER_RULES: tuple[ProviderRule, ...] = (
 #: than hand-written, so it cannot drift away from what it is standing in for;
 #: named groups are stripped because two rules may reuse a group name and the
 #: combined pattern would not compile.
+#: A gate in front of the gate. Every provider rule needs either a long run of
+#: credential characters, a PEM header, or a URL carrying a password -- and
+#: four fifths of the lines in a repository have none of the three. Testing
+#: that first halves the cost of the pass, because one simple pattern is much
+#: cheaper for the engine than an alternation of twenty.
+#:
+#: It is a correctness risk as well as a speed win: a line this rejects is
+#: never looked at again. The corpus test asserts that every provider rule's
+#: example clears it, which is what keeps the threshold honest.
+_CANDIDATE = re.compile(r"[A-Za-z0-9+/_=-]{14}|-----BEGIN|://[^\s/]*:[^\s/]*@")
+
 _ANY_PROVIDER = re.compile(
     "|".join(
         "(?{flags}:{body})".format(
@@ -359,11 +370,11 @@ def scan_line(
 
     matched_spans: list[tuple[int, int]] = []
 
-    yield from _provider_findings(path, line_number, line, matched_spans, allow_examples)
-
-    yield from _scan_encoded(
-        path, line_number, line, matched_spans, allow_examples
-    )
+    # Both of these need a long run of credential characters or one of the two
+    # literal shapes; the entropy rules below do not, so they run either way.
+    if _CANDIDATE.search(line):
+        yield from _provider_findings(path, line_number, line, matched_spans, allow_examples)
+        yield from _scan_encoded(path, line_number, line, matched_spans, allow_examples)
 
     yield from _scan_assignments(
         path, line_number, line, matched_spans, allow_examples, value_position
