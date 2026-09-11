@@ -144,6 +144,20 @@ learned; the next person has the same afternoon ahead of them otherwise.
 Docstrings are prose, not restatements of the signature. `"""Return the path."""`
 on a function called `path` is worse than nothing.
 
+## Releasing
+
+Bump the version in `pyproject.toml` and `src/repo_sentinel/__init__.py`, move
+the changelog's unreleased notes under a heading for it, then tag:
+
+```bash
+git tag v0.4.0 && git push origin v0.4.0
+```
+
+`.github/workflows/release.yml` takes it from there: it refuses a tag that
+disagrees with the packaged version, runs the suite, builds, and publishes with
+PyPI trusted publishing -- an OIDC exchange for a token that lasts one upload,
+so there is no long-lived secret in the repository for anything to leak.
+
 ## Reporting a vulnerability
 
 See [SECURITY.md](SECURITY.md). Report privately, not in a public issue.

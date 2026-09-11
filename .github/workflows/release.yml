@@ -1,0 +1,88 @@
+name: release
+
+# Tagging is the whole trigger: nothing here runs on a branch, and nothing
+# here needs a token stored in the repository. Publishing uses PyPI's trusted
+# publishing, which exchanges the job's OIDC identity for a short-lived upload
+# token -- so there is no long-lived secret to leak, rotate, or find in a scan.
+#
+# Before the first release, add repo-sentinel as a trusted publisher on PyPI
+# (project settings -> publishing) naming this repository, this workflow file,
+# and the "pypi" environment. Until that exists the publish step fails, which
+# is the right way round: an unconfigured release does nothing rather than
+# something surprising.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build the distributions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.13"
+
+      # A tag that disagrees with the version in pyproject.toml produces a
+      # release nobody can reason about afterwards, so it stops here instead.
+      - name: Check the tag matches the packaged version
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          packaged=$(python -c "
+          import re, pathlib
+          text = pathlib.Path('pyproject.toml').read_text()
+          print(re.search(r'^version = \"([^\"]+)\"', text, re.M).group(1))
+          ")
+          if [ "$TAG" != "v$packaged" ]; then
+            echo "tag $TAG does not match pyproject version $packaged" >&2
+            exit 1
+          fi
+
+      - name: Run the test suite
+        run: python -m unittest discover -s tests
+        env:
+          PYTHONPATH: src
+
+      - name: Build
+        run: |
+          python -m pip install --quiet build
+          python -m build
+
+      - name: Upload the distributions
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: distributions
+          path: dist/
+
+  publish:
+    name: publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: pypi
+    permissions:
+      # The only write this workflow has, and it is a token minted for one
+      # upload rather than a secret that outlives it.
+      id-token: write
+    steps:
+      - name: Download the distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: distributions
+          path: dist/
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2

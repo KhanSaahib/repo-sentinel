@@ -18,6 +18,12 @@ cd repo-sentinel
 pip install .
 ```
 
+Or from a tag, without a checkout:
+
+```bash
+pip install git+https://github.com/KhanSaahib/repo-sentinel@v0.3.0
+```
+
 Or run it straight from a checkout, with no install at all:
 
 ```bash

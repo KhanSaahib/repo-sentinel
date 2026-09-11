@@ -99,7 +99,10 @@ outcome than a feature nobody wanted.
       the shape stops short of a policy language on purpose
 - [x] Markdown output for a pull request comment
 - [x] `repo-sentinel init`, for the first five minutes with the tool
-- [ ] Publish to PyPI so `pipx run repo-sentinel` works
+- [ ] Publish to PyPI so `pipx run repo-sentinel` works. The release workflow
+      is written and waits on one thing only: registering this repository as a
+      trusted publisher in the PyPI project settings, which needs an account
+      rather than a commit
 - [x] `--quiet` for CI logs that only need the summary line, and `--sort path`
       for reading a report top to bottom
 - [x] ~~Group findings by file in text output~~ — `--sort path` answers the same
