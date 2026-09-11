@@ -324,5 +324,72 @@ class TestWorkflowRunCheckout(unittest.TestCase):
         self.assertNotIn("WF008", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
 
 
+def privileged(steps):
+    return (
+        "name: risky\non:\n  pull_request_target:\njobs:\n  build:\n"
+        "    permissions:\n      contents: read\n    steps:\n" + steps
+    )
+
+
+class TestPersistedCredentials(unittest.TestCase):
+    def test_checkout_under_a_privileged_trigger(self):
+        findings = workflows.scan_workflow(
+            ".github/workflows/a.yml", privileged("      - uses: actions/checkout@" + SHA + "\n")
+        )
+        self.assertIn("WF009", rule_ids(findings))
+
+    def test_disabling_it_settles_the_matter(self):
+        text = privileged(
+            "      - uses: actions/checkout@" + SHA + "\n"
+            "        with:\n          persist-credentials: false\n"
+        )
+        self.assertNotIn("WF009", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+    def test_an_ordinary_trigger_is_not_in_scope(self):
+        # The default is tolerable when the job only runs the repository's own
+        # code; scoping the rule is what keeps it from being ignored.
+        text = (
+            "name: ci\non:\n  push:\njobs:\n  build:\n    permissions:\n"
+            "      contents: read\n    steps:\n      - uses: actions/checkout@" + SHA + "\n"
+        )
+        self.assertNotIn("WF009", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+    def test_other_actions_are_not_checkouts(self):
+        text = privileged("      - uses: actions/setup-node@" + SHA + "\n")
+        self.assertNotIn("WF009", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+
+class TestExportedSecrets(unittest.TestCase):
+    def test_secret_written_to_a_job_output(self):
+        text = workflow(
+            "jobs:\n  build:\n    permissions:\n      contents: read\n    steps:\n"
+            '      - run: echo "token=${{ secrets.API_TOKEN }}" >> $GITHUB_OUTPUT\n'
+        )
+        findings = workflows.scan_workflow(".github/workflows/a.yml", text)
+        self.assertIn("WF010", rule_ids(findings))
+        self.assertIn("API_TOKEN", next(f for f in findings if f.rule_id == "WF010").title)
+
+    def test_secret_written_to_the_job_environment(self):
+        text = workflow(
+            "jobs:\n  build:\n    permissions:\n      contents: read\n    steps:\n"
+            '      - run: echo "T=${{ secrets.API_TOKEN }}" >> $GITHUB_ENV\n'
+        )
+        self.assertIn("WF010", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+    def test_using_a_secret_within_the_step_is_fine(self):
+        text = workflow(
+            "jobs:\n  build:\n    permissions:\n      contents: read\n    steps:\n"
+            "      - run: deploy.sh\n        env:\n          T: ${{ secrets.API_TOKEN }}\n"
+        )
+        self.assertNotIn("WF010", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+    def test_writing_something_that_is_not_a_secret_is_fine(self):
+        text = workflow(
+            "jobs:\n  build:\n    permissions:\n      contents: read\n    steps:\n"
+            '      - run: echo "version=1.2.3" >> $GITHUB_OUTPUT\n'
+        )
+        self.assertEqual(rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)), set())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -92,6 +92,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+      - run: echo "token=${{ secrets.DEPLOY_TOKEN }}" >> $GITHUB_OUTPUT
       - uses: some-vendor/deploy@v2
         with:
           token: ${{ secrets.DEPLOY_TOKEN }}

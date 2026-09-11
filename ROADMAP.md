@@ -33,8 +33,9 @@ outcome than a feature nobody wanted.
       and credentials embedded in connection strings
 - [x] Confidence score per finding, separate from severity, with
       `--min-confidence` to gate on it
-- [ ] GCP service account JSON as a whole document, not just the private key
-      line inside it
+- [x] GCP service account JSON as a whole document, not just the private key
+      line inside it (SEC021), and any provider credential hidden inside base64
+      (SEC022)
 - [ ] Multi-line detection generally: the scanner is line-by-line, so a PEM body
       or a wrapped JSON credential is only caught by its first line
 - [ ] Verify a candidate is not already public (git history vs. working tree),
@@ -52,24 +53,25 @@ outcome than a feature nobody wanted.
       run's head (WF008)
 - [x] Detect self-hosted runners (WF006). Whether the repository is public is
       not knowable offline, so the finding says what it saw and why it matters
-- [ ] Detect `actions/checkout` with `persist-credentials: true` (the default)
-      followed by a step that runs untrusted code
+- [x] Detect `actions/checkout` with `persist-credentials: true` (the default)
+      under a privileged trigger (WF009). Scoping it to `pull_request_target`
+      and `workflow_run` is what keeps it from being ignored everywhere else
 - [ ] Warn on `contents: write` without an obvious need — needs a notion of
       "obvious need" that does not just move the noise somewhere else
 - [ ] Reusable workflow calls (`uses:` at job level) pinned to a mutable ref
-- [ ] `GITHUB_TOKEN` or a secret written into an output, where it survives into
-      the calling workflow's logs
+- [x] `GITHUB_TOKEN` or a secret written into an output, where it survives into
+      the calling workflow's logs (WF010)
 
 ## Beyond GitHub Actions
 
 - [x] Dockerfile checks: running as root, `curl | sh`, unpinned base images,
       secrets in `ARG`/`ENV`, `ADD` from a URL, disabled TLS verification
-- [ ] Terraform checks: public S3 buckets, `0.0.0.0/0` security group ingress,
-      unencrypted storage
-- [ ] Kubernetes manifests: privileged containers, hostPath mounts, missing
-      resource limits
-- [ ] `docker-compose.yml` beyond secrets: privileged services, host network,
-      Docker socket mounts
+- [x] Terraform checks: public S3 buckets, `0.0.0.0/0` security group ingress,
+      unencrypted storage, wildcard policies, public databases, plain state
+- [x] Kubernetes manifests: privileged containers, hostPath mounts, missing
+      resource limits, host namespaces, capabilities, and secrets in manifests
+- [x] `docker-compose.yml` beyond secrets: privileged services, host network,
+      Docker socket mounts, and ports published on every interface
 
 ## Output and integration
 
@@ -78,12 +80,16 @@ outcome than a feature nobody wanted.
 - [x] Pre-commit hook definition
 - [x] GitHub Action wrapper in this repository
 - [x] `repo-sentinel rules` to print the catalogue, in text or JSON
-- [ ] `--diff` mode: scan only files changed against a base ref, for fast PR
-      runs. Needs git, which every other part of this tool avoids shelling out
-      to; the honest version is a `--paths-from` flag that reads a file list
+- [x] ~~`--diff` mode~~ — shipped as `--paths-from`, which reads the file list
+      from stdin or a file rather than shelling out to git. `git diff
+      --name-only origin/main | repo-sentinel scan . --paths-from -` is the
+      same feature without the dependency on git's CLI being where we think
 - [ ] Publish to PyPI so `pipx run repo-sentinel` works
-- [ ] `--quiet` for CI logs that only need the summary line
-- [ ] Group findings by file in text output when there are many
+- [x] `--quiet` for CI logs that only need the summary line, and `--sort path`
+      for reading a report top to bottom
+- [x] ~~Group findings by file in text output~~ — `--sort path` answers the same
+      need without a second output shape to maintain, and keeps every line in
+      the clickable `path:line` form
 
 ## Engineering health
 
@@ -91,6 +97,11 @@ outcome than a feature nobody wanted.
       catalogue, so a new rule cannot ship undocumented and a deleted one
       cannot leave its entry behind
 - [x] CONTRIBUTING.md
+- [x] README tables asserted against the rule catalogue, so documentation
+      cannot fall behind the rules
+- [ ] Multi-line PEM bodies: a private key is caught by its header line, so a
+      body pasted without one is missed
+- [ ] Helm templates, where `{{ .Values.x }}` makes every structural rule guess
 - [ ] Coverage measurement in CI with a floor
 - [ ] Property-based tests for the entropy and redaction functions
 - [ ] Benchmark against a large repository; the walk should stay under a second

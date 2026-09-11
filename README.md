@@ -2,8 +2,10 @@
 
 A small command line auditor that reads a repository the way a security
 reviewer skims it: looking for credentials that should never have been
-committed, and for build configuration that hands the keys to whoever opens a
-pull request.
+committed, and for the configuration that quietly hands out more access than
+anyone intended -- a workflow an outside contributor can hijack, a container
+that runs as root, a security group open to the internet, a Compose service
+that publishes your database on every interface.
 
 **No runtime dependencies.** Standard library only, on Python 3.9 and up. A tool
 you run against your supply chain should not enlarge it.
@@ -40,7 +42,16 @@ repo-sentinel scan . --no-example-allowlist   # include documented example keys
 
 repo-sentinel scan . --write-baseline         # accept what is already there
 repo-sentinel scan . --baseline               # fail only on what is new
+
+repo-sentinel scan . --quiet                  # just the summary line
+repo-sentinel scan . --sort path              # read a report, rather than triage it
+git diff --name-only origin/main | repo-sentinel scan . --paths-from -
 ```
+
+That last line is the fast per-pull-request run: the scan is restricted to the
+files the branch touched. A listed path that no longer exists is skipped, since
+a diff lists deletions too, and a listed path that `.gitignore` covers is
+scanned anyway -- you named it.
 
 Exit codes: `0` clean, `1` findings at or above `--fail-on` (default `medium`),
 `2` usage error, unreadable baseline, or unwritable output. That makes it a
@@ -144,6 +155,8 @@ want to diff it between releases. The tables below are the same list, annotated.
 | SEC018 | Slack incoming webhook URL | high | high |
 | SEC019 | Hugging Face access token | high | high |
 | SEC020 | Credentials embedded in a URL | high | medium |
+| SEC021 | Google service account key file | critical | high |
+| SEC022 | Provider credential hidden inside base64 | varies | high |
 | SEC100 | High-entropy value in a quoted assignment | high | medium |
 | SEC101 | High-entropy value in an unquoted config value | high | medium |
 | SEC900 | Suppression block opened and never closed | medium | high |
@@ -154,6 +167,16 @@ and never closed. See [Suppressing a false positive](#suppressing-a-false-positi
 SEC001–SEC020 match on documented token structure. Two of them are looser than
 the rest and say so through their confidence: SEC014 is a two-letter prefix in
 front of 32 hex characters, and SEC020 is any `scheme://user:password@host`.
+
+SEC021 and SEC022 are the two rules a line-at-a-time scanner cannot express.
+SEC021 reports a Google service account key file -- `"type": "service_account"`
+plus a private key field, neither of which means anything alone and no single
+line of which sees both. SEC022 decodes base64 runs and hands the result to the
+provider rules: encoding is not encryption, but it is enough to hide a
+credential from every rule that reads the line it sits on, which is most of
+what a kubeconfig or a CI variable is made of. Only the documented token shapes
+are applied to decoded text, never entropy -- decoded base64 is random-looking
+by construction, so entropy there would fire on every certificate in the tree.
 
 #### The entropy rules
 
@@ -220,6 +243,8 @@ auditing what the scanner chose not to tell you.
 | WF006 | Job runs on a self-hosted runner | medium |
 | WF007 | Secret passed as an input to a third-party action | medium |
 | WF008 | `workflow_run` checking out untrusted code | critical |
+| WF009 | Checkout leaves a usable token in `.git/config` | high |
+| WF010 | Secret written to a job output or environment | high |
 
 WF003 is the script-injection class: `${{ github.event.issue.title }}` inside a
 `run:` step is substituted into the shell command *before* the shell runs, so an
@@ -238,6 +263,15 @@ output. WF007 is asked per step, and only for actions outside the `actions/` and
 `github/` namespaces: an action can read every input it is given, so handing one
 a secret extends that secret's blast radius to that action's supply chain. It is
 often necessary and often fine — hence medium — but it should be a decision.
+
+WF009 is scoped on purpose. `actions/checkout` leaves the job's token in the
+working copy unless told otherwise, which is tolerable on a workflow that only
+runs your own code and is not tolerable under `pull_request_target` or
+`workflow_run` -- triggers that exist precisely to run in a context an outsider
+influenced. Reporting every checkout in the world would get the rule switched
+off. WF010 catches a secret written to `$GITHUB_OUTPUT` or `$GITHUB_ENV`, where
+it outlives the step, reaches later jobs and calling workflows, and stops being
+covered by log masking the moment it is transformed.
 
 Workflow checks are pattern-based rather than YAML-aware, a deliberate
 consequence of the zero-dependency rule. What the scanner does parse is
@@ -266,6 +300,77 @@ compiler stage is how a whole tool gets switched off.
 DK004 is worth stating plainly: every `ENV` and `ARG` value survives in the image
 metadata, so `docker history` reads them back out of any published image, and
 deleting the value in a later layer does not remove it from the earlier one.
+
+### Terraform
+
+| Rule | Finds | Severity |
+| --- | --- | --- |
+| TF001 | Security group admits `0.0.0.0/0` | critical to an admin port, otherwise high |
+| TF002 | Storage granted to the public or to every account | high |
+| TF003 | Encryption at rest explicitly switched off | medium |
+| TF004 | Policy allows every action on every resource | high |
+| TF005 | Managed database given a public endpoint | high |
+| TF006 | Terraform state stored without encryption | medium |
+
+These read block structure rather than lines, through a small HCL reader that
+knows a line ending in `{` opens a block and that braces inside strings,
+comments and heredocs are not braces at all. The difference is the whole rule:
+`cidr_blocks` in an `egress` block is not a finding, `encrypted = false` inside
+`root_block_device` is a different finding from the same words at the top of a
+resource, and a wildcard action only counts when the statement's effect is
+`Allow`. TF001 grades on what the port range exposes, so `0.0.0.0/0` to 22 is
+critical and names SSH while `0.0.0.0/0` to 443 is high.
+
+What none of this can do is evaluate Terraform. A CIDR arriving through a
+variable, a `for_each` over a map of rules, a module whose defaults live
+somewhere else: all invisible. A clean report means the literal, obvious form
+of each mistake is absent.
+
+### Kubernetes
+
+| Rule | Finds | Severity |
+| --- | --- | --- |
+| K8S001 | Container runs privileged | critical |
+| K8S002 | Volume mounts a path from the node | critical for a runtime socket, otherwise high |
+| K8S003 | Pod shares a namespace with the node | high |
+| K8S004 | Container declares no resource limits | low |
+| K8S005 | Container declares that it runs as root | medium |
+| K8S006 | Privilege handed back after being dropped | high |
+| K8S007 | Credential committed inside a Secret manifest | critical |
+| K8S008 | Container image tag can point elsewhere tomorrow | medium |
+
+Manifests are found by content, not by filename: a Kubernetes document is one
+with `apiVersion` and `kind` at its root. That beats guessing at `deploy/`,
+`k8s/`, `manifests/` and `charts/templates/`, and it means a workflow file that
+happens to live in one of them is correctly ignored.
+
+Containers are found by walking for the container list keys rather than by
+knowing the shape of each workload kind, so a Pod, a Deployment, a CronJob and
+a custom resource that embeds a pod template are all covered by the same rules.
+
+K8S007 decodes what it finds. A `Secret` stores values base64-encoded, which is
+not encryption but is enough to hide a credential from every rule that reads
+lines; when the decoded value is a shape the secret rules recognise, the
+finding says which and is critical.
+
+### Docker Compose
+
+| Rule | Finds | Severity |
+| --- | --- | --- |
+| DC001 | Service runs privileged | critical |
+| DC002 | Service bind-mounts a path that grants the host | critical |
+| DC003 | Service shares a host namespace | high |
+| DC004 | Capability added or confinement disabled | high |
+| DC005 | Sensitive port published on every interface | high |
+| DC006 | Service image tag can point elsewhere tomorrow | low |
+
+DC005 is the one people are most often surprised by. `5432:5432` publishes
+PostgreSQL on every interface the host has, firewall permitting, and on a cloud
+instance that means the internet; `127.0.0.1:5432:5432` is the same line with
+the mistake removed. It fires only for ports worth shouting about -- a server on
+443 open to the world is the point of it. DC002 is scoped the same way: mounting
+the project directory is how everyone develops, so only the paths that grant the
+host are reported, the container runtime socket chief among them.
 
 ## Baselines
 
@@ -363,10 +468,11 @@ CI runs the suite on Python 3.9, 3.11 and 3.13, scans this repository with the
 tool itself, and publishes the result to the Security tab.
 
 The test suite includes a corpus that trips **every** rule in the catalogue, and
-asserts in both directions: no scanner may emit a rule the catalogue does not
-describe, and no catalogue entry may describe a rule nothing can emit. Adding a
-rule without documenting it fails the build, and so does leaving an entry behind
-after deleting one.
+asserts in three directions: no scanner may emit a rule the catalogue does not
+describe, no catalogue entry may describe a rule nothing can emit, and no rule
+may be missing from the tables in this README. Adding a rule without
+documenting it fails the build, and so does leaving an entry behind after
+deleting one.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for how a new rule earns its place.
 

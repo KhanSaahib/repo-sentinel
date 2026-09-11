@@ -38,6 +38,10 @@ _REF = re.compile(r"^\s*ref:\s*(?P<value>\S.*)$")
 _RUNS_ON = re.compile(r"^\s*runs-on:.*\bself-hosted\b")
 _SECRET_REFERENCE = re.compile(r"\$\{\{\s*secrets\.(?P<name>[A-Za-z_][\w-]*)")
 _JOBS_HEADER = re.compile(r"^jobs:\s*$")
+_PERSIST_CREDENTIALS = re.compile(r"^\s*persist-credentials:\s*(?P<value>\S+)")
+#: Writes that outlive the step: a job output, or the environment of every
+#: later step in the job.
+_EXPORTS = re.compile(r"\$GITHUB_OUTPUT|\$GITHUB_ENV|::set-output|::set-env")
 _BLOCK_KEY = re.compile(r"^(?P<indent>\s+)(?P<name>[A-Za-z_][\w-]*):\s*(?P<inline>.*)$")
 _STEP_START = re.compile(r"^(?P<indent>\s*)-\s+\S")
 
@@ -412,6 +416,97 @@ def _check_secret_handoff(path: str, jobs: list[Job]) -> Iterator[Finding]:
                 break
 
 
+def _check_persisted_credentials(path: str, lines: list[str], jobs: list[Job]) -> Iterator[Finding]:
+    """WF009: a checkout that leaves a usable token in ``.git/config``.
+
+    ``actions/checkout`` stores the job's ``GITHUB_TOKEN`` in the repository's
+    git config unless told not to, so every later step in the job -- including
+    a build script and everything it installs -- can push with it.
+
+    That is a tolerable default on a workflow that only ever runs the
+    repository's own code. Under ``pull_request_target`` or ``workflow_run`` it
+    is not, because those triggers exist precisely to run in a context an
+    outsider influenced, which is why the rule is scoped to them rather than
+    reported against every checkout in the world.
+    """
+    privileged = any(
+        pattern.match(line)
+        for line in lines
+        for pattern in (_PULL_REQUEST_TARGET, _WORKFLOW_RUN)
+    )
+    if not privileged:
+        return
+
+    for job in jobs:
+        for step in _iter_steps(job.body):
+            uses = next(
+                (
+                    _USES.match(text).group("ref")  # type: ignore[union-attr]
+                    for _, text in step
+                    if _USES.match(text)
+                ),
+                None,
+            )
+            if uses is None or not uses.startswith("actions/checkout"):
+                continue
+            setting = next(
+                (
+                    (number, _PERSIST_CREDENTIALS.match(text).group("value"))  # type: ignore[union-attr]
+                    for number, text in step
+                    if _PERSIST_CREDENTIALS.match(text)
+                ),
+                None,
+            )
+            if setting is not None and setting[1].strip("\"'").lower() == "false":
+                continue
+            line = setting[0] if setting is not None else step[0][0]
+            yield Finding(
+                rule_id="WF009",
+                severity=Severity.HIGH,
+                title=f"Checkout in job {job.name!r} leaves credentials in .git/config",
+                path=path,
+                line=line,
+                evidence=(
+                    "persist-credentials is not disabled under a privileged trigger"
+                ),
+                remediation=(
+                    "Add 'persist-credentials: false' to the checkout step. "
+                    "Without it the job's token stays in the working copy, "
+                    "where any script the job runs can use it to push."
+                ),
+            )
+
+
+def _check_exported_secrets(path: str, lines: list[str]) -> Iterator[Finding]:
+    """WF010: a secret written somewhere it outlives the step that knew it.
+
+    ``echo "token=${{ secrets.X }}" >> $GITHUB_OUTPUT`` hands the value to
+    every later job that consumes the output, and to the calling workflow if
+    this one is reusable. Masking only covers the literal string in logs; it
+    does not follow the value into a file, an artifact, or another workflow.
+    """
+    for number, line in _iter_run_lines(lines):
+        if not _EXPORTS.search(line):
+            continue
+        match = _SECRET_REFERENCE.search(line)
+        if match is None:
+            continue
+        yield Finding(
+            rule_id="WF010",
+            severity=Severity.HIGH,
+            title=f"Secret {match.group('name')!r} is written to a job output or environment",
+            path=path,
+            line=number,
+            evidence=line.strip(),
+            remediation=(
+                "Keep the secret in the step that needs it, passed through "
+                "env:. A value written to GITHUB_OUTPUT or GITHUB_ENV survives "
+                "the step, reaches later jobs and calling workflows, and is no "
+                "longer covered by log masking once it has been transformed."
+            ),
+        )
+
+
 def scan_workflow(path: str, text: str) -> list[Finding]:
     """Run every workflow rule against one workflow file.
 
@@ -434,6 +529,8 @@ def scan_workflow(path: str, text: str) -> list[Finding]:
         *_check_permissions(path, lines, jobs),
         *_check_runners(path, lines),
         *_check_secret_handoff(path, jobs),
+        *_check_persisted_credentials(path, lines, jobs),
+        *_check_exported_secrets(path, lines),
     ]
     return marks.filter_findings(findings)
 

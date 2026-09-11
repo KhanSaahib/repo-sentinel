@@ -78,6 +78,8 @@ RULES: "dict[str, Rule]" = _rules(
     ("WF006", "self-hosted-runner", "Job runs on a self-hosted runner", Severity.MEDIUM),
     ("WF007", "secret-to-third-party", "Secret passed as input to a third-party action", Severity.MEDIUM),
     ("WF008", "workflow-run-checkout", "workflow_run checking out untrusted code", Severity.CRITICAL),
+    ("WF009", "persisted-credentials", "Checkout leaves a usable token in .git/config", Severity.HIGH),
+    ("WF010", "secret-exported", "Secret written to a job output or environment", Severity.HIGH),
     ("DK001", "unpinned-base-image", "Base image not pinned to a digest", Severity.MEDIUM),
     ("DK002", "root-container", "Final image runs as root", Severity.MEDIUM),
     ("DK003", "pipe-to-shell", "Build step pipes a download into a shell", Severity.HIGH),

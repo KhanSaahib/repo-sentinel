@@ -4,6 +4,64 @@ All notable changes to repo-sentinel. This project follows [semantic
 versioning](https://semver.org/); until 1.0 the minor number carries breaking
 changes.
 
+## 0.3.0
+
+0.2.0 was about the output people read. This one is about how much of a
+repository the tool can read at all: it grew from two file formats to six.
+
+### Added
+
+- **Terraform** (TF001–TF006): security groups open to the internet, public
+  storage, encryption switched off, wildcard IAM policies, public database
+  endpoints, and unencrypted remote state. Built on a small HCL reader that
+  knows blocks, so `cidr_blocks` in an `egress` block is correctly not a
+  finding and `encrypted = false` in a `root_block_device` is reported where it
+  actually sits.
+- **Kubernetes** (K8S001–K8S008): privileged containers, host namespaces,
+  hostPath mounts, capabilities added after the drop, declared root, absent
+  resource limits, floating image tags, and credentials inside `Secret`
+  manifests -- decoded from base64 and identified by the secret rules.
+  Manifests are recognised by content (`apiVersion` plus `kind`), not by path.
+- **Docker Compose** (DC001–DC006): privileged services, bind mounts that grant
+  the host, shared host namespaces, confinement removed, sensitive ports
+  published on every interface, and floating image tags.
+- **SEC021**, a Google service account key file, which no single line reveals.
+- **SEC022**, a provider credential hidden inside base64 -- kubeconfigs, CI
+  variables, Helm values.
+- **WF009**, a checkout that leaves the job token in `.git/config` under a
+  privileged trigger, and **WF010**, a secret written to `$GITHUB_OUTPUT` or
+  `$GITHUB_ENV` where it outlives the step.
+- **`--paths-from FILE`** (`-` for stdin) to scan only the files a pull request
+  touched, **`--quiet`** for the summary alone, and **`--sort path`** for
+  reading a report rather than triaging it.
+- A **YAML subset reader** and an **HCL block reader**, both standard library
+  only, both explicit about what they do not parse.
+
+### Changed
+
+- Findings that share a path, a line and a redacted value are collapsed to one:
+  scanners overlap on purpose, reports should not. The most severe wins, and on
+  a tie the format-specific rule does.
+- Shared security facts -- which ports are worth shouting about, which host
+  paths grant the host, which capabilities are a synonym for root -- moved into
+  one module, so three scanners cannot drift into disagreeing about them.
+
+### Fixed
+
+- In the YAML reader, a colon only opens a mapping when whitespace follows it.
+  Without that, `- 5432:5432` parses as a mapping and a Compose port list turns
+  into nonsense.
+- A quoted type expression (`tuple[int, str, int]`) is no longer read as a
+  high-entropy credential. That one fired on this project's own source.
+- A base64 run that yields a credential is no longer also reported by the
+  entropy rules for being long and random.
+
+### Internal
+
+- The corpus test now asserts in three directions rather than two: every rule
+  must also appear in the README's tables, so the documentation cannot fall
+  behind the catalogue.
+
 ## 0.2.0
 
 The theme of this release is that a scanner is only useful if people keep

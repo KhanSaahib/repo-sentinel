@@ -1,5 +1,6 @@
 """The rule catalogue must describe exactly what the scanners can emit."""
 
+import pathlib
 import unittest
 
 import corpus
@@ -40,6 +41,16 @@ class TestCatalogue(unittest.TestCase):
         for rule in secrets._PROVIDER_RULES:
             with self.subTest(rule=rule.rule_id):
                 self.assertEqual(rules.RULES[rule.rule_id].severity, rule.severity)
+
+    def test_every_rule_is_documented_in_the_readme(self):
+        # The catalogue keeps the scanners honest; this keeps the README
+        # honest. A rule table nobody is forced to update is a rule table that
+        # describes the release before last.
+        readme = (pathlib.Path(__file__).resolve().parents[1] / "README.md").read_text(
+            encoding="utf-8"
+        )
+        undocumented = sorted(rule_id for rule_id in rules.RULES if rule_id not in readme)
+        self.assertEqual(undocumented, [], "rules missing from the README tables")
 
     def test_ids_are_unique_and_sorted_within_a_category(self):
         for category, catalogued in rules.by_category().items():
