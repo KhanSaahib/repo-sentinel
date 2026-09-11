@@ -61,5 +61,41 @@ class TestScan(unittest.TestCase):
         self.assertEqual(engine.scan_path(root), engine.scan(root).findings)
 
 
+class TestCollapse(unittest.TestCase):
+    """Scanners overlap on purpose; reports should not."""
+
+    def finding(self, rule_id, severity, evidence="AKIA****LM3D", line=6):
+        from repo_sentinel.findings import Finding, Severity
+
+        return Finding(
+            rule_id=rule_id,
+            severity=Severity.parse(severity),
+            title=rule_id,
+            path="s.yaml",
+            line=line,
+            evidence=evidence,
+        )
+
+    def test_the_same_value_at_the_same_line_is_reported_once(self):
+        kept = engine.collapse([self.finding("SEC022", "high"), self.finding("K8S007", "critical")])
+        self.assertEqual([finding.rule_id for finding in kept], ["K8S007"])
+
+    def test_a_tie_keeps_the_format_specific_rule(self):
+        kept = engine.collapse(
+            [self.finding("SEC022", "critical"), self.finding("K8S007", "critical")]
+        )
+        self.assertEqual([finding.rule_id for finding in kept], ["K8S007"])
+
+    def test_different_values_on_one_line_both_survive(self):
+        kept = engine.collapse(
+            [self.finding("SEC001", "critical"), self.finding("SEC005", "critical", "sk_l****90ab")]
+        )
+        self.assertEqual(len(kept), 2)
+
+    def test_the_same_value_on_different_lines_both_survive(self):
+        kept = engine.collapse([self.finding("SEC001", "critical"), self.finding("SEC001", "critical", line=9)])
+        self.assertEqual(len(kept), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

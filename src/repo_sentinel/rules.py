@@ -65,6 +65,8 @@ RULES: "dict[str, Rule]" = _rules(
     ("SEC018", "slack-webhook", "Slack incoming webhook URL", Severity.HIGH),
     ("SEC019", "huggingface-token", "Hugging Face access token", Severity.HIGH),
     ("SEC020", "url-credentials", "Credentials embedded in a URL", Severity.HIGH),
+    ("SEC021", "gcp-service-account", "Google service account key file", Severity.CRITICAL),
+    ("SEC022", "base64-wrapped-credential", "Provider credential hidden inside base64", Severity.HIGH),
     ("SEC100", "entropy-quoted", "High-entropy value assigned to a secret-shaped name", Severity.HIGH),
     ("SEC101", "entropy-value-position", "High-entropy value in an unquoted config value position", Severity.HIGH),
     ("SEC900", "unterminated-suppression", "Suppression block opened and never closed", Severity.MEDIUM),

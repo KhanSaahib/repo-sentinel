@@ -22,6 +22,8 @@ scanner people learn to ignore.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import dataclasses
 import posixpath
 import re
@@ -245,6 +247,26 @@ _ANY_PROVIDER = re.compile(
     )
 )
 
+#: A run of base64 long enough to be hiding something. Encoding is not
+#: encryption, but it is enough to make a credential invisible to every rule
+#: that reads the line it sits on -- kubeconfigs, CI variables and manifests
+#: are full of them -- so SEC022 decodes these and asks the provider rules
+#: what they see.
+#: Two alphabets, scanned separately on purpose. A single class containing
+#: both would swallow the name in front of the value -- "TOKEN=QUtJ..." is one
+#: unbroken run of it -- and the joined string decodes to nothing, which is how
+#: a rule quietly stops firing.
+_BASE64_RUNS = (
+    re.compile(r"[A-Za-z0-9+/]{24,}"),
+    re.compile(r"[A-Za-z0-9_-]{24,}"),
+)
+
+#: The two fields that together make a file a Google service account key.
+#: Either alone is unremarkable; the pair is a credential with no expiry that
+#: is accepted by every Google API the account can reach.
+_SERVICE_ACCOUNT_TYPE = re.compile(r'"type"\s*:\s*"service_account"')
+_SERVICE_ACCOUNT_KEY = re.compile(r'"private_key(?:_id)?"\s*:')
+
 #: Quoted assignment: ``api_key = "...."`` in any language that quotes strings.
 _QUOTED_ASSIGNMENT = re.compile(
     r"""(?ix)
@@ -330,34 +352,53 @@ def scan_line(
 
     matched_spans: list[tuple[int, int]] = []
 
-    # The prefilter answers 'is there a credential shape on this line at all'
-    # in one pass. Only when it says yes is it worth asking twenty rules
-    # which one, which on a real repository is almost never.
-    if _ANY_PROVIDER.search(line):
-        for rule in _PROVIDER_RULES:
-            for match in rule.pattern.finditer(line):
-                secret = match.group(rule.secret_group)
-                # Record the span before deciding whether to report: a suppressed
-                # example must not resurface under the entropy rules below.
-                matched_spans.append(match.span(rule.secret_group))
-                if rule.reject is not None and rule.reject(match):
-                    continue
-                if allow_examples and allowlist.is_known_example(secret):
-                    continue
-                yield Finding(
-                    rule_id=rule.rule_id,
-                    severity=rule.severity,
-                    title=rule.title,
-                    path=path,
-                    line=line_number,
-                    evidence=_evidence_for(match, rule),
-                    remediation=rule.remediation,
-                    confidence=rule.confidence,
-                )
+    yield from _provider_findings(path, line_number, line, matched_spans, allow_examples)
+
+    yield from _scan_encoded(
+        path, line_number, line, matched_spans, allow_examples
+    )
 
     yield from _scan_assignments(
         path, line_number, line, matched_spans, allow_examples, value_position
     )
+
+
+def _provider_findings(
+    path: str,
+    line_number: int,
+    line: str,
+    matched_spans: "list[tuple[int, int]]",
+    allow_examples: bool,
+) -> Iterator[Finding]:
+    """Every documented token shape, in one line of text.
+
+    Spans of everything matched are recorded even when the finding is
+    suppressed as a known example, so that a value the allowlist silenced
+    cannot resurface under the entropy rules below.
+    """
+    # The prefilter answers 'is there a credential shape on this line at all'
+    # in one pass. Only when it says yes is it worth asking twenty rules
+    # which one, which on a real repository is almost never.
+    if not _ANY_PROVIDER.search(line):
+        return
+    for rule in _PROVIDER_RULES:
+        for match in rule.pattern.finditer(line):
+            secret = match.group(rule.secret_group)
+            matched_spans.append(match.span(rule.secret_group))
+            if rule.reject is not None and rule.reject(match):
+                continue
+            if allow_examples and allowlist.is_known_example(secret):
+                continue
+            yield Finding(
+                rule_id=rule.rule_id,
+                severity=rule.severity,
+                title=rule.title,
+                path=path,
+                line=line_number,
+                evidence=_evidence_for(match, rule),
+                remediation=rule.remediation,
+                confidence=rule.confidence,
+            )
 
 
 def _scan_assignments(
@@ -425,6 +466,95 @@ def _scan_assignments(
         )
 
 
+def _runs(line: str) -> "Iterator[re.Match[str]]":
+    """Every base64-looking run in a line, under either alphabet."""
+    for pattern in _BASE64_RUNS:
+        yield from pattern.finditer(line)
+
+
+def _decode_base64(value: str) -> str:
+    """Decode a base64 run to text, or "" when it is not base64 text.
+
+    Deliberately forgiving about padding and about the URL-safe alphabet, and
+    deliberately unforgiving about the result: a blob that decodes to bytes
+    rather than text is a blob, not a hidden credential.
+    """
+    candidate = value.replace("-", "+").replace("_", "/")
+    padded = candidate + "=" * (-len(candidate) % 4)
+    try:
+        return base64.b64decode(padded, validate=True).decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError, ValueError):
+        return ""
+
+
+def _scan_encoded(
+    path: str,
+    line_number: int,
+    line: str,
+    matched_spans: "list[tuple[int, int]]",
+    allow_examples: bool,
+) -> Iterator[Finding]:
+    """SEC022: a provider credential hiding inside a base64 value.
+
+    Only provider rules are applied to the decoded text, never the entropy
+    ones. Decoded base64 is random-looking by construction, so entropy would
+    fire on every certificate in the repository; a documented token shape
+    inside one is a different claim entirely.
+
+    A run that yields a finding has its span recorded, so the entropy rules do
+    not then report the same base64 token a second time for being long and
+    random -- which it is, and which is no longer the interesting part.
+    """
+    seen: "set[str]" = set()
+    for match in _runs(line):
+        decoded = _decode_base64(match.group(0))
+        if not decoded or decoded in seen:
+            continue
+        seen.add(decoded)
+        inner: "list[tuple[int, int]]" = []
+        for finding in _provider_findings(path, line_number, decoded, inner, allow_examples):
+            matched_spans.append(match.span())
+            yield Finding(
+                rule_id="SEC022",
+                severity=finding.severity,
+                title=f"{finding.title}, base64 encoded",
+                path=path,
+                line=line_number,
+                evidence=finding.evidence,
+                remediation=(
+                    f"{finding.remediation} Encoding is not encryption: the "
+                    "value is as committed as if it were written out."
+                ),
+                confidence=finding.confidence,
+            )
+
+
+def scan_document(path: str, text: str) -> Iterator[Finding]:
+    """Findings that only exist when the whole file is read at once.
+
+    A line-at-a-time scanner cannot see that ``"type": "service_account"`` on
+    line two and ``"private_key"`` on line five are the same object. That pair
+    is a Google service account key file, which is a credential with no expiry
+    and usually far more authority than whatever needed it.
+    """
+    type_match = _SERVICE_ACCOUNT_TYPE.search(text)
+    if type_match is None or not _SERVICE_ACCOUNT_KEY.search(text):
+        return
+    yield Finding(
+        rule_id="SEC021",
+        severity=Severity.CRITICAL,
+        title="Google service account key file",
+        path=path,
+        line=text.count("\n", 0, type_match.start()) + 1,
+        evidence='"type": "service_account" with a private key',
+        remediation=(
+            "Delete the key in the Google Cloud console -- it does not expire, "
+            "so the file being old is no comfort -- and move the workload to "
+            "workload identity federation or an attached service account."
+        ),
+    )
+
+
 def scan_text(path: str, text: str, *, allow_examples: bool = True) -> list[Finding]:
     """Scan an entire file's contents, honouring its suppression directives.
 
@@ -450,6 +580,8 @@ def scan_text(path: str, text: str, *, allow_examples: bool = True) -> list[Find
             value_position=value_position,
         )
     ]
+
+    findings.extend(scan_document(path, text))
 
     # Appended after the filter on purpose: the warning sits on a suppressed
     # line by definition, and suppressing the report of a runaway suppression

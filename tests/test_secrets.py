@@ -1,3 +1,4 @@
+import base64
 import unittest
 
 import fixtures
@@ -194,6 +195,69 @@ class TestValuePositions(unittest.TestCase):
     def test_does_not_report_the_same_value_twice(self):
         text = "AWS_SECRET_ACCESS_KEY=" + fixtures.REALISTIC_AWS_KEY_ID
         self.assertEqual(len(secrets.scan_text(".env", text)), 1)
+
+
+class TestEncodedCredentials(unittest.TestCase):
+    """base64 is an encoding, and encodings are not hiding places."""
+
+    def encoded(self, value):
+        return base64.b64encode(value.encode()).decode()
+
+    def test_finds_a_provider_token_inside_base64(self):
+        line = "token: " + self.encoded(fixtures.REALISTIC_AWS_KEY_ID)
+        findings = secrets.scan_text("kubeconfig.yaml", line)
+        self.assertEqual(rule_ids(findings), {"SEC022"})
+        self.assertIn("base64", findings[0].title)
+
+    def test_the_name_in_front_of_the_value_does_not_hide_it(self):
+        # "TOKEN=QUtJ..." is one unbroken run of base64 characters if "=" is
+        # part of the alphabet, and the joined string decodes to nothing.
+        for line in (
+            "TOKEN=" + self.encoded(fixtures.REALISTIC_AWS_KEY_ID),
+            "aws_" + self.encoded(fixtures.REALISTIC_AWS_KEY_ID),
+        ):
+            with self.subTest(line=line[:20]):
+                self.assertIn("SEC022", rule_ids(secrets.scan_text("ci.env", line)))
+
+    def test_the_entropy_rule_does_not_report_it_a_second_time(self):
+        line = "api_token: " + self.encoded(fixtures.REALISTIC_AWS_KEY_ID)
+        self.assertEqual(rule_ids(secrets.scan_text("config.yaml", line)), {"SEC022"})
+
+    def test_ordinary_base64_is_not_a_finding(self):
+        blob = self.encoded("the quick brown fox jumps over the lazy dog, twice over")
+        self.assertEqual(secrets.scan_text("a.py", f'BLOB = "{blob}"'), [])
+
+    def test_a_binary_blob_is_not_decoded_into_a_finding(self):
+        blob = base64.b64encode(bytes(range(256))).decode()
+        self.assertEqual(secrets.scan_text("a.py", f'BLOB = "{blob}"'), [])
+
+    def test_the_raw_value_never_reaches_the_report(self):
+        line = "token: " + self.encoded(fixtures.REALISTIC_AWS_KEY_ID)
+        finding = secrets.scan_text("kubeconfig.yaml", line)[0]
+        self.assertNotIn(fixtures.REALISTIC_AWS_KEY_ID, finding.evidence)
+
+
+class TestServiceAccountFiles(unittest.TestCase):
+    """A finding that only exists when the whole document is read at once."""
+
+    def document(self, *fields):
+        return "{\n" + ",\n".join(fields) + "\n}\n"
+
+    def test_type_and_private_key_together_are_a_key_file(self):
+        text = self.document(
+            '  "type": "service_account"', '  "project_id": "x"', '  "private_key_id": "abc"'
+        )
+        findings = secrets.scan_text("sa.json", text)
+        self.assertIn("SEC021", rule_ids(findings))
+        self.assertEqual(next(f for f in findings if f.rule_id == "SEC021").line, 2)
+
+    def test_the_type_alone_is_not_a_credential(self):
+        text = self.document('  "type": "service_account"', '  "client_email": "a@b.com"')
+        self.assertEqual(secrets.scan_text("sa.json", text), [])
+
+    def test_a_private_key_field_alone_is_not_a_service_account(self):
+        text = self.document('  "private_key_id": "abc"')
+        self.assertNotIn("SEC021", rule_ids(secrets.scan_text("other.json", text)))
 
 
 if __name__ == "__main__":

@@ -55,10 +55,35 @@ def scan(
     found += compose.scan_files(files)
 
     return ScanReport(
-        findings=sorted(found, key=lambda finding: finding.sort_key),
+        findings=sorted(collapse(found), key=lambda finding: finding.sort_key),
         file_count=len(files),
         duration=time.monotonic() - started,
     )
+
+
+def collapse(findings: "Iterable[Finding]") -> "list[Finding]":
+    """Drop the second report of one problem.
+
+    Scanners overlap on purpose -- a credential inside a Kubernetes Secret is
+    both a manifest problem and a secret, and each rule says something the
+    other cannot. What nobody needs is the same value, at the same line, listed
+    twice. Where that happens the more severe finding wins; on a tie the rule
+    whose id sorts first does, which reliably keeps the file-format rule over
+    the generic one because every format prefix sorts ahead of SEC.
+
+    Identity is the redacted evidence rather than the title, so two rules that
+    genuinely found different things on one line both survive.
+    """
+    best: "dict[tuple[str, int, str], Finding]" = {}
+    for finding in findings:
+        key = (finding.path, finding.line, finding.evidence)
+        current = best.get(key)
+        if current is None or (
+            (-finding.severity.rank, -finding.confidence.rank, finding.rule_id)
+            < (-current.severity.rank, -current.confidence.rank, current.rule_id)
+        ):
+            best[key] = finding
+    return list(best.values())
 
 
 def scan_path(

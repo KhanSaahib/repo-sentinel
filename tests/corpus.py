@@ -53,9 +53,21 @@ SECRETS_FILE = "\n".join(
     )
 )
 
+SERVICE_ACCOUNT_FILE = "\n".join(
+    (
+        "{",
+        '  "type": "service_account",',
+        '  "project_id": "billing-prod",',
+        '  "private_key_id": "' + _filler(40) + '",',
+        '  "client_email": "svc@billing-prod.iam.gserviceaccount.com"',
+        "}",
+    )
+)
+
 ENV_FILE = "\n".join(
     (
         "APP_NAME=billing",
+        "AWS_BACKUP=" + _b64("aws_access_key_id=" + fixtures.REALISTIC_AWS_KEY_ID),
         "DATABASE_PASSWORD=Tv8nRw1YXk92mQp7Lz4T",
     )
 )
@@ -183,6 +195,7 @@ COMPOSE_FILE = """services:
 FILES = (
     ("src/config.py", SECRETS_FILE),
     (".env", ENV_FILE),
+    ("deploy/service-account.json", SERVICE_ACCOUNT_FILE),
     ("src/generated.py", RUNAWAY_SUPPRESSION_FILE),
     (".github/workflows/risky.yml", WORKFLOW_FILE),
     ("Dockerfile", DOCKERFILE),
