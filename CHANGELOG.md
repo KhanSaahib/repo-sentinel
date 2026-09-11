@@ -61,6 +61,9 @@ repository the tool can read at all: it grew from two file formats to six.
   `package.json`, `.npmrc`, `requirements*.txt`, `pip.conf`, `Gemfile` and
   `pom.xml` -- the question of where the rest of the build comes from, which
   every other family leaves unasked.
+- **`--no-suppression`**, which reads the `repo-sentinel: ignore` markers but
+  does not obey them, and a count of marker lines in every run's summary
+  whether or not they were obeyed.
 - **JSON is read wherever YAML is**: CloudFormation templates, Kubernetes
   manifests, `package.json` and `composer.json`, through a small reader that
   keeps line numbers and produces the same nodes as the YAML one. No rule
@@ -129,6 +132,14 @@ repository the tool can read at all: it grew from two file formats to six.
 
 ### Fixed
 
+- **The YAML reader kept trailing comments inside values.** `privileged: true
+  # a note` was not `true`, so the rule reading it quietly found nothing --
+  the worst way for a scanner to be wrong, and invisible from the output. Every
+  YAML-based family was affected.
+- **A suppression marker on a Dockerfile instruction broke the instruction.**
+  Docker has no inline comments, so the marker became part of the image
+  reference and the rule found nothing to parse: suppression by accident rather
+  than by decision.
 - **The YAML sequence parser was quadratic.** Parsing `- key: value` rebuilt the
   remaining token list for every item, so a 40,000-line rules file took minutes:
   scanning the Prometheus repository did not finish in five. It now takes 13

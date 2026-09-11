@@ -24,6 +24,12 @@ from ..findings import Confidence, Finding, Severity, redact
 from ..heuristics import is_secret_name, looks_generated
 
 _INSTRUCTION = re.compile(r"^\s*(?P<name>[A-Za-z]+)\s+(?P<rest>.*)$")
+#: Docker has no inline comments -- a "#" mid-line is part of the argument --
+#: so a suppression marker written at the end of an instruction would
+#: otherwise become part of the image reference and stop it parsing. The
+#: marker is this tool's, so this tool removes it; every other "#" is left
+#: exactly where the author put it.
+_MARKER_COMMENT = re.compile(r"\s+#\s*repo-sentinel:.*$")
 _FROM = re.compile(
     r"^(?P<image>[^\s]+?)(?::(?P<tag>[^\s@]+))?(?:@(?P<digest>sha256:[0-9a-f]{64}))?"
     r"(?:\s+[Aa][Ss]\s+(?P<stage>\S+))?\s*$"
@@ -67,7 +73,7 @@ def iter_instructions(lines: list[str]) -> Iterator[tuple[int, str, str]]:
             index += 1
             joined = joined[:-1].rstrip() + " " + lines[index].strip()
         index += 1
-        match = _INSTRUCTION.match(joined)
+        match = _INSTRUCTION.match(_MARKER_COMMENT.sub("", joined))
         if match is None:
             continue
         yield start + 1, match.group("name").upper(), match.group("rest").strip()
@@ -190,9 +196,11 @@ def _shorten(text: str, limit: int = 160) -> str:
     return collapsed if len(collapsed) <= limit else collapsed[: limit - 1] + "…"
 
 
-def scan_dockerfile(path: str, text: str) -> list[Finding]:
+def scan_dockerfile(
+    path: str, text: str, marks: "suppression.Suppressions | None" = None
+) -> list[Finding]:
     """Run every Dockerfile rule against one build file."""
-    marks = suppression.parse(text)
+    marks = suppression.parse(text) if marks is None else marks
     if marks.whole_file:
         return []
 
@@ -258,11 +266,14 @@ def _check_final_user(
     )
 
 
-def scan_files(files: Iterable[tuple[str, str]]) -> list[Finding]:
+def scan_files(
+    files: "Iterable[tuple[str, str]]", *, honour_markers: bool = True
+) -> "list[Finding]":
     """Scan ``(path, text)`` pairs, ignoring anything that is not a Dockerfile."""
+    markers = None if honour_markers else suppression.NONE
     return [
         finding
         for path, text in files
         if is_dockerfile_path(path)
-        for finding in scan_dockerfile(path, text)
+        for finding in scan_dockerfile(path, text, markers)
     ]

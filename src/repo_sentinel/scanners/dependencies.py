@@ -275,13 +275,15 @@ def _check_requirement_urls(path: str, text: str) -> "Iterator[Finding]":
         )
 
 
-def scan_manifest(path: str, text: str) -> "list[Finding]":
+def scan_manifest(
+    path: str, text: str, marks: "suppression.Suppressions | None" = None
+) -> "list[Finding]":
     """Run the rules for whichever package manager this file belongs to."""
     kind = manifest_kind(path)
     if kind is None:
         return []
 
-    marks = suppression.parse(text)
+    marks = suppression.parse(text) if marks is None else marks
     if marks.whole_file:
         return []
 
@@ -295,6 +297,9 @@ def scan_manifest(path: str, text: str) -> "list[Finding]":
     return marks.filter_findings(findings)
 
 
-def scan_files(files: "Iterable[tuple[str, str]]") -> "list[Finding]":
+def scan_files(
+    files: "Iterable[tuple[str, str]]", *, honour_markers: bool = True
+) -> "list[Finding]":
     """Scan ``(path, text)`` pairs, ignoring anything that is not a manifest."""
-    return [finding for path, text in files for finding in scan_manifest(path, text)]
+    markers = None if honour_markers else suppression.NONE
+    return [finding for path, text in files for finding in scan_manifest(path, text, markers)]

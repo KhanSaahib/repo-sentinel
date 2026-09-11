@@ -7,6 +7,7 @@ import time
 from collections.abc import Iterable
 
 from .discovery import DEFAULT_EXCLUDES, Entry, read_listed, walk
+from . import suppression
 from .findings import Finding
 from .scanners import (
     ansible,
@@ -36,6 +37,11 @@ class ScanReport:
     findings: "list[Finding]"
     file_count: int
     duration: float
+    #: How many lines carry a suppression directive, and in how many files.
+    #: Reported rather than merely obeyed: a scanner that can be switched off
+    #: invisibly is worse than no scanner.
+    suppressed_lines: int = 0
+    suppressed_files: int = 0
 
 
 def scan(
@@ -45,6 +51,7 @@ def scan(
     allow_examples: bool = True,
     use_gitignore: bool = True,
     only_paths: "Iterable[str] | None" = None,
+    honour_markers: bool = True,
 ) -> ScanReport:
     """Run every scanner over ``path``, worst findings first.
 
@@ -64,21 +71,30 @@ def scan(
     files = [(entry.path, entry.text) for entry in entries if entry.text is not None]
 
     found = filenames.scan_paths([(entry.path, entry.text) for entry in entries])
-    found += secrets.scan_files(files, allow_examples=allow_examples)
-    found += workflows.scan_files(files)
-    found += dockerfiles.scan_files(files)
-    found += terraform.scan_files(files)
-    found += kubernetes.scan_files(files)
-    found += compose.scan_files(files)
-    found += gitlab.scan_files(files)
-    found += cloudformation.scan_files(files)
-    found += dependencies.scan_files(files)
-    found += ansible.scan_files(files)
+    found += secrets.scan_files(
+        files, allow_examples=allow_examples, honour_markers=honour_markers
+    )
+    for scanner in (
+        workflows,
+        dockerfiles,
+        terraform,
+        kubernetes,
+        compose,
+        gitlab,
+        cloudformation,
+        dependencies,
+        ansible,
+    ):
+        found += scanner.scan_files(files, honour_markers=honour_markers)
+
+    marked = [len(suppression.parse(text).marked_lines) for _, text in files]
 
     return ScanReport(
         findings=sorted(collapse(found), key=lambda finding: finding.sort_key),
         file_count=len(entries),
         duration=time.monotonic() - started,
+        suppressed_lines=sum(marked),
+        suppressed_files=sum(1 for count in marked if count),
     )
 
 

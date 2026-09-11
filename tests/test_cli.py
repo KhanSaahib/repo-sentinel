@@ -384,6 +384,35 @@ class TestPathList(unittest.TestCase):
         self.assertEqual(listed, cli.EXIT_FINDINGS)
 
 
+class TestSuppressionVisibility(unittest.TestCase):
+    """Silence is always counted, and can always be read past."""
+
+    def repository(self, root):
+        with open(os.path.join(root, "Dockerfile"), "w", encoding="utf-8") as handle:
+            handle.write("FROM debian:latest  # repo-sentinel: ignore\nUSER app\n")
+
+    def test_the_markers_are_counted_even_when_obeyed(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.repository(root)
+            code, output = run(["scan", root])
+        self.assertEqual(code, cli.EXIT_OK)
+        self.assertIn("carry a suppression marker", output)
+
+    def test_no_suppression_reads_past_them(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.repository(root)
+            code, output = run(["scan", root, "--no-suppression"])
+        self.assertEqual(code, cli.EXIT_FINDINGS)
+        self.assertIn("DK001", output)
+
+    def test_a_repository_with_no_markers_says_nothing_about_them(self):
+        with tempfile.TemporaryDirectory() as root:
+            with open(os.path.join(root, "Dockerfile"), "w", encoding="utf-8") as handle:
+                handle.write("FROM debian:12@sha256:" + "a" * 64 + "\nUSER app\n")
+            _, output = run(["scan", root])
+        self.assertNotIn("suppression marker", output)
+
+
 class TestQuietAndSort(unittest.TestCase):
     def test_quiet_keeps_the_counts_and_drops_the_detail(self):
         with sample_repo() as root:

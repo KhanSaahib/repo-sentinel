@@ -109,10 +109,14 @@ Two invariants hold across all of it:
 
 - **The command line always wins.** A config file can never stop somebody
   auditing their own repository more strictly than the project usually does.
-- **Silence is always counted.** A disabled rule, a baselined finding, a
-  suppressed line: every one of them is reported as a number in the output.
-  Silence nobody can see is the failure this whole tool exists to avoid, and a
-  scanner that can be switched off invisibly is worse than no scanner.
+- **Silence is always counted, and can always be read past.** A disabled rule,
+  a baselined finding, a suppressed line: each is reported as a number in the
+  output, and each has a flag that ignores it -- `--disable` is answered by the
+  count, the baseline by `--write-baseline`, the markers by `--no-suppression`,
+  `.gitignore` by `--no-gitignore`, and the example allowlist by
+  `--no-example-allowlist`. Silence nobody can see is the failure this whole
+  tool exists to avoid, and a scanner that can be switched off invisibly is
+  worse than no scanner.
 
 The unterminated suppression block is the same principle as a rule: SEC900
 reports a marker that silences the rest of a file, because otherwise the file

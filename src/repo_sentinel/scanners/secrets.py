@@ -664,7 +664,13 @@ def scan_document(path: str, text: str) -> Iterator[Finding]:
     )
 
 
-def scan_text(path: str, text: str, *, allow_examples: bool = True) -> list[Finding]:
+def scan_text(
+    path: str,
+    text: str,
+    *,
+    allow_examples: bool = True,
+    marks: "suppression.Suppressions | None" = None,
+) -> list[Finding]:
     """Scan an entire file's contents, honouring its suppression directives.
 
     This is where file-level and block-level markers are resolved, because
@@ -672,7 +678,7 @@ def scan_text(path: str, text: str, *, allow_examples: bool = True) -> list[Find
     warning is raised here rather than in the workflow scanner so that it is
     reported once per file, whatever the file happens to be.
     """
-    marks = suppression.parse(text)
+    marks = suppression.parse(text) if marks is None else marks
     if marks.whole_file:
         return []
 
@@ -725,11 +731,15 @@ def _weigh_for_context(path: str, findings: "list[Finding]") -> "list[Finding]":
 
 
 def scan_files(
-    files: Iterable[tuple[str, str]], *, allow_examples: bool = True
+    files: Iterable[tuple[str, str]],
+    *,
+    allow_examples: bool = True,
+    honour_markers: bool = True,
 ) -> list[Finding]:
     """Scan ``(path, text)`` pairs."""
+    markers = None if honour_markers else suppression.NONE
     return [
         finding
         for path, text in files
-        for finding in scan_text(path, text, allow_examples=allow_examples)
+        for finding in scan_text(path, text, allow_examples=allow_examples, marks=markers)
     ]

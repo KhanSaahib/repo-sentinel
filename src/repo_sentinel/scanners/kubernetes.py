@@ -23,7 +23,7 @@ import base64
 import binascii
 import posixpath
 import re
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 
 from .. import jsonish, suppression, wellknown, yamlish
 from ..findings import Confidence, Finding, Severity, redact
@@ -441,10 +441,16 @@ def _decode(value: str) -> str:
         return ""
 
 
+#: What every rule below looks like: a path and a document in, findings out.
+#: Spelled out so that the two rule sets and the variable holding one of them
+#: agree about their type -- otherwise a checker reads each tuple as its own
+#: fixed-length type and refuses the assignment.
+_Rule = Callable[[str, "yamlish.Node"], "Iterator[Finding]"]
+
 #: Rules that read a value the document actually contains. These are as sound
 #: on a Helm template as on a finished manifest: "privileged: true" written in
 #: a chart is privileged: true when it is installed.
-_POSITIVE_RULES = (
+_POSITIVE_RULES: "tuple[_Rule, ...]" = (
     _check_privileged,
     _check_host_paths,
     _check_host_namespaces,
@@ -458,20 +464,23 @@ _POSITIVE_RULES = (
 #: Rules that conclude something from what is *missing* or from a value's
 #: exact shape. A template cannot answer either question: the values file
 #: supplies the limits and the image tag, and neither is in front of us.
-_COMPLETE_DOCUMENT_RULES = (
+_COMPLETE_DOCUMENT_RULES: "tuple[_Rule, ...]" = (
     _check_resources,
     _check_images,
 )
 
-_RULES = _POSITIVE_RULES + _COMPLETE_DOCUMENT_RULES
+_RULES: "tuple[_Rule, ...]" = _POSITIVE_RULES + _COMPLETE_DOCUMENT_RULES
 
 
-def scan_manifest(path: str, text: str) -> "list[Finding]":
+def scan_manifest(
+    path: str, text: str, marks: "suppression.Suppressions | None" = None
+) -> "list[Finding]":
     """Run every rule against every Kubernetes document in one file."""
-    marks = suppression.parse(text)
+    marks = suppression.parse(text) if marks is None else marks
     if marks.whole_file:
         return []
 
+    active: "tuple[_Rule, ...]"
     if jsonish.looks_like_json(text):
         # `kubectl get -o json` and anything that generates manifests. Same
         # rules, same nodes, a different reader.
@@ -491,11 +500,14 @@ def scan_manifest(path: str, text: str) -> "list[Finding]":
     return marks.filter_findings(findings)
 
 
-def scan_files(files: "Iterable[tuple[str, str]]") -> "list[Finding]":
+def scan_files(
+    files: "Iterable[tuple[str, str]]", *, honour_markers: bool = True
+) -> "list[Finding]":
     """Scan ``(path, text)`` pairs, ignoring anything that is not a manifest."""
+    markers = None if honour_markers else suppression.NONE
     return [
         finding
         for path, text in files
         if is_manifest_path(path)
-        for finding in scan_manifest(path, text)
+        for finding in scan_manifest(path, text, markers)
     ]

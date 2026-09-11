@@ -222,9 +222,11 @@ def _check_plaintext_fetch(path: str, task: "yamlish.Node") -> "Iterator[Finding
 _RULES = (_check_verification, _check_modes, _check_plaintext_fetch)
 
 
-def scan_playbook(path: str, text: str) -> "list[Finding]":
+def scan_playbook(
+    path: str, text: str, marks: "suppression.Suppressions | None" = None
+) -> "list[Finding]":
     """Run every Ansible rule against one playbook or task file."""
-    marks = suppression.parse(text)
+    marks = suppression.parse(text) if marks is None else marks
     if marks.whole_file:
         return []
 
@@ -239,11 +241,14 @@ def scan_playbook(path: str, text: str) -> "list[Finding]":
     return marks.filter_findings(findings)
 
 
-def scan_files(files: "Iterable[tuple[str, str]]") -> "list[Finding]":
+def scan_files(
+    files: "Iterable[tuple[str, str]]", *, honour_markers: bool = True
+) -> "list[Finding]":
     """Scan ``(path, text)`` pairs, ignoring anything that is not Ansible."""
+    markers = None if honour_markers else suppression.NONE
     return [
         finding
         for path, text in files
         if is_yaml_path(path)
-        for finding in scan_playbook(path, text)
+        for finding in scan_playbook(path, text, markers)
     ]

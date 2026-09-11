@@ -74,6 +74,24 @@ class TestScalarsAndGaps(unittest.TestCase):
         self.assertFalse(document.get("e").falsy())
 
 
+class TestComments(unittest.TestCase):
+    def test_a_trailing_comment_is_not_part_of_the_value(self):
+        self.assertEqual(parse("a: true  # repo-sentinel: ignore\n").get("a").text, "true")
+        self.assertEqual(parse("a: nginx # pin me\n").get("a").text, "nginx")
+
+    def test_a_hash_inside_quotes_stays(self):
+        self.assertEqual(parse('a: "x # y"\n').get("a").text, '"x # y"')
+
+    def test_a_hash_with_no_space_before_it_is_not_a_comment(self):
+        # YAML starts a comment at a "#" that follows whitespace, and nowhere
+        # else, which is what keeps a URL fragment intact.
+        self.assertEqual(parse("a: http://h/#frag\n").get("a").text, "http://h/#frag")
+
+    def test_sequence_items_are_stripped_too(self):
+        document = parse("args:\n  - --verbose  # why\n")
+        self.assertEqual(next(document.get("args").entries()).text, "--verbose")
+
+
 class TestColonRule(unittest.TestCase):
     """A colon only opens a mapping when whitespace follows it."""
 

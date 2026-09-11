@@ -146,6 +146,30 @@ def strip_templates(text: str) -> str:
     return "\n".join(out)
 
 
+def strip_comment(value: str) -> str:
+    """Remove a trailing comment from a scalar, leaving quoted text alone.
+
+    YAML starts a comment at a ``#`` that follows whitespace or begins the
+    value, and nowhere else: ``image: nginx  # pinned later`` is a comment and
+    ``url: http://x/#anchor`` is not. Without this, every value in a commented
+    file carries the comment with it -- ``true  # repo-sentinel: ignore`` is
+    not ``true``, so the rule reading it quietly finds nothing, which is the
+    worst way for a scanner to be wrong.
+    """
+    quote = None
+    for index, character in enumerate(value):
+        if quote:
+            if character == quote:
+                quote = None
+            continue
+        if character in "\"'":
+            quote = character
+            continue
+        if character == "#" and (index == 0 or value[index - 1] in " \t"):
+            return value[:index].rstrip()
+    return value
+
+
 def parse(text: str) -> "list[Node]":
     """Read a YAML stream into one :class:`Node` per document."""
     lines = text.splitlines()
@@ -243,7 +267,7 @@ def _parse_mapping(tokens: 'list[Token]', index: int, indent: int) -> "tuple[Nod
         key = match.group("key").strip().strip("\"'")
         value = match.group("value")
         if value and not _BLOCK_SCALAR.match(value):
-            mapping[key] = Node(value.strip(), line)
+            mapping[key] = Node(strip_comment(value).strip(), line)
             index += 1
             continue
         child, index = _parse_child(tokens, index + 1, current_indent, line)
@@ -269,7 +293,7 @@ def _parse_sequence(tokens: 'list[Token]', index: int, indent: int) -> "tuple[No
             child, index = _parse_child(tokens, index + 1, current_indent, line)
             items.append(child)
             continue
-        items.append(Node(rest.strip(), line))
+        items.append(Node(strip_comment(rest).strip(), line))
         index += 1
     return Node(items, start), index
 

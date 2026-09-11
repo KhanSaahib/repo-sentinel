@@ -61,6 +61,7 @@ repo-sentinel scan . --fail-on critical       # relax the CI gate
 repo-sentinel scan . --exclude 'fixtures'     # skip a directory (repeatable)
 repo-sentinel scan . --no-gitignore           # also scan git-ignored files
 repo-sentinel scan . --no-example-allowlist   # include documented example keys
+repo-sentinel scan . --no-suppression         # read past the ignore markers
 
 repo-sentinel scan . --write-baseline         # accept what is already there
 repo-sentinel scan . --baseline               # fail only on what is new
@@ -357,6 +358,11 @@ a later release adds a rule that would have caught something real there, and the
 comment no longer records why the exemption exists. Family prefixes work too
 (`ignore[K8S*]`), and so do lists (`ignore[SEC100, DK002]`); the syntax is the
 same one `disable` uses in the config file.
+
+Every run says how many lines carry a marker, whether or not it obeyed them,
+and `--no-suppression` reads past all of them. A scanner that can be switched
+off invisibly is worse than no scanner, which is the same reason
+`--no-gitignore` exists.
 
 A block that is opened and never closed silences everything after it, so it is
 reported as SEC900 rather than trusted. Close the block, or say `ignore-file` and

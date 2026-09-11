@@ -259,9 +259,11 @@ _RULES = (
 )
 
 
-def scan_template(path: str, text: str) -> "list[Finding]":
+def scan_template(
+    path: str, text: str, marks: "suppression.Suppressions | None" = None
+) -> "list[Finding]":
     """Run every CloudFormation rule against one template."""
-    marks = suppression.parse(text)
+    marks = suppression.parse(text) if marks is None else marks
     if marks.whole_file:
         return []
 
@@ -276,11 +278,14 @@ def scan_template(path: str, text: str) -> "list[Finding]":
     return marks.filter_findings(findings)
 
 
-def scan_files(files: "Iterable[tuple[str, str]]") -> "list[Finding]":
+def scan_files(
+    files: "Iterable[tuple[str, str]]", *, honour_markers: bool = True
+) -> "list[Finding]":
     """Scan ``(path, text)`` pairs, ignoring anything that is not a template."""
+    markers = None if honour_markers else suppression.NONE
     return [
         finding
         for path, text in files
         if is_template_path(path)
-        for finding in scan_template(path, text)
+        for finding in scan_template(path, text, markers)
     ]

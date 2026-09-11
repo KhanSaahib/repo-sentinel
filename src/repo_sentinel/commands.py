@@ -104,6 +104,7 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
         allow_examples=not args.no_example_allowlist,
         use_gitignore=not args.no_gitignore,
         only_paths=only_paths,
+        honour_markers=not args.no_suppression,
     )
     findings: "list[Finding]" = [
         finding
@@ -178,7 +179,13 @@ def _listed_paths(source: "str | None") -> "list[str] | None":
 def _scan_note(result) -> str:
     if result.file_count == 0:
         return "Scanned 0 files. Check the path, the excludes and your .gitignore."
-    return f"Scanned {result.file_count} file(s) in {result.duration:.2f}s."
+    note = f"Scanned {result.file_count} file(s) in {result.duration:.2f}s."
+    if result.suppressed_lines:
+        note += (
+            f" {result.suppressed_lines} line(s) in {result.suppressed_files} file(s) "
+            "carry a suppression marker; --no-suppression reads past them."
+        )
+    return note
 
 
 def _write_baseline(path: str, findings: "list[Finding]") -> int:

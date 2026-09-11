@@ -122,6 +122,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="also scan files git was told to ignore",
     )
     scan_parser.add_argument(
+        "--no-suppression",
+        action="store_true",
+        help="read the 'repo-sentinel: ignore' markers but do not obey them",
+    )
+    scan_parser.add_argument(
         "--no-example-allowlist",
         action="store_true",
         help="also report credentials published as vendor or RFC examples",

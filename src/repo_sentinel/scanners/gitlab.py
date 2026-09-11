@@ -220,9 +220,11 @@ def _check_debug_trace(path: str, document: "yamlish.Node") -> "Iterator[Finding
         )
 
 
-def scan_pipeline(path: str, text: str) -> "list[Finding]":
+def scan_pipeline(
+    path: str, text: str, marks: "suppression.Suppressions | None" = None
+) -> "list[Finding]":
     """Run every GitLab rule against one pipeline file."""
-    marks = suppression.parse(text)
+    marks = suppression.parse(text) if marks is None else marks
     if marks.whole_file:
         return []
 
@@ -244,11 +246,14 @@ def scan_pipeline(path: str, text: str) -> "list[Finding]":
     return marks.filter_findings(findings)
 
 
-def scan_files(files: "Iterable[tuple[str, str]]") -> "list[Finding]":
+def scan_files(
+    files: "Iterable[tuple[str, str]]", *, honour_markers: bool = True
+) -> "list[Finding]":
     """Scan ``(path, text)`` pairs, ignoring anything that is not a pipeline."""
+    markers = None if honour_markers else suppression.NONE
     return [
         finding
         for path, text in files
         if is_yaml_path(path)
-        for finding in scan_pipeline(path, text)
+        for finding in scan_pipeline(path, text, markers)
     ]

@@ -43,6 +43,7 @@ __all__ = [
     "FILE_MARKER_MAX_LINE",
     "LINE_MARKER",
     "UNTERMINATED_RULE_ID",
+    "NONE",
     "Suppressions",
     "marker",
     "marker_scope",
@@ -144,6 +145,11 @@ class Suppressions:
             for finding in findings
             if not self.suppresses(finding.line, finding.rule_id)
         ]
+
+
+#: What a scan uses when it has been told to ignore markers. Shared rather
+#: than constructed per file, because it is immutable and there is one of it.
+NONE = Suppressions()
 
 
 def parse(text: str) -> Suppressions:
