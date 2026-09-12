@@ -57,6 +57,7 @@ repo-sentinel scan . --format json            # machine-readable output
 repo-sentinel scan . --format sarif --output results.sarif
 repo-sentinel scan . --format markdown         # a pull request comment
 repo-sentinel scan . --format github          # annotations on the diff
+repo-sentinel scan . --format junit           # a test report, for other CIs
 repo-sentinel scan . --min-severity high      # only show what matters most
 repo-sentinel scan . --min-confidence high    # only show what it is sure of
 repo-sentinel scan . --fail-on critical       # relax the CI gate
@@ -334,6 +335,26 @@ which need no permission at all:
 ```
 
 Same findings, worse home, far fewer prerequisites.
+
+### Every other CI: a test report
+
+GitLab, Azure Pipelines and Jenkins all render JUnit XML natively, as a list of
+failures with a message and a body -- which is a finding with its remediation
+attached. No plugin, no permission:
+
+```yaml
+# .gitlab-ci.yml
+scan:
+  script: repo-sentinel scan . --format junit --output report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+```
+
+One test case per finding, classed by family so the CI groups them the way the
+catalogue does, and a clean run is a single passing case rather than an empty
+suite -- an empty report renders as a broken job rather than a quiet one.
 
 ## Reporting to the GitHub Security tab
 

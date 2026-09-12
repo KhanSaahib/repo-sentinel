@@ -204,6 +204,9 @@ class TestInit(unittest.TestCase):
             _, output = run(["init", root])
         self.assertIn(".gitlab-ci.yml", output)
         self.assertNotIn("runs-on", output)
+        # GitLab draws a JUnit report itself, so the snippet asks for one.
+        self.assertIn("--format junit", output)
+        self.assertIn("reports:", output)
 
 
 class TestRulesCommand(unittest.TestCase):

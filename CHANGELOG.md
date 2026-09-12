@@ -180,6 +180,12 @@ last of them is the first that reads code rather than configuration.
   of every credential the repository holds. Medium confidence when the call is
   pinned to a SHA, which at least fixes the code that will read them.
 
+- **`--format junit`**, which GitLab, Azure Pipelines and Jenkins all render
+  natively as a list of failures with a message and a body. SARIF is the better
+  format and GitHub is the only place it goes; this is for the other three, and
+  it needs no plugin and no permission. A clean run is one passing case rather
+  than an empty suite, because an empty report renders as a broken job.
+
 - **`rules <one rule>` prints a card rather than a row**: what the rule reads,
   which weakness it claims, how to silence it here and how to switch it off
   everywhere, and where the long version lives. A pattern that matches several

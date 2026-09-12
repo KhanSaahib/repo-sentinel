@@ -34,7 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     scan_parser.add_argument("path", nargs="?", default=".", help="path to scan (default: .)")
     scan_parser.add_argument(
         "--format",
-        choices=("text", "json", "sarif", "markdown", "github"),
+        choices=("text", "json", "sarif", "markdown", "github", "junit"),
         default="text",
         help="output format",
     )

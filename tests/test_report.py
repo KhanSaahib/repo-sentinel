@@ -292,6 +292,56 @@ class TestRuleDetail(unittest.TestCase):
         self.assertEqual(len(payload["rules"]), 1)
 
 
+class TestJunit(unittest.TestCase):
+    """The format every CI except GitHub already knows how to draw."""
+
+    def parse(self, findings, **kwargs):
+        import xml.etree.ElementTree as ElementTree
+
+        return ElementTree.fromstring(report.format_junit(findings, **kwargs))
+
+    def test_it_is_well_formed_xml_with_one_case_per_finding(self):
+        root = self.parse([CRITICAL, GUESS])
+        cases = root.findall("./testsuite/testcase")
+        self.assertEqual(len(cases), 2)
+        self.assertEqual(root.get("failures"), "2")
+
+    def test_a_case_carries_the_severity_the_evidence_and_the_fix(self):
+        failure = self.parse([CRITICAL]).find("./testsuite/testcase/failure")
+        self.assertEqual(failure.get("type"), "critical")
+        self.assertIn("AKIA****LM3D", failure.text)
+        self.assertIn("Deactivate the key in IAM.", failure.text)
+
+    def test_the_family_is_the_classname_so_a_ci_can_group_by_it(self):
+        case = self.parse([CRITICAL]).find("./testsuite/testcase")
+        self.assertEqual(case.get("classname"), "repo-sentinel.secrets")
+
+    def test_a_clean_run_is_one_passing_case_not_an_empty_suite(self):
+        root = self.parse([])
+        cases = root.findall("./testsuite/testcase")
+        self.assertEqual(len(cases), 1)
+        self.assertEqual(root.get("failures"), "0")
+        self.assertIsNone(cases[0].find("failure"))
+
+    def test_notes_survive_as_properties(self):
+        root = self.parse([], notes=["3 finding(s) accepted by the baseline."])
+        values = [node.get("value") for node in root.findall("./testsuite/properties/property")]
+        self.assertEqual(values, ["3 finding(s) accepted by the baseline."])
+
+    def test_awkward_characters_do_not_break_the_document(self):
+        awkward = Finding(
+            rule_id="WF003",
+            severity=Severity.CRITICAL,
+            title='Untrusted input in run: <block> & "quoted"',
+            path="a&b.yml",
+            line=1,
+            remediation="Use env: instead of <interpolation>.",
+        )
+        case = self.parse([awkward]).find("./testsuite/testcase")
+        self.assertIn("a&b.yml", case.get("name"))
+        self.assertIn("<interpolation>", case.find("failure").text)
+
+
 class TestCatalogueOutput(unittest.TestCase):
     def test_text_lists_every_rule_under_its_category(self):
         text = report.format_rule_catalogue()

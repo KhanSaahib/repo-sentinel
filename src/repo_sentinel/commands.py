@@ -151,7 +151,7 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
     if args.format in ("text", "markdown", "github"):
         notes.append(_scan_note(result))
 
-    exit_code = _emit(_render(args, findings, notes), args.output)
+    exit_code = _emit(_render(args, findings, notes, result.duration), args.output)
     if exit_code != EXIT_OK:
         return exit_code
     if any(finding.severity >= fail_on for finding in findings):
@@ -160,7 +160,10 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
 
 
 def _render(
-    args: argparse.Namespace, findings: "list[Finding]", notes: "list[str]"
+    args: argparse.Namespace,
+    findings: "list[Finding]",
+    notes: "list[str]",
+    duration: float = 0.0,
 ) -> str:
     if args.format == "json":
         return report.format_json(findings, version=__version__, notes=notes)
@@ -170,6 +173,8 @@ def _render(
         return report.format_markdown(findings, notes=notes)
     if args.format == "github":
         return report.format_github(findings, notes=notes)
+    if args.format == "junit":
+        return report.format_junit(findings, notes=notes, duration=duration)
     colour = not args.no_color and args.output is None and sys.stdout.isatty()
     if args.quiet:
         return report.format_summary(findings, notes=notes)
@@ -284,7 +289,11 @@ repo-sentinel:
   image: python:3.13
   script:
     - pip install git+https://github.com/KhanSaahib/repo-sentinel@main
-    - repo-sentinel scan .
+    - repo-sentinel scan . --format junit --output repo-sentinel.xml
+  artifacts:
+    when: always
+    reports:
+      junit: repo-sentinel.xml
 """
 
 

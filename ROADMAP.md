@@ -67,6 +67,7 @@ better outcome than a feature nobody wanted.
 ## Output and integration
 
 - [x] SARIF with stable partial fingerprints, CWE tags and help URLs
+- [x] JUnit XML, which GitLab, Azure and Jenkins render without a plugin
 - [x] Pre-commit hook, GitHub Action wrapper, `rules` command, `init` command
 - [x] `--paths-from FILE` for per-PR runs, `--format markdown` for a PR comment,
       `--format github` for annotations

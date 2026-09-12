@@ -1,6 +1,6 @@
 """Turning findings into something a person, a pipeline or GitHub can read.
 
-Four formats, for four readers:
+Six formats, for six readers:
 
 * **text**, for the person who just ran the command. Worst first, with the fix
   attached to the problem, because a finding without a next action is a nag.
@@ -11,6 +11,8 @@ Four formats, for four readers:
   people arguing about the change are already looking.
 * **github**, the workflow-command form, which makes findings appear as
   annotations on the diff without needing the permission SARIF upload does.
+* **junit**, for the CI systems that are not GitHub: GitLab, Azure and Jenkins
+  all draw a test report without being asked twice.
 
 Formatting lives here rather than in the CLI so that the CLI is only argument
 handling, and so that a new format is a function rather than a branch inside a
@@ -21,6 +23,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from xml.sax.saxutils import escape, quoteattr
 
 from . import rules
 from .findings import Confidence, Finding, Severity
@@ -379,6 +382,80 @@ def _sarif_message(finding: Finding) -> str:
     if finding.remediation:
         parts.append(finding.remediation)
     return " ".join(parts)
+
+
+def format_junit(
+    findings: Sequence[Finding], *, notes: Sequence[str] = (), duration: float = 0.0
+) -> str:
+    """JUnit XML, which every CI system except GitHub already knows how to draw.
+
+    GitLab has ``artifacts: reports: junit``, Azure has PublishTestResults,
+    Jenkins has the junit step, and all three render it as a list of failures
+    with a message and a body -- which is a finding with its remediation.
+    SARIF is the better format and GitHub is the only place it goes; this is
+    for the other three, and it needs no permission and no plugin.
+
+    One testcase per finding, named for where it is, classed by family so the
+    CI groups them the way the catalogue does. A clean run emits one passing
+    case rather than an empty suite: a report with no tests in it renders as a
+    broken job rather than a quiet one.
+    """
+    cases: "list[str]" = []
+    for finding in findings:
+        name = f"{finding.rule_id} {finding.path}:{finding.line}"
+        family = rules.RULES[finding.rule_id].category if finding.rule_id in rules.RULES else "other"
+        body = "\n".join(
+            part
+            for part in (
+                finding.title + _repeat_note(finding),
+                f"evidence: {finding.evidence}" if finding.evidence else "",
+                f"confidence: {finding.confidence.value}",
+                finding.remediation,
+            )
+            if part
+        )
+        cases.append(
+            f"    <testcase name={_attribute(name)} "
+            f"classname={_attribute('repo-sentinel.' + family)}>\n"
+            f"      <failure message={_attribute(finding.title)} "
+            f"type={_attribute(finding.severity.value)}>{_text(body)}</failure>\n"
+            "    </testcase>"
+        )
+    if not cases:
+        cases.append(
+            f"    <testcase name={_attribute('no findings')} "
+            f"classname={_attribute('repo-sentinel')} />"
+        )
+
+    properties = ""
+    if notes:
+        properties = (
+            "    <properties>\n"
+            + "\n".join(
+                f"      <property name={_attribute('note')} value={_attribute(note)} />"
+                for note in notes
+            )
+            + "\n    </properties>\n"
+        )
+    count = len(cases)
+    failures = len(findings)
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<testsuites name="repo-sentinel" tests="{count}" failures="{failures}">\n'
+        f'  <testsuite name="repo-sentinel" tests="{count}" failures="{failures}" '
+        f'time="{duration:.3f}">\n'
+        f"{properties}"
+        + "\n".join(cases)
+        + "\n  </testsuite>\n</testsuites>"
+    )
+
+
+def _attribute(value: str) -> str:
+    return quoteattr(value)
+
+
+def _text(value: str) -> str:
+    return escape(value)
 
 
 def _matching_rules(pattern: "str | None") -> "list[rules.Rule]":
