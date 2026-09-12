@@ -189,6 +189,12 @@ last of them is the first that reads code rather than configuration.
   `git` dependency carries a `rev` or a `tag`; without one it installs whatever
   the default branch holds at build time. No TOML parser behind it -- `tomllib`
   arrived in 3.11 and this runs on 3.9.
+- **A chart's values file is read**, where a `Chart.yaml` sits beside it.
+  `privileged: true` under a `securityContext` means the same thing in values
+  as in a manifest, and that is where most Kubernetes settings actually live --
+  a manifest in a chart is a template with `{{ .Values.securityContext }}` in
+  it. Six settings, all at medium confidence, since the chart should pass them
+  through and this reader has not read the template that does.
 - **A CustomResourceDefinition is no longer read as a workload.** It carries
   an OpenAPI schema, and a schema names every field these rules look for --
   `hostPath`, `privileged`, `capabilities` -- as keys. The Grafana operator

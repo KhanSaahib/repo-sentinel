@@ -650,14 +650,222 @@ def scan_manifest(
     return marks.filter_findings(findings)
 
 
+#: What a chart's values file is called. Helm reads values.yaml; everything
+#: else here is the convention for an environment's overrides, and a
+#: production one is exactly where a privileged setting ends up.
+_VALUES_NAMES = ("values.yaml", "values.yml")
+_VALUES_PREFIXES = ("values-", "values.")
+
+#: Settings whose meaning does not depend on where in the chart they land.
+#: Each is (key, rule, severity, title, remediation), and each is read only
+#: where the key's own name says what it is for: "privileged: true" under a
+#: securityContext is the container setting, and under "annotations" it is
+#: somebody's label.
+_VALUE_FLAGS = (
+    ("hostNetwork", "K8S003", Severity.HIGH, "shares the node's network namespace",
+     "A pod on the host network sees every interface the node has, and binds "
+     "its ports. Publish the workload through a Service instead."),
+    ("hostPID", "K8S003", Severity.HIGH, "shares the node's process namespace",
+     "Every process on the node is visible, and its /proc with it. Remove this "
+     "unless the workload is a node agent that genuinely needs it."),
+    ("hostIPC", "K8S003", Severity.HIGH, "shares the node's IPC namespace",
+     "Shared memory belonging to every other pod on the node is reachable. "
+     "Remove this unless the workload is a node agent that needs it."),
+)
+
+
+#: A cheap gate in front of the parse: every rule below needs one of these
+#: words, so a values file without any of them -- which is most of them -- is
+#: skipped without being read. A hint missing from this tuple disables a rule
+#: silently, which is why the corpus test exists.
+_VALUES_HINTS = ("true", "hostPath", "capabilities", "Unconfined")
+
+
+def is_values_path(path: str) -> bool:
+    """True for a file named the way Helm names a chart's values."""
+    name = posixpath.basename(path.replace("\\", "/")).lower()
+    if name in _VALUES_NAMES:
+        return True
+    return name.startswith(_VALUES_PREFIXES) and name.endswith(_MANIFEST_SUFFIXES)
+
+
+def chart_directories(paths: "Iterable[str]") -> "frozenset[str]":
+    """Directories holding a ``Chart.yaml``, which is what makes a chart a chart."""
+    return frozenset(
+        posixpath.dirname(path.replace("\\", "/"))
+        for path in paths
+        if posixpath.basename(path.replace("\\", "/")).lower() == "chart.yaml"
+    )
+
+
+def scan_values(
+    path: str, text: str, marks: "suppression.Suppressions | None" = None
+) -> "list[Finding]":
+    """Read a chart's values for the settings that mean the same anywhere.
+
+    A values file is not a manifest: it has no apiVersion, no kind, and no
+    containers, so the manifest rules never look at it. What it does have is
+    the settings a chart hands to its templates, and a handful of those carry
+    their meaning with them. ``privileged: true`` under a ``securityContext``
+    is the container setting wherever it is written, because that is the only
+    thing a chart can do with a key of that name.
+
+    Reported at medium confidence throughout: the chart *should* pass these
+    through, and this reader has not read the template that does it.
+    """
+    marks = suppression.parse(text) if marks is None else marks
+    if marks.whole_file:
+        return []
+    if not any(hint in text for hint in _VALUES_HINTS):
+        return []
+
+    source = yamlish.strip_templates(text) if yamlish.is_templated(text) else text
+    findings: "list[Finding]" = []
+    for document in yamlish.parse(source):
+        findings.extend(_values_findings(path, document))
+    return marks.filter_findings(findings)
+
+
+def _values_findings(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
+    for key, node in document.walk():
+        for name, rule_id, severity, what, remediation in _VALUE_FLAGS:
+            if key == name and node.truthy():
+                yield Finding(
+                    rule_id=rule_id,
+                    severity=severity,
+                    title=f"Chart values set {name}: the workload {what}",
+                    path=path,
+                    line=node.line,
+                    evidence=f"{name}: {node.text.strip()}",
+                    remediation=remediation,
+                    confidence=Confidence.MEDIUM,
+                )
+        if key != "securityContext" or not node.is_map:
+            continue
+        yield from _values_security_context(path, node)
+        continue
+
+    for key, node in document.walk():
+        if key != "hostPath" or not node.is_map:
+            continue
+        # A Kubernetes hostPath volume always carries a path -- the API
+        # requires it -- and a values file is full of sections named after the
+        # feature they configure. Dagger's chart has a "hostPath:" block whose
+        # keys are dataVolume and runVolume, which is an option, not a mount.
+        mounted = (node.get("path") or yamlish.Node("", node.line)).text.strip().strip("\"'")
+        if not mounted:
+            continue
+        yield Finding(
+            rule_id="K8S002",
+            severity=Severity.CRITICAL if wellknown.is_critical_host_path(mounted) else Severity.HIGH,
+            title=f"Chart values mount host path {mounted}",
+            path=path,
+            line=node.line,
+            evidence=f"hostPath: {mounted}" if mounted else "hostPath volume",
+            remediation=(
+                "A hostPath mount is shared with the node and every other pod "
+                "that mounts it. Use a PersistentVolume, a projected volume, "
+                "or a CSI driver."
+            ),
+            confidence=Confidence.MEDIUM,
+        )
+
+
+def _values_security_context(path: str, context: "yamlish.Node") -> "Iterator[Finding]":
+    """The securityContext keys a chart can only mean one way."""
+    privileged = context.get("privileged")
+    if privileged is not None and privileged.truthy():
+        yield Finding(
+            rule_id="K8S001",
+            severity=Severity.CRITICAL,
+            title="Chart values run the container privileged",
+            path=path,
+            line=privileged.line,
+            evidence="privileged: true",
+            remediation=(
+                "A privileged container holds every capability and can reach "
+                "the node's devices. Grant the one capability the workload "
+                "needs instead."
+            ),
+            confidence=Confidence.MEDIUM,
+        )
+
+    escalation = context.get("allowPrivilegeEscalation")
+    if escalation is not None and escalation.truthy():
+        yield Finding(
+            rule_id="K8S006",
+            severity=Severity.MEDIUM,
+            title="Chart values allow privilege escalation",
+            path=path,
+            line=escalation.line,
+            evidence="allowPrivilegeEscalation: true",
+            remediation=(
+                "Setting this to false blocks setuid binaries from gaining "
+                "privileges the pod was not granted. Very little needs it."
+            ),
+            confidence=Confidence.MEDIUM,
+        )
+
+    profile = context.get("seccompProfile", "type")
+    if profile is not None and profile.text.strip().strip("\"'").lower() == _UNCONFINED:
+        yield Finding(
+            rule_id="K8S012",
+            severity=Severity.HIGH,
+            title="Chart values ask for no seccomp profile",
+            path=path,
+            line=profile.line,
+            evidence="seccompProfile: Unconfined",
+            remediation=(
+                "Unconfined leaves every syscall available to the container. "
+                "RuntimeDefault is the profile the runtime already ships."
+            ),
+            confidence=Confidence.MEDIUM,
+        )
+
+    added = context.get("capabilities", "add")
+    if added is None:
+        return
+    # A flow list -- add: ["SYS_ADMIN"] -- comes through as text, which is what
+    # the reader promises to do with structure it does not parse. The names are
+    # still in it.
+    granted = {
+        entry.text.strip().strip("\"'").upper()
+        for entry in (added.entries() if added.is_list else ())
+    } or set(re.findall(r"[A-Z_]+", added.text.upper()))
+    risky = sorted(granted & wellknown.DANGEROUS_CAPABILITIES)
+    if risky:
+        yield Finding(
+            rule_id="K8S006",
+            severity=Severity.HIGH,
+            title=f"Chart values add capability {', '.join(risky)}",
+            path=path,
+            line=added.line,
+            evidence=f"capabilities.add: {', '.join(risky)}",
+            remediation=(
+                "These capabilities are root by another name: SYS_ADMIN and "
+                "SYS_PTRACE in particular. Drop ALL and add back only what the "
+                "workload calls for."
+            ),
+            confidence=Confidence.MEDIUM,
+        )
+
+
 def scan_files(
     files: "Iterable[tuple[str, str]]", *, honour_markers: bool = True
 ) -> "list[Finding]":
-    """Scan ``(path, text)`` pairs, ignoring anything that is not a manifest."""
+    """Scan ``(path, text)`` pairs: manifests, and the values files beside charts.
+
+    A values file is only read when a ``Chart.yaml`` sits in the same
+    directory. Without that test, every ``values.yaml`` in every application
+    repository -- and they are everywhere -- would be read as a chart's.
+    """
     markers = None if honour_markers else suppression.NONE
-    return [
-        finding
-        for path, text in files
-        if is_manifest_path(path)
-        for finding in scan_manifest(path, text, markers)
-    ]
+    pairs = list(files)
+    charts = chart_directories(path for path, _ in pairs)
+    findings: "list[Finding]" = []
+    for path, text in pairs:
+        if is_manifest_path(path):
+            findings.extend(scan_manifest(path, text, markers))
+        if is_values_path(path) and posixpath.dirname(path.replace("\\", "/")) in charts:
+            findings.extend(scan_values(path, text, markers))
+    return findings

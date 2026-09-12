@@ -672,6 +672,21 @@ not encryption but is enough to hide a credential from every rule that reads
 lines; when the decoded value is a shape the secret rules recognise, the
 finding says which and is critical.
 
+The family also reads a chart's **values file** -- `values.yaml` and its
+`values-production.yaml` relatives -- but only where a `Chart.yaml` sits beside
+it, because every application repository has a `values.yaml` somewhere. A
+values file has no `apiVersion`, no `kind` and no containers, so the manifest
+rules never look at it; what it does have is the settings the chart hands to
+its templates, and a handful of those carry their meaning with them.
+`privileged: true` under a `securityContext` is the container setting wherever
+it is written, because that is the only thing a chart can do with a key of that
+name. Six settings are read this way -- privileged, allowPrivilegeEscalation,
+added capabilities, an Unconfined seccomp profile, the three host namespaces,
+and a hostPath volume -- all at medium confidence, since the chart *should*
+pass them through and this reader has not read the template that does. A
+`hostPath` block with no `path` in it is a configuration section rather than a
+volume: Dagger's chart has one whose keys are `dataVolume` and `runVolume`.
+
 A `CustomResourceDefinition` is skipped whole. It carries an OpenAPI schema,
 and a schema names every field a resource may have -- `hostPath`,
 `privileged`, `capabilities` -- as keys, which is how a CRD comes to look like

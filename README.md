@@ -200,7 +200,7 @@ and why; `repo-sentinel rules` prints the same catalogue from the tool.
 | [Terraform](docs/RULES.md#terraform) | TF001–TF008 | Open ingress, public storage, wildcard policies |
 | [Ansible](docs/RULES.md#ansible) | AN001–AN003 | Decisions applied to every host at once |
 | [CloudFormation](docs/RULES.md#cloudformation) | CF001–CF006 | The same, in AWS's other vocabulary |
-| [Kubernetes](docs/RULES.md#kubernetes) | K8S001–K8S012 | Container escape routes, secrets in manifests |
+| [Kubernetes](docs/RULES.md#kubernetes) | K8S001–K8S012 | Container escape routes, secrets in manifests, chart values |
 
 Three things are worth knowing before you read the list.
 
