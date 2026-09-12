@@ -378,6 +378,29 @@ class TestInit(unittest.TestCase):
                 _, output = run(["init", root])
                 self.assertIn(expected, output)
 
+    def test_it_names_the_rules_doing_most_of_the_talking(self):
+        # A count says how much there is; this says what it is. A hundred
+        # findings that are all one rule is a decision to make once.
+        with tempfile.TemporaryDirectory() as root:
+            with open(os.path.join(root, "app.py"), "w", encoding="utf-8") as handle:
+                handle.write(f'K = "{fixtures.REALISTIC_AWS_KEY_ID}"\n')
+            os.makedirs(os.path.join(root, ".github", "workflows"))
+            with open(
+                os.path.join(root, ".github", "workflows", "ci.yml"), "w", encoding="utf-8"
+            ) as handle:
+                handle.write("jobs:\n  build:\n    steps:\n      - uses: acme/deploy@v1\n")
+            _, output = run(["init", root])
+        self.assertIn("Most of it is:", output)
+        self.assertIn("SEC001", output)
+        self.assertIn("repo-sentinel rules <id>", output)
+
+    def test_one_rule_alone_needs_no_breakdown(self):
+        with tempfile.TemporaryDirectory() as root:
+            with open(os.path.join(root, "app.py"), "w", encoding="utf-8") as handle:
+                handle.write(f'K = "{fixtures.REALISTIC_AWS_KEY_ID}"\n')
+            _, output = run(["init", root])
+        self.assertNotIn("Most of it is:", output)
+
     def test_the_snippet_matches_the_ci_system_the_repository_has(self):
         with tempfile.TemporaryDirectory() as root:
             self.repository(root)

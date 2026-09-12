@@ -43,8 +43,10 @@ Start here:
 repo-sentinel init .
 ```
 
-That scans the repository, tells you what is in it, records the findings at or
-above `high` as a baseline so your first pipeline run is green, writes a
+That scans the repository, tells you what is in it -- including which three
+rules are doing most of the talking, because a hundred findings that are all
+one rule is a decision to make once -- records the findings at or above `high`
+as a baseline so your first pipeline run is green, writes a
 `.repo-sentinel.json`, and prints the CI snippet for whichever CI system the
 repository already has -- GitHub Actions, GitLab, Azure Pipelines, CircleCI or
 Jenkins, the last four wired to draw the report rather than print it. Nothing

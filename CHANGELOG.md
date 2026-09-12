@@ -208,6 +208,10 @@ last of them is the first that reads code rather than configuration.
   every CI has its own word for that -- continue-on-error, allow_failure,
   continueOnError, catchError. Saying it in the command means the gate and the
   report differ by one readable flag. A usage error still exits 2.
+- **`init` says what the findings *are***, not only how many: the three rules
+  doing most of the talking, with their summaries and a pointer at
+  `repo-sentinel rules <id>`. A hundred findings that are all one rule is a
+  decision to make once, and the baseline it just recorded is mostly that rule.
 - **`init` knows five CI systems, not two.** The snippet it prints is for the
   one the repository already has -- Azure, CircleCI and Jenkins included, each
   wired to draw the JUnit report. Suggesting GitHub Actions to a project that

@@ -15,7 +15,13 @@ import os
 import sys
 from collections.abc import Sequence
 
-from . import __version__, baseline as baseline_module, config as config_module, report
+from . import (
+    __version__,
+    baseline as baseline_module,
+    config as config_module,
+    report,
+    rules as rules_module,
+)
 from .discovery import DEFAULT_EXCLUDES, MAX_FILE_BYTES
 from .engine import scan
 from .findings import Confidence, Finding, Severity
@@ -165,6 +171,37 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
     if fail_on is not None and any(finding.severity >= fail_on for finding in findings):
         return EXIT_FINDINGS
     return EXIT_OK
+
+
+#: How many rules to name when introducing a repository to itself. Three is
+#: enough to say what shape the noise is -- "it is all unpinned actions" is a
+#: different morning from "it is four different things" -- and short enough
+#: that the setup output stays readable.
+_LOUDEST = 3
+
+
+def _loudest_rules(findings: "Sequence[Finding]") -> "list[str]":
+    """The rules doing most of the talking, for someone meeting this repository.
+
+    A count and a severity say how much there is; this says what it *is*. A
+    hundred findings that are all one rule is a decision to make once, and the
+    baseline just recorded is mostly that rule.
+    """
+    if not findings:
+        return []
+    counts: "dict[str, int]" = {}
+    for finding in findings:
+        counts[finding.rule_id] = counts.get(finding.rule_id, 0) + 1
+    ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:_LOUDEST]
+    if len(ranked) < 2:
+        return []
+    lines = ["", "Most of it is:"]
+    for rule_id, count in ranked:
+        rule = rules_module.RULES.get(rule_id)
+        summary = rule.summary if rule else rule_id
+        lines.append(f"  {rule_id:<7} {count:>4}  {summary}")
+    lines.extend(["  'repo-sentinel rules <id>' explains any of them.", ""])
+    return lines
 
 
 def _scan_facts(result) -> "dict":
@@ -451,6 +488,8 @@ def init_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
         f"Scanned {result.file_count} file(s) in {result.duration:.2f}s: "
         f"{report.summarise(findings) if findings else 'no findings'}."
     )
+    for line in _loudest_rules(findings):
+        print(line)
 
     config_path = os.path.join(root, config_module.DEFAULT_PATH)
     baseline_path = os.path.join(root, baseline_module.DEFAULT_PATH)
