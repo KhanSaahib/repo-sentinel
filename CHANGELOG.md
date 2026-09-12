@@ -316,6 +316,10 @@ last of them is the first that reads code rather than configuration.
   the other characters something treats as a line break, leaving a corrupt
   command behind it. Found by a property test that now runs every format over
   findings built from the characters a real file can contain.
+- **A file skipped for its size is now counted and named**, with
+  `--max-file-size` (and a `max_file_size` config key) to raise the 2 MB limit.
+  A 3 MB `.env` was skipped silently, which is precisely the answer this tool
+  exists to avoid giving.
 - **A control character in a file could make the JUnit report unparseable**,
   and a lone carriage return could end a Markdown table row early. Both came
   from the same place -- evidence is a piece of a file, and a file with a stray

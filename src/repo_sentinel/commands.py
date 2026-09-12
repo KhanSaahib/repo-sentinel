@@ -16,7 +16,7 @@ import sys
 from collections.abc import Sequence
 
 from . import __version__, baseline as baseline_module, config as config_module, report
-from .discovery import DEFAULT_EXCLUDES
+from .discovery import DEFAULT_EXCLUDES, MAX_FILE_BYTES
 from .engine import scan
 from .findings import Confidence, Finding, Severity
 from .rules import RULES
@@ -95,6 +95,7 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
         min_severity = Severity.parse(args.min_severity)
         min_confidence = Confidence.parse(args.min_confidence)
         fail_on = _fail_threshold(args.fail_on)
+        max_bytes = _file_size_limit(getattr(args, "max_file_size", None))
     except ValueError as error:
         parser.error(str(error))
         return EXIT_ERROR  # pragma: no cover - argparse exits first
@@ -112,6 +113,7 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
         use_gitignore=not args.no_gitignore,
         only_paths=only_paths,
         honour_markers=not args.no_suppression,
+        max_bytes=max_bytes,
     )
     findings: "list[Finding]" = [
         finding
@@ -183,6 +185,21 @@ def _render(
     )
 
 
+_SIZE_SUFFIXES = {"k": 1024, "m": 1024 ** 2, "g": 1024 ** 3}
+
+
+def _file_size_limit(value: "str | None") -> int:
+    """Bytes from "2M", "500k" or a plain number; the default when unset."""
+    if value is None:
+        return MAX_FILE_BYTES
+    text = value.strip().lower().rstrip("b")
+    scale = _SIZE_SUFFIXES.get(text[-1:], 1)
+    digits = text[:-1] if scale > 1 else text
+    if not digits.isdigit() or int(digits) <= 0:
+        raise ValueError(f"unreadable size {value!r} (try 2M, 500k, or a number of bytes)")
+    return int(digits) * scale
+
+
 def _fail_threshold(value: str) -> "Severity | None":
     """The severity that fails the run, or None for "report, never fail".
 
@@ -225,6 +242,12 @@ def _scan_note(result) -> str:
             + unread
         )
     note = f"Scanned {result.file_count} file(s) in {result.duration:.2f}s." + unread
+    if result.oversized:
+        note += (
+            f" {len(result.oversized)} file(s) were larger than the size limit "
+            f"and were not read, starting with {result.oversized[0]!r}; "
+            "--max-file-size raises it."
+        )
     if result.suppressed_lines:
         note += (
             f" {result.suppressed_lines} line(s) in {result.suppressed_files} file(s) "

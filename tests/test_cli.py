@@ -135,6 +135,62 @@ class TestSeverityParsing(unittest.TestCase):
             Severity.parse("catastrophic")
 
 
+class TestFileSizeLimit(unittest.TestCase):
+    """A file skipped for its size is a decision, so the run says so."""
+
+    def repository(self, root, size=3 * 1024 * 1024):
+        with open(os.path.join(root, "dump.json"), "w", encoding="utf-8") as handle:
+            handle.write('{"x": "' + "a" * size + '"}')
+        with open(os.path.join(root, "app.py"), "w", encoding="utf-8") as handle:
+            handle.write("x = 1\n")
+
+    def test_the_summary_names_what_the_limit_skipped(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.repository(root)
+            _, output = run(["scan", root])
+        self.assertIn("larger than the size limit", output)
+        self.assertIn("dump.json", output)
+        self.assertIn("--max-file-size", output)
+
+    def test_raising_the_limit_reads_the_file(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.repository(root)
+            _, output = run(["scan", root, "--max-file-size", "4M"])
+        self.assertNotIn("larger than the size limit", output)
+
+    def test_a_config_file_can_raise_it_too(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.repository(root)
+            with open(
+                os.path.join(root, ".repo-sentinel.json"), "w", encoding="utf-8"
+            ) as handle:
+                handle.write('{"max_file_size": "4M"}')
+            _, output = run(["scan", root])
+        self.assertNotIn("larger than the size limit", output)
+
+    def test_every_spelling_of_a_size(self):
+        from repo_sentinel.commands import _file_size_limit
+
+        self.assertEqual(_file_size_limit("1024"), 1024)
+        self.assertEqual(_file_size_limit("2M"), 2 * 1024 * 1024)
+        self.assertEqual(_file_size_limit(" 500k "), 500 * 1024)
+        self.assertEqual(_file_size_limit("1GB"), 1024 ** 3)
+
+    def test_nonsense_is_a_usage_error_not_a_default(self):
+        # Falling back to the default would mean a typo silently changes what
+        # was scanned, which is the failure this whole tool is about.
+        with tempfile.TemporaryDirectory() as root, self.assertRaises(SystemExit) as caught:
+            run(["scan", root, "--max-file-size", "big"])
+        self.assertEqual(caught.exception.code, 2)
+
+    def test_a_clean_run_says_nothing_about_the_limit(self):
+        with tempfile.TemporaryDirectory() as root:
+            with open(os.path.join(root, "app.py"), "w", encoding="utf-8") as handle:
+                handle.write("x = 1\n")
+            _, output = run(["scan", root])
+        self.assertNotIn("size limit", output)
+
+
 class TestModuleEntryPoint(unittest.TestCase):
     """``python -m repo_sentinel`` is how the README says to run it."""
 

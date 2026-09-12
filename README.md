@@ -70,6 +70,7 @@ repo-sentinel scan . --min-confidence high    # only show what it is sure of
 repo-sentinel scan . --fail-on critical       # relax the CI gate
 repo-sentinel scan . --fail-on none           # report, never fail
 repo-sentinel scan . --exclude 'fixtures'     # skip a directory (repeatable)
+repo-sentinel scan . --max-file-size 8M       # read the big ones too
 repo-sentinel scan . --no-gitignore           # also scan git-ignored files
 repo-sentinel scan . --no-example-allowlist   # include documented and invented keys
 repo-sentinel scan . --no-suppression         # read past the ignore markers
@@ -151,6 +152,10 @@ neither flag and reads everything.
 
 The walk skips binaries, files over 2 MB, and a built-in list of generated or
 vendored directories (`.git`, `node_modules`, `.venv`, `dist`, `target`, …).
+The size limit is reported rather than assumed: every run says how many files
+it skipped and names the first, and `--max-file-size 8M` reads them. A binary
+is the one silent skip, because its bytes are not text in any sense a rule
+could read.
 
 It also honours `.gitignore`, including nested ones, which each govern their own
 subtree. The rules implemented are negation with `!`, anchoring with a leading or
@@ -231,8 +236,8 @@ instead:
 ```
 
 The settings are `exclude`, `fail_on` (`"none"` included), `min_severity`,
-`min_confidence`, `baseline`, `sort`, `disable`, `gitignore` and
-`example_allowlist`. An unknown
+`min_confidence`, `baseline`, `max_file_size`, `sort`, `disable`, `gitignore`
+and `example_allowlist`. An unknown
 key is an error rather than a shrug: a typo in a security tool's configuration
 means a project believes it configured something it did not.
 

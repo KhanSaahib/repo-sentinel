@@ -62,6 +62,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     scan_parser.add_argument(
+        "--max-file-size",
+        metavar="SIZE",
+        default=None,
+        help=(
+            "read files up to SIZE (default 2M). Accepts a plain number of "
+            "bytes or a K/M/G suffix; every run says how many files the limit "
+            "skipped"
+        ),
+    )
+    scan_parser.add_argument(
         "--exclude",
         action="append",
         default=[],
@@ -185,6 +195,7 @@ _CONFIG_TO_DEST = {
     "min_severity": ("min_severity", False),
     "min_confidence": ("min_confidence", False),
     "baseline": ("baseline", False),
+    "max_file_size": ("max_file_size", False),
     "sort": ("sort", False),
     "disable": ("disable", False),
     "gitignore": ("no_gitignore", True),

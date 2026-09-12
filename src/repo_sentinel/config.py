@@ -38,6 +38,7 @@ _KEYS = {
     "min_severity": str,
     "min_confidence": str,
     "baseline": str,
+    "max_file_size": str,
     "sort": str,
     "disable": list,
     "gitignore": bool,

@@ -6,7 +6,7 @@ import dataclasses
 import time
 from collections.abc import Iterable
 
-from .discovery import DEFAULT_EXCLUDES, Entry, read_listed, walk
+from .discovery import DEFAULT_EXCLUDES, MAX_FILE_BYTES, Entry, read_listed, walk
 from . import suppression
 from . import wellknown
 from .findings import Confidence, Finding
@@ -78,6 +78,10 @@ class ScanReport:
     #: because "no findings" from a tree that was never read is the most
     #: dangerous answer this tool can give.
     unreadable: "tuple[str, ...]" = ()
+    #: Files skipped for being larger than the limit. Not a gap the tool could
+    #: not help -- a decision it made -- so the run says so and the flag that
+    #: changes it is named in the same sentence.
+    oversized: "tuple[str, ...]" = ()
 
 
 def scan(
@@ -88,6 +92,7 @@ def scan(
     use_gitignore: bool = True,
     only_paths: "Iterable[str] | None" = None,
     honour_markers: bool = True,
+    max_bytes: int = MAX_FILE_BYTES,
 ) -> ScanReport:
     """Run every scanner over ``path``, worst findings first.
 
@@ -98,9 +103,17 @@ def scan(
     """
     started = time.monotonic()
     unreadable: "list[str]" = []
+    oversized: "list[str]" = []
     if only_paths is None:
         entries = list(
-            walk(path, excludes=excludes, use_gitignore=use_gitignore, unreadable=unreadable)
+            walk(
+                path,
+                excludes=excludes,
+                max_bytes=max_bytes,
+                use_gitignore=use_gitignore,
+                unreadable=unreadable,
+                oversized=oversized,
+            )
         )
     else:
         entries = [
@@ -127,6 +140,7 @@ def scan(
         suppressed_lines=sum(marked),
         suppressed_files=sum(1 for count in marked if count),
         unreadable=tuple(unreadable),
+        oversized=tuple(oversized),
     )
 
 
