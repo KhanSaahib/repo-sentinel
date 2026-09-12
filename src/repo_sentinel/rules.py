@@ -146,6 +146,13 @@ RULES: "dict[str, Rule]" = _rules(
     ("SEC045", "artifactory-token", "JFrog Artifactory token", Severity.CRITICAL),
     ("SEC046", "terraform-cloud-token", "Terraform Cloud API token", Severity.CRITICAL),
     ("SEC047", "fcm-server-key", "Firebase Cloud Messaging server key", Severity.HIGH),
+    ("SEC048", "vault-token", "HashiCorp Vault service token", Severity.CRITICAL),
+    ("SEC049", "supabase-service-key", "Supabase service role key", Severity.CRITICAL),
+    ("SEC050", "planetscale-token", "PlanetScale database token", Severity.CRITICAL),
+    ("SEC051", "tailscale-auth-key", "Tailscale auth key", Severity.CRITICAL),
+    ("SEC052", "sentry-auth-token", "Sentry authentication token", Severity.HIGH),
+    ("SEC053", "groq-api-key", "Groq API key", Severity.HIGH),
+    ("SEC054", "replicate-token", "Replicate API token", Severity.HIGH),
     ("SEC100", "entropy-quoted", "High-entropy value assigned to a secret-shaped name", Severity.HIGH),
     ("SEC101", "entropy-value-position", "High-entropy value in an unquoted config value position", Severity.HIGH),
     ("SEC900", "unterminated-suppression", "Suppression block opened and never closed", Severity.MEDIUM),
@@ -253,7 +260,7 @@ def _claim(cwe: str, *rule_ids: str) -> None:
 # Use of hard-coded credentials.
 _claim(
     "CWE-798",
-    *[f"SEC{index:03d}" for index in range(1, 48)],
+    *[f"SEC{index:03d}" for index in range(1, 55)],
     "SEC100",
     "SEC101",
     "FN001",

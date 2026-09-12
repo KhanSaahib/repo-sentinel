@@ -237,6 +237,24 @@ class TestAdditionalProviders(unittest.TestCase):
             with self.subTest(rule=rule_id):
                 self.assertIn(rule_id, rule_ids(secrets.scan_text("app.py", f'k = "{value}"')))
 
+    def test_the_tokens_a_repository_written_this_year_leaks(self):
+        for rule_id, value in (
+            ("SEC048", "hv" + "s." + filler(40)),
+            ("SEC049", "sb" + "p_" + filler(40)),
+            ("SEC050", "pscale" + "_tkn_" + filler(34)),
+            ("SEC051", "tsk" + "ey-auth-" + filler(12) + "-" + filler(22)),
+            ("SEC052", "sntry" + "s_" + filler(48)),
+            ("SEC053", "gs" + "k_" + filler(52)),
+            ("SEC054", "r" + "8_" + filler(40)),
+        ):
+            with self.subTest(rule=rule_id):
+                self.assertIn(rule_id, rule_ids(secrets.scan_text("app.py", f'k = "{value}"')))
+
+    def test_the_new_prefixes_alone_are_not_tokens(self):
+        for prefix in ("hvs.", "sbp_", "pscale_tkn_", "tskey-auth-", "sntrys_", "gsk_", "r8_"):
+            with self.subTest(prefix=prefix):
+                self.assertEqual(secrets.scan_text("app.py", f'k = "{prefix}"'), [])
+
     def test_the_new_patterns_do_not_fire_on_their_own_prefixes(self):
         # "glpat-" and friends turn up in documentation about tokens far more
         # often than actual tokens do.

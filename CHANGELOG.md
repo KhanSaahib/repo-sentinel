@@ -189,6 +189,11 @@ last of them is the first that reads code rather than configuration.
   `git` dependency carries a `rev` or a `tag`; without one it installs whatever
   the default branch holds at build time. No TOML parser behind it -- `tomllib`
   arrived in 3.11 and this runs on 3.9.
+- **Seven token shapes from the last two years** (SEC048–SEC054): HashiCorp
+  Vault service tokens, Supabase service role keys, PlanetScale database
+  tokens, Tailscale auth keys, Sentry auth tokens, Groq and Replicate keys.
+  Four of them are critical because they reach the data or the network
+  directly; the rest are billed by the token.
 - **A committed password database is a finding on its name**: `.kdbx`,
   `.kdb`, `.psafe3`, `.opvault`, `.agilekeychain`. Encrypted, so not critical;
   offline once committed, so not low -- unlimited guesses at one master

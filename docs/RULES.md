@@ -69,6 +69,13 @@ a weakness in anybody's software.
 | SEC045 | JFrog Artifactory token | critical | high |
 | SEC046 | Terraform Cloud API token | critical | high |
 | SEC047 | Firebase Cloud Messaging server key | high | high |
+| SEC048 | HashiCorp Vault service token | critical | high |
+| SEC049 | Supabase service role key | critical | high |
+| SEC050 | PlanetScale database token | critical | high |
+| SEC051 | Tailscale auth key | critical | high |
+| SEC052 | Sentry authentication token | high | high |
+| SEC053 | Groq API key | high | high |
+| SEC054 | Replicate API token | high | high |
 | SEC100 | High-entropy value in a quoted assignment | high | medium |
 | SEC101 | High-entropy value in an unquoted config value | high | medium |
 | SEC900 | Suppression block opened and never closed | medium | high |
@@ -76,7 +83,7 @@ a weakness in anybody's software.
 SEC900 is not a class of secret; it reports a suppression block that was opened
 and never closed. See [Suppressing a false positive](#suppressing-a-false-positive).
 
-SEC001–SEC047 match on documented token structure. A token to a secrets
+SEC001–SEC054 match on documented token structure. A token to a secrets
 manager (SEC028) is rated as what it opens rather than as one credential, and
 a payment token (SEC034) as what it can move, and a Terraform Cloud token
 (SEC046) as the state it can read -- which holds every secret a plan touched. Two of them are looser than

@@ -74,6 +74,13 @@ SECRETS_FILE = "\n".join(
         'artifactory = "AKC' + 'p8' + _filler(64) + '"',
         'tfcloud = "' + _filler(14) + '.atlasv1.' + _filler(48) + '"',
         'fcm = "AAA' + 'A' + _filler(7) + ':APA91b' + _filler(136) + '"',
+        'vault = "hv' + 's.' + _filler(40) + '"',
+        'supabase = "sb' + 'p_' + _filler(40, "0a1b2c3d4e5f") + '"',
+        'planetscale = "pscale' + '_tkn_' + _filler(34) + '"',
+        'tailscale = "tsk' + 'ey-auth-' + _filler(12) + '-' + _filler(22) + '"',
+        'sentry_auth = "sntry' + 's_' + _filler(48) + '"',
+        'groq = "gs' + 'k_' + _filler(52) + '"',
+        'replicate = "r' + '8_' + _filler(40) + '"',
         'session_secret = "Qq7Zx9Lm2Pv4Rt8WcY6h"',
     )
 )
