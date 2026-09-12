@@ -143,6 +143,35 @@ class TestPasswordHashing(unittest.TestCase):
         self.assertEqual(scan("app.py", "digest = bcrypt.hashpw(password, salt)\n"), [])
 
 
+class TestShellFromInterpolation(unittest.TestCase):
+    """AP006: the injection class, in the language rather than the pipeline."""
+
+    def test_a_request_inside_a_php_command_is_critical(self):
+        findings = scan("index.php", 'system("ls " . $_GET["dir"]);\n')
+        finding = next(f for f in findings if f.rule_id == "AP006")
+        self.assertEqual(finding.severity, Severity.CRITICAL)
+
+    def test_a_fixed_php_command_is_not(self):
+        self.assertEqual(scan("index.php", 'system("ls /tmp");\n'), [])
+
+    def test_a_python_call_with_a_shell_and_an_f_string(self):
+        findings = scan("app.py", 'subprocess.run(f"tar -xf {name}", shell=True)\n')
+        finding = next(f for f in findings if f.rule_id == "AP006")
+        self.assertEqual(finding.confidence, Confidence.MEDIUM)
+
+    def test_a_list_of_arguments_is_the_fix(self):
+        self.assertEqual(scan("app.py", 'subprocess.run(["tar", "-xf", name])\n'), [])
+
+    def test_a_shell_with_nothing_interpolated_into_it(self):
+        self.assertEqual(scan("app.py", 'subprocess.run("ls -la", shell=True)\n'), [])
+
+    def test_node_exec_with_a_template_literal(self):
+        self.assertIn("AP006", rule_ids(scan("a.js", "exec(`git log ${branch}`)\n")))
+
+    def test_exec_file_takes_its_arguments_separately(self):
+        self.assertEqual(scan("a.js", 'execFile("git", ["log", branch])\n'), [])
+
+
 class TestFixtureTrees(unittest.TestCase):
     """An end-to-end suite talking to a self-signed server is the ordinary case."""
 

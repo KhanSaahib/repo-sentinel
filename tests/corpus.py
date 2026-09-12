@@ -412,6 +412,7 @@ runs:
 APPLICATION_CODE = """import hashlib
 import random
 import requests
+import subprocess
 import yaml
 
 DEBUG = True
@@ -432,6 +433,10 @@ def load(body):
 
 def store(password):
     return hashlib.md5(password.encode()).hexdigest()
+
+
+def unpack(name):
+    return subprocess.run(f"tar -xf {name}", shell=True)
 """
 
 #: ``(path, text)`` pairs, in the shape :func:`iter_files` yields.

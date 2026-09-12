@@ -197,6 +197,12 @@ last of them is the first that reads code rather than configuration.
   directory. Terraform at `--min-confidence medium`: 180 findings → 17.
 - **A fixture's URL is not a package source.** `git = "[ROOTURL]/git-package"`
   is what Cargo's test suite writes, eleven times.
+- **AP006**: a shell command built from an interpolated value. PHP's
+  superglobals make it unambiguous and critical -- the request is inside the
+  command line -- while a Python call with `shell=True` and an f-string, or
+  Node's `exec()` with a template literal, are shapes rather than proofs and
+  say so in their confidence. The fix is the same either way: stop using a
+  shell.
 - **AP004 and AP005**: untrusted data deserialised into objects
   (`yaml.load()` without a `Loader`, PHP's `unserialize()` on a superglobal),
   and a password put through a digest built for speed. The second is medium
