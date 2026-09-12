@@ -8,6 +8,7 @@ it is about have no text to read.
 from . import (
     allowlist,
     ansible,
+    appcode,
     azure,
     ci,
     circleci,
@@ -28,6 +29,7 @@ from . import (
 __all__ = [
     "allowlist",
     "ansible",
+    "appcode",
     "azure",
     "circleci",
     "cloudformation",

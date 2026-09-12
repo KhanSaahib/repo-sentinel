@@ -59,6 +59,10 @@ better outcome than a feature nobody wanted.
 - [ ] Kustomize overlays, where the patch and the base disagree
 - [ ] systemd units and cron files: the other two places a repository decides
       what runs as root
+- [ ] More application-code idioms, once AP001-AP003 have been measured against
+      enough repositories to know what the third one costs: shell execution
+      built from a request, deserialisation of untrusted input, a password
+      hashed with a fast digest
 
 ## Output and integration
 

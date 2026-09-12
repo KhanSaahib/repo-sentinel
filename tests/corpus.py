@@ -384,6 +384,21 @@ runs:
       shell: bash
 """
 
+APPLICATION_CODE = """import random
+import requests
+
+DEBUG = True
+
+
+def fetch(url):
+    return requests.get(url, verify=False)
+
+
+def issue():
+    reset_token = random.choice("0123456789")
+    return reset_token
+"""
+
 #: ``(path, text)`` pairs, in the shape :func:`iter_files` yields.
 FILES = (
     ("src/config.py", SECRETS_FILE),
@@ -405,6 +420,7 @@ FILES = (
     (".circleci/config.yml", CIRCLECI_FILE),
     ("Jenkinsfile", JENKINSFILE),
     ("scripts/setup.sh", SHELL_SCRIPT),
+    ("billing/api.py", APPLICATION_CODE),
 )
 
 #: ``(path, text)`` pairs, in the shape the walk reports, with None for the

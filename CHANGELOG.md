@@ -156,6 +156,14 @@ repository the tool can read at all: it grew from two file formats to six.
   GitLab example per released version: the same two files were reported thirty
   times over.
 
+- **Application code** (AP001–AP003), the first family that reads code rather
+  than configuration: certificate verification switched off (six spellings,
+  across Python, JavaScript, Go, PHP and Ruby), a web framework left in debug
+  mode, and a credential generated from `Math.random()` or `random.choice()`.
+  Each idiom is read only in the language it means something in, bundles are
+  skipped, and a fixture tree drops a step of confidence -- a test against a
+  self-signed server is the ordinary reason any of them appears.
+
 - **Composite actions are scanned too.** `action.yml` is a workflow fragment by
   another name, and its steps run inside whichever repository calls it, so the
   pinning and injection rules apply there with a wider reach. **WF012** is the

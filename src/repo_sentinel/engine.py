@@ -12,6 +12,7 @@ from . import wellknown
 from .findings import Confidence, Finding
 from .scanners import (
     ansible,
+    appcode,
     azure,
     circleci,
     cloudformation,
@@ -39,6 +40,7 @@ from .scanners import (
 #: rather than contents.
 FORMAT_SCANNERS = (
     ansible,
+    appcode,
     azure,
     circleci,
     cloudformation,

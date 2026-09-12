@@ -7,6 +7,7 @@ import corpus
 from repo_sentinel import rules
 from repo_sentinel.scanners import (
     ansible,
+    appcode,
     azure,
     circleci,
     cloudformation,
@@ -30,8 +31,8 @@ from repo_sentinel.scanners import (
 #: asking -- the one way for that test to be useless.
 CONTENT_SCANNERS = (
     ansible,
+    appcode,
     azure,
-    circleci,
     circleci,
     cloudformation,
     compose,
@@ -71,6 +72,33 @@ class TestCoverageOfTheScanners(unittest.TestCase):
             if name not in ("allowlist", "filenames")
         }
         self.assertEqual(modules, set(CONTENT_SCANNERS))
+
+
+_ONES = (
+    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
+    "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen",
+    "sixteen", "seventeen", "eighteen", "nineteen",
+)
+_TENS = ("", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety")
+
+
+def in_words(number: int) -> str:
+    """Spell a number the way the README does, capitalised.
+
+    This used to be a hand-written table of every total the catalogue had
+    passed through, extended by whoever added the rule that broke it. The
+    test it serves is about the README rotting, not about arithmetic.
+    """
+    if number >= 100:
+        rest = number % 100
+        hundreds = f"{_ONES[number // 100]} hundred"
+        spelled = hundreds if not rest else f"{hundreds} and {in_words(rest).lower()}"
+    elif number >= 20:
+        tens, ones = divmod(number, 10)
+        spelled = _TENS[tens] if not ones else f"{_TENS[tens]}-{_ONES[ones]}"
+    else:
+        spelled = _ONES[number]
+    return spelled[0].upper() + spelled[1:]
 
 
 def _documentation() -> str:
@@ -211,37 +239,13 @@ class TestCatalogue(unittest.TestCase):
         # The README quotes a total. A number in prose is a number that rots.
         root = pathlib.Path(__file__).resolve().parents[1]
         readme = (root / "README.md").read_text(encoding="utf-8")
-        words = {
-            60: "Sixty", 61: "Sixty-one", 62: "Sixty-two", 63: "Sixty-three",
-            64: "Sixty-four", 65: "Sixty-five", 66: "Sixty-six", 67: "Sixty-seven",
-            68: "Sixty-eight", 69: "Sixty-nine", 70: "Seventy", 71: "Seventy-one",
-            72: "Seventy-two", 73: "Seventy-three", 74: "Seventy-four",
-            75: "Seventy-five", 76: "Seventy-six", 77: "Seventy-seven",
-            78: "Seventy-eight", 79: "Seventy-nine", 80: "Eighty",
-            81: "Eighty-one", 82: "Eighty-two", 83: "Eighty-three",
-            84: "Eighty-four", 85: "Eighty-five", 86: "Eighty-six",
-            87: "Eighty-seven", 88: "Eighty-eight", 89: "Eighty-nine",
-            90: "Ninety", 91: "Ninety-one", 92: "Ninety-two",
-            93: "Ninety-three", 94: "Ninety-four", 95: "Ninety-five",
-            96: "Ninety-six", 97: "Ninety-seven", 98: "Ninety-eight",
-            99: "Ninety-nine", 100: "One hundred",
-            101: "One hundred and one", 102: "One hundred and two",
-            103: "One hundred and three", 104: "One hundred and four",
-            105: "One hundred and five", 106: "One hundred and six",
-            107: "One hundred and seven", 108: "One hundred and eight",
-            109: "One hundred and nine", 110: "One hundred and ten",
-            111: "One hundred and eleven", 112: "One hundred and twelve",
-            113: "One hundred and thirteen", 114: "One hundred and fourteen",
-            115: "One hundred and fifteen", 116: "One hundred and sixteen",
-            117: "One hundred and seventeen", 118: "One hundred and eighteen",
-            119: "One hundred and nineteen", 120: "One hundred and twenty",
-            121: "One hundred and twenty-one", 122: "One hundred and twenty-two",
-            123: "One hundred and twenty-three", 124: "One hundred and twenty-four",
-            125: "One hundred and twenty-five", 126: "One hundred and twenty-six",
-        }
-        spelled = words.get(len(rules.RULES))
-        self.assertIsNotNone(spelled, "extend the number words in this test")
-        self.assertIn(f"{spelled} rules", readme)
+        self.assertIn(f"{in_words(len(rules.RULES))} rules", readme)
+
+    def test_the_readme_counts_the_families_correctly(self):
+        root = pathlib.Path(__file__).resolve().parents[1]
+        readme = (root / "README.md").read_text(encoding="utf-8")
+        families = in_words(len(rules.FAMILIES)).lower()
+        self.assertIn(f"across {families} families", readme)
 
     def test_every_rule_names_the_weakness_it_reports(self):
         # A CWE is a claim, not a decoration, so the only rule without one is
