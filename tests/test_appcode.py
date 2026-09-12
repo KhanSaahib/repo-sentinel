@@ -212,19 +212,29 @@ class TestShellFromInterpolation(unittest.TestCase):
 
 
 class TestFixtureTrees(unittest.TestCase):
-    """An end-to-end suite talking to a self-signed server is the ordinary case."""
+    """An end-to-end suite talking to a self-signed server is the ordinary case.
+
+    The weighing itself lives in the engine, which applies it to every format
+    scanner; these assert that this family's findings go through it and come
+    out weaker rather than gone.
+    """
 
     CODE = "cfg := &tls.Config{InsecureSkipVerify: true}\n"
 
+    def weighed(self, path):
+        from repo_sentinel import engine
+
+        return engine._weigh_by_context(scan(path, self.CODE))
+
     def test_the_same_line_is_weaker_under_a_test_tree(self):
-        shipped = scan("internal/client/main.go", self.CODE)[0]
-        tested = scan("test/e2e/admission/admission_test.go", self.CODE)[0]
+        shipped = self.weighed("internal/client/main.go")[0]
+        tested = self.weighed("test/e2e/admission/admission_test.go")[0]
         self.assertLess(tested.confidence, shipped.confidence)
 
     def test_it_is_weakened_rather_than_dropped(self):
         # The idiom copied out of a test into the client it exercises is
         # exactly how it ships.
-        self.assertIn("AP001", rule_ids(scan("test/e2e/admission_test.go", self.CODE)))
+        self.assertIn("AP001", rule_ids(self.weighed("test/e2e/admission_test.go")))
 
 
 class TestSuppressionAndScope(unittest.TestCase):

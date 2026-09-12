@@ -27,7 +27,7 @@ import posixpath
 import re
 from collections.abc import Iterable, Iterator
 
-from .. import suppression, wellknown
+from .. import suppression
 from ..findings import Confidence, Finding, Severity
 
 #: Suffixes worth reading. The list is deliberately short: a rule that does not
@@ -336,12 +336,6 @@ def scan_source(
         return []
 
     name = posixpath.basename(path.replace("\\", "/")).lower()
-    # A test that talks to a server with a self-signed certificate is the
-    # ordinary reason any of these idioms appears, and an end-to-end suite is
-    # mostly that. Measured on ingress-nginx: sixteen findings, every one of
-    # them in test/e2e. Weakened rather than dropped -- the idiom copied out
-    # of a test into the client it exercises is exactly how it ships.
-    in_fixtures = wellknown.is_test_path(path)
     findings: "list[Finding]" = []
     for rule in _RULES:
         if not _applies(rule, name):
@@ -366,7 +360,7 @@ def scan_source(
                     line=line,
                     evidence=evidence[:120],
                     remediation=rule.remediation,
-                    confidence=rule.confidence.weaker if in_fixtures else rule.confidence,
+                    confidence=rule.confidence,
                 )
             )
     return marks.filter_findings(findings)

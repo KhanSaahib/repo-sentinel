@@ -59,6 +59,12 @@
       "for": "a hundred charts: templates, values, and the settings people really ship"
     },
     {
+      "name": "argo-cd",
+      "url": "https://github.com/argoproj/argo-cd",
+      "commit": "a2bd9e8cda9e91498b9b896db9961350bac01f22",
+      "for": "four hundred manifests under testdata, and a Go codebase around them"
+    },
+    {
       "name": "grafana-operator",
       "url": "https://github.com/grafana/grafana-operator",
       "commit": "a0a582eff403bf81ad5413d5aaf62ee27efffbee",

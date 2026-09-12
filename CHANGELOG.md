@@ -152,6 +152,12 @@ last of them is the first that reads code rather than configuration.
 - A **YAML subset reader** and an **HCL block reader**, both standard library
   only, both explicit about what they do not parse.
 
+- **A config file in a fixture tree drops a step too.** A manifest under
+  `testdata/` exists to be diffed or parsed rather than applied, and Argo CD
+  has four hundred of them: 497 findings at `--min-confidence medium` became
+  210, and the ones that remain are its own certificates and its Go code. The
+  application-code family's own copy of this arithmetic is gone, since the
+  engine now does it for every format scanner.
 - **A config file in a documentation tree drops a step of confidence.** The
   secrets scanner already weighed prose this way; the config families now do
   too, for the reason that a pipeline under `docs/` is a snippet in a tutorial
