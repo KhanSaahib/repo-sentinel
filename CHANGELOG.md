@@ -191,6 +191,10 @@ last of them is the first that reads code rather than configuration.
   `git` dependency carries a `rev` or a `tag`; without one it installs whatever
   the default branch holds at build time. No TOML parser behind it -- `tomllib`
   arrived in 3.11 and this runs on 3.9.
+- **A systemd unit and a crontab are value-position formats.** A unit is an
+  INI file that runs as root, and the place a credential lands in one is
+  `Environment=DB_PASSWORD=…` -- an assignment wrapped in an assignment, where
+  the name that matters is the inner one.
 - **A `classpath:` reference is not a private key.** Spring configuration says
   where a key file is -- `private-key: classpath:server.key` -- and spring-boot
   writes that a dozen times.

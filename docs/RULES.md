@@ -121,8 +121,10 @@ SEC100 and SEC101 are the heuristics. They fire when a name that promises a
 credential (`password`, `api_key`, `client_secret`, …) is assigned a value that
 looks generated rather than written. SEC100 reads quoted assignments in source
 code; SEC101 reads the formats that write credentials bare — `.env`, `.npmrc`,
-`.pypirc`, INI files, YAML — where there is no quoting to key on, and where the
-file's own syntax has to stand in for it.
+`.pypirc`, INI files, YAML, a crontab, and a systemd unit — where there is no
+quoting to key on, and where the file's own syntax has to stand in for it. A
+unit wraps its assignment in one of its own (`Environment=DB_PASSWORD=…`), and
+the name that matters is the inner one.
 
 One consequence worth knowing: a real `.env` is usually git-ignored, so SEC101
 will not see it unless you pass `--no-gitignore`. Where it earns its keep by

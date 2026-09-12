@@ -413,6 +413,24 @@ class TestValuePositions(unittest.TestCase):
         self.assertIn("SEC101", rule_ids(findings))
         self.assertNotIn("\\", findings[0].evidence)
 
+    def test_a_systemd_unit_is_a_value_position_format(self):
+        unit = (
+            "[Service]\nUser=app\n"
+            "Environment=DB_PASSWORD=Tv8nRw1YXk92mQp7Lz4T\n"
+            "ExecStart=/usr/bin/app\n"
+        )
+        findings = secrets.scan_text("deploy/app.service", unit)
+        self.assertIn("SEC101", rule_ids(findings))
+        self.assertIn("DB_PASSWORD", findings[0].title)
+
+    def test_a_quoted_systemd_environment_line(self):
+        unit = '[Service]\nEnvironment="API_TOKEN=Qq7Zx9Lm2Pv4Rt8WcY6h"\n'
+        self.assertIn("SEC101", rule_ids(secrets.scan_text("app.service", unit)))
+
+    def test_an_ordinary_unit_setting_says_nothing(self):
+        unit = "[Service]\nUser=app\nExecStart=/usr/bin/app --port 8080\nRestart=always\n"
+        self.assertEqual(secrets.scan_text("app.service", unit), [])
+
     def test_reports_a_compose_environment_value(self):
         text = "services:\n  db:\n    environment:\n      MYSQL_ROOT_PASSWORD: Qq7Zx9Lm2Pv4Rt8W\n"
         self.assertIn("SEC101", rule_ids(secrets.scan_text("docker-compose.yml", text)))
