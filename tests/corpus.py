@@ -423,6 +423,7 @@ runs:
 """
 
 APPLICATION_CODE = """import hashlib
+import jwt
 import random
 import requests
 import subprocess
@@ -450,6 +451,10 @@ def store(password):
 
 def unpack(name):
     return subprocess.run(f"tar -xf {name}", shell=True)
+
+
+def whoami(token):
+    return jwt.decode(token, key, algorithms=["none"])
 """
 
 #: ``(path, text)`` pairs, in the shape :func:`iter_files` yields.

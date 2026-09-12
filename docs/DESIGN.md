@@ -127,8 +127,8 @@ Code says what a system *does*, and answering a question about that needs
 something this tool does not have -- a parser, a call graph, and a notion of
 which values reach which calls. So the application-code family
 (:mod:`scanners.appcode`) asks a smaller question on purpose: does this file
-contain one of three idioms whose meaning is fixed, in a language where that
-spelling means what it looks like? `verify=False` is a Python spelling; the
+contain one of a handful of idioms whose meaning is fixed, in a language where
+that spelling means what it looks like? `verify=False` is a Python spelling; the
 same characters in a Go file are a guess, so the rule does not apply there.
 
 That smallness is the point. A clean report from that family means "none of

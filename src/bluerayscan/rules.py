@@ -193,6 +193,7 @@ RULES: "dict[str, Rule]" = _rules(
     ("AP004", "unsafe-deserialisation", "Untrusted data deserialised into objects", Severity.HIGH),
     ("AP005", "fast-password-hash", "Password hashed with a digest built for speed", Severity.MEDIUM),
     ("AP006", "shell-from-interpolation", "Shell command built from an interpolated value", Severity.CRITICAL),
+    ("AP007", "jwt-none-algorithm", "JWT accepted with the \"none\" algorithm", Severity.CRITICAL),
     ("SH001", "script-downloads-and-runs", "Script downloads code and runs it in one step", Severity.HIGH),
     ("SH002", "script-skips-verification", "Script disables certificate verification", Severity.MEDIUM),
     ("SH003", "script-world-writable", "Script makes something world-writable", Severity.MEDIUM),
@@ -305,6 +306,8 @@ _claim("CWE-330", "AP003")
 _claim("CWE-502", "AP004")
 _claim("CWE-916", "AP005")
 _claim("CWE-489", "AP002")
+# Missing or improper verification of a cryptographic signature.
+_claim("CWE-347", "AP007")
 # Execution with unnecessary privileges.
 _claim("CWE-250", "DK002", "DC001", "DC004", "K8S001", "K8S005", "K8S006", "K8S012", "WF013")
 # Incorrect permission assignment for a critical resource.

@@ -1,11 +1,13 @@
-"""Audit application source for three decisions that disable a defence.
+"""Audit application source for the decisions that disable a defence.
 
 Every other scanner here reads configuration. This one reads code, which is a
 different proposition: configuration says what a system *is*, and code says
 what it does, and a line-at-a-time reader can only honestly answer questions
-about idioms rather than about behaviour. So the rules are three, each a
+about idioms rather than about behaviour. So the rules are few, each a
 well-known idiom with a well-known meaning, each written per language rather
-than guessed at across all of them.
+than guessed at across all of them. The bar for adding one is that the idiom
+has a single meaning in the language it is read in: ``verify=False`` is a
+Python spelling, and the same characters in a Go file are a guess.
 
 What they have in common is that they are all *deliberate*. Nobody disables
 certificate verification by accident; it is typed to get past a failure, on a
@@ -16,7 +18,7 @@ ever ask about it again.
 The limits are the usual ones, and they are real. There is no parser here, so
 a construct spread over several lines is invisible, a helper called
 ``insecure_session()`` is invisible, and a value arriving through a variable is
-invisible. A clean report from this family means "none of the three idioms
+invisible. A clean report from this family means "none of these idioms
 appears", which is a smaller claim than "this code verifies certificates".
 """
 
@@ -144,6 +146,32 @@ _PYTHON_SHELL_INTERPOLATION = re.compile(
 _NODE_SHELL_INTERPOLATION = re.compile(
     r"\b(?:child_process\.)?exec(?:Sync)?\s*\(\s*`[^`\n]*\$\{"
 )
+
+#: A JSON Web Token is a claim plus a signature, and the signature is the only
+#: reason to believe the claim. "none" is an algorithm in the spec meaning
+#: there is no signature, which makes a token anyone can type: change the
+#: subject to "admin", re-encode, send. A library that is told to accept it
+#: accepts a forgery, so the list is read for the word rather than for the
+#: length of it -- ``algorithms: ["none", "HS256"]`` still accepts the forgery,
+#: because the token says which one it used.
+#:
+#: The call has to name the library on the same line. "none" is what half the
+#: world calls the absence of a compression or a cipher, and a list of
+#: supported algorithms containing it is ordinary everywhere except here. That
+#: makes a construct spread over several lines invisible, which is a limit this
+#: family already has and states.
+_JWT_NONE_ALGORITHM = re.compile(
+    r"""(?x)
+    \b(?:jwt|jsonwebtoken)\b
+    [^\n]{0,120}?
+    \balgorithms?\s*[:=]\s*[\[(]
+    [^\])\n]{0,80}?
+    ['"]none['"]
+    """,
+    re.IGNORECASE,
+)
+#: golang-jwt names the same decision in one identifier, and names it honestly.
+_GO_JWT_NONE = re.compile(r"\bUnsafeAllowNoneSignatureType\b")
 
 _RULES = (
     _Rule(
@@ -294,6 +322,21 @@ _RULES = (
         Confidence.MEDIUM,
         hints=("random", "rand(", "mt_rand"),
     ),
+    _Rule(
+        "AP007", _JWT_NONE_ALGORITHM, _PYTHON + _JAVASCRIPT, Severity.CRITICAL,
+        "A JWT is accepted with the \"none\" algorithm",
+        "\"none\" means the token carries no signature, so anyone can write one: "
+        "change the subject to an administrator, re-encode, send. Name the "
+        "algorithms you actually issue -- and only those -- when verifying.",
+        hints=("jwt", "jsonwebtoken"),
+    ),
+    _Rule(
+        "AP007", _GO_JWT_NONE, _GO, Severity.CRITICAL,
+        "A JWT is accepted with the \"none\" algorithm",
+        "golang-jwt names this constant honestly. A token with no signature "
+        "is a token anyone can write. Parse with the algorithms you issue.",
+        hints=("unsafeallownone",),
+    ),
 )
 
 #: A cheap test in front of the expensive ones. Every rule above needs one of
@@ -303,7 +346,7 @@ _HINTS = (
     "verif", "rejectunauthorized", "node_tls_reject", "check_hostname",
     "debug", "random", "rand(", "mt_rand", "yaml.load", "unserialize",
     "md5", "sha1", "sha256", "sha512", "exec", "system", "passthru",
-    "popen", "subprocess",
+    "popen", "subprocess", "jwt", "jsonwebtoken", "unsafeallownone",
 )
 
 

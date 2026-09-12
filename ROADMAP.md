@@ -71,11 +71,21 @@ better outcome than a feature nobody wanted.
       value-position formats for the rules that already read those
 - [x] More application-code idioms, measured against nineteen repositories:
       AP004 (unsafe deserialisation), AP005 (a password through a fast digest)
-      and AP006 (a shell command built by interpolation). The family is six
+      and AP006 (a shell command built by interpolation). The family is seven
       rules and reads five languages
-- [ ] A seventh, if one earns it. The bar is an idiom with one meaning, read
-      only in the language where it has that meaning -- which is what keeps
-      this family three rules rather than thirty
+- [x] A seventh: AP007, a JWT accepted with the "none" algorithm. It has
+      exactly one meaning in each of the three languages it is read in, which
+      is the bar -- an idiom with one meaning, read only where it has that
+      meaning, which is what keeps this family seven rules rather than thirty.
+      Fires no times across the twenty-one pinned repositories, which is the
+      expected result
+- [ ] An eighth, on the same terms. Candidates that have not cleared the bar:
+      hardcoded JWT signing secrets, DEBUG in frameworks other than Django and
+      Flask, weak TLS versions, permissive CORS (`*` is only a problem with
+      credentials, which the line does not say), and PyJWT's unverified decode
+      with no second decode after it -- measured at twenty-one findings across
+      the pinned repositories, every sampled one of them the honest two-step,
+      so telling them apart needs to see the decode that follows
 
 ## Output and integration
 

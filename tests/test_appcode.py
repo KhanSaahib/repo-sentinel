@@ -1,4 +1,4 @@
-"""Three idioms in application code, read per language."""
+"""Idioms in application code, each read in the language it means something in."""
 
 import unittest
 
@@ -35,6 +35,9 @@ class TestHints(unittest.TestCase):
         'subprocess.run(f"tar {name}", shell=True)': "app.py",
         "exec(`git log ${branch}`)": "a.js",
         "token = Math.random()": "a.js",
+        'jwt.decode(token, key, algorithms=["none"])': "app.py",
+        "jwt.verify(token, key, { algorithms: ['none'] })": "a.js",
+        "token.Method = jwt.UnsafeAllowNoneSignatureType": "main.go",
     }
 
     def test_every_rule_fires_on_a_line_carrying_its_own_shape(self):
@@ -264,6 +267,79 @@ class TestSuppressionAndScope(unittest.TestCase):
         # The cheap substring gate in front of the patterns: a file that
         # mentions none of them never runs one.
         self.assertEqual(scan("app.py", "x = 1\n" * 500), [])
+
+
+class TestUnverifiedTokens(unittest.TestCase):
+    """AP007: the signature is the only reason to believe a JWT's claims."""
+
+    def test_the_none_algorithm_in_python_and_javascript(self):
+        for line, path in (
+            ('jwt.decode(token, key, algorithms=["none"])', "auth.py"),
+            ("jwt.decode(token, key, algorithms=['none'])", "auth.py"),
+            ("jwt.verify(token, key, { algorithms: ['none'] })", "auth.js"),
+            ('jwt.verify(token, key, { algorithms: ["none"] })', "auth.ts"),
+        ):
+            with self.subTest(line=line):
+                findings = [f for f in scan(path, line + "\n") if f.rule_id == "AP007"]
+                self.assertEqual(len(findings), 1, line)
+                self.assertEqual(findings[0].severity, Severity.CRITICAL)
+
+    def test_a_list_is_read_for_the_word_not_for_its_length(self):
+        # "none" alongside a real algorithm still accepts the forgery: the
+        # token says which one it used.
+        line = 'jwt.decode(token, key, algorithms=["HS256", "none"])'
+        self.assertIn("AP007", rule_ids(scan("auth.py", line + "\n")))
+
+    def test_go_names_the_decision_honestly(self):
+        line = "token.Method = jwt.UnsafeAllowNoneSignatureType"
+        findings = [f for f in scan("main.go", line + "\n") if f.rule_id == "AP007"]
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].severity, Severity.CRITICAL)
+
+    def test_the_algorithms_a_service_actually_issues(self):
+        for line in (
+            'jwt.decode(token, key, algorithms=["RS256"])',
+            "jwt.verify(token, key, { algorithms: ['HS256', 'RS256'] })",
+        ):
+            with self.subTest(line=line):
+                self.assertNotIn("AP007", rule_ids(scan("auth.py", line + "\n")))
+                self.assertNotIn("AP007", rule_ids(scan("auth.js", line + "\n")))
+
+    def test_none_as_a_value_rather_than_a_name(self):
+        # Python's None is not the JWT algorithm, and neither is a variable
+        # called none_of_them. The quotes are what make it the algorithm.
+        for line in (
+            "jwt.decode(token, key, algorithms=None)",
+            "algorithms = none_of_them",
+        ):
+            with self.subTest(line=line):
+                self.assertNotIn("AP007", rule_ids(scan("auth.py", line + "\n")))
+
+    def test_a_go_spelling_is_not_read_in_python(self):
+        # The whole bar for this family: an idiom is read in the language
+        # where it has its meaning.
+        line = "token.Method = jwt.UnsafeAllowNoneSignatureType"
+        self.assertNotIn("AP007", rule_ids(scan("auth.py", line + "\n")))
+        self.assertNotIn("AP007", rule_ids(scan("auth.rb", line + "\n")))
+
+    def test_none_is_what_half_the_world_calls_no_compression(self):
+        # A list of supported algorithms containing "none" is ordinary
+        # everywhere except in a JWT call, so the call has to name the library
+        # on the same line.
+        for line in (
+            'compression_algorithms = ["none", "gzip"]',
+            "cipher.algorithms = ('none',)",
+        ):
+            with self.subTest(line=line):
+                self.assertNotIn("AP007", rule_ids(scan("transport.py", line + "\n")))
+
+    def test_the_javascript_package_name_counts_too(self):
+        line = "jsonwebtoken.verify(token, key, { algorithms: ['none'] })"
+        self.assertIn("AP007", rule_ids(scan("auth.js", line + "\n")))
+
+    def test_a_marker_silences_it(self):
+        line = 'jwt.decode(token, key, algorithms=["none"])  # bluerayscan: ignore[AP007]'
+        self.assertEqual(scan("auth.py", line + "\n"), [])
 
 
 if __name__ == "__main__":

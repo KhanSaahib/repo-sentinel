@@ -569,13 +569,16 @@ somebody's note about the thing they decided not to do.
 | AP004 | Untrusted data deserialised into objects | high |
 | AP005 | Password hashed with a digest built for speed | medium |
 | AP006 | Shell command built from an interpolated value | critical for a request, otherwise high |
+| AP007 | JWT accepted with the "none" algorithm | critical |
 
 Every other family reads configuration. This one reads code, which is a
 different proposition: configuration says what a system *is*, and code says
 what it does. A line-at-a-time reader can honestly answer questions about
-idioms and not about behaviour, so there are three rules, each a well-known
+idioms and not about behaviour, so the rules are few, each a well-known
 idiom with a well-known meaning, and each written per language rather than
-guessed at across all of them. Python, JavaScript and TypeScript, Go, PHP and
+guessed at across all of them. The bar for adding one is that the idiom has a
+single meaning in the language it is read in: `verify=False` is a Python
+spelling, and the same characters in a Go file are a guess. Python, JavaScript and TypeScript, Go, PHP and
 Ruby; `.min.js` and its relatives are skipped, because a bundle is machine
 output and never chose any of its idioms.
 
@@ -633,6 +636,39 @@ a process id going into a build script. None of those is exploitable today and
 every one of them is one refactor away from taking a value from somewhere else,
 which is exactly what medium confidence is for: `--min-confidence high` does not
 show them, and a review reading everything does.
+
+AP007 is about the one thing that makes a JSON Web Token worth reading. A token
+is a claim plus a signature, and the signature is the only reason to believe
+the claim. `none` is an algorithm in the specification meaning there is no
+signature -- so a library told to accept it accepts a token anybody can type:
+change the subject to an administrator, re-encode, send. That is critical, and
+it is read three ways, each in its own language: `algorithms` naming `"none"`
+in Python or JavaScript, and golang-jwt's `UnsafeAllowNoneSignatureType`, which
+names the decision honestly. A list is read for the word rather than for its
+length, because `algorithms: ["none", "HS256"]` still accepts the forgery: the
+token says which one it used.
+
+The call has to name the library on the same line. `none` is what half the
+world calls the absence of a compression or a cipher, and a list of supported
+algorithms containing it is ordinary everywhere except here. The cost of that
+is the limit this family already has and states: an options object spread over
+several lines is invisible.
+
+What this rule does *not* read is PyJWT's `options={"verify_signature": False}`,
+and the reason is a measurement rather than a principle. It has one honest use
+-- read the header to find out which key signed the token, then decode again,
+verifying, with that key -- and across the twenty-one pinned repositories it
+fired twenty-one times, in authentik and saleor, every sampled one of them that
+honest shape. Telling the two apart means seeing whether a verifying decode
+follows, which needs a reader this family does not have. So it is not a rule
+here, and the absence is deliberate.
+
+Measured across the same twenty-one repositories, the `none` spellings fire
+**no times at all**. That is the expected result and not a disappointment: it
+is not an idiom anybody reaches for by accident, which is exactly the argument
+for reading for it. A rule that is silent on every well-run repository and
+loud on the one that got this wrong is the shape this whole family is aiming
+at.
 
 A finding in a fixture tree drops a step of confidence, for the same reason the
 secrets rules do it: a test that talks to a server with a self-signed

@@ -8,6 +8,22 @@ changes.
 
 ### Added
 
+- **AP007: a JWT accepted with the `none` algorithm.** A token is a claim plus
+  a signature, and the signature is the only reason to believe the claim.
+  `none` is an algorithm in the specification meaning there is no signature,
+  so a library told to accept it accepts a token anybody can type: change the
+  subject to an administrator, re-encode, send. Read three ways, each in the
+  language it means something in -- `algorithms` naming `"none"` in Python or
+  JavaScript, and golang-jwt's `UnsafeAllowNoneSignatureType`. The call has to
+  name the library on the same line, because `none` is also what half the
+  world calls the absence of a compression or a cipher.
+
+  Measured across the twenty-one pinned repositories: **no findings**, which is
+  the expected result for an idiom nobody reaches for by accident. Not added,
+  after the same measurement: PyJWT's `options={"verify_signature": False}`,
+  which fired twenty-one times, every sampled one of them the honest two-step
+  of reading a header to find the key before verifying with it.
+
 - **`bluerayscan history`**, which reads a `git log -p` stream and reports the
   credentials its commits introduced, each named with the commit that
   introduced it and the day it became public. A value added, reverted and
