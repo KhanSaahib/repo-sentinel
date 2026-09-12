@@ -159,12 +159,28 @@ def format_summary(findings: Sequence[Finding], *, notes: Sequence[str] = ()) ->
     return "\n".join([summarise(findings) if findings else _CLEAN, *notes])
 
 
-def format_json(findings: Sequence[Finding], *, version: str, notes: Sequence[str] = ()) -> str:
-    payload = {
+def format_json(
+    findings: Sequence[Finding],
+    *,
+    version: str,
+    notes: Sequence[str] = (),
+    scan: "dict | None" = None,
+) -> str:
+    """The format to build on, including what the run could not read.
+
+    ``scan`` carries the same facts the text summary puts in a sentence: how
+    many files were read, what was skipped and why, how many lines carry a
+    suppression marker. A person reads that sentence; a pipeline cannot, and a
+    pipeline that cannot tell "no findings" from "nothing was read" is exactly
+    the failure the sentence exists to prevent.
+    """
+    payload: "dict" = {
         "version": version,
         "finding_count": len(findings),
-        "findings": [finding.to_dict() for finding in findings],
     }
+    if scan is not None:
+        payload["scan"] = scan
+    payload["findings"] = [finding.to_dict() for finding in findings]
     if notes:
         payload["notes"] = list(notes)
     return json.dumps(payload, indent=2)

@@ -298,7 +298,14 @@ open would mean a truncated file silently accepts everything.
 
 ## The JSON output
 
-`--format json` is the one to build on. Each finding carries:
+`--format json` is the one to build on. Alongside the findings it carries a
+`scan` object -- how many files were read, how long it took, what was skipped
+for being unreadable or too large, and how many lines carry a suppression
+marker. A person reads that as a sentence under the report; a pipeline cannot,
+and a pipeline that cannot tell "no findings" from "nothing was read" is
+exactly what that sentence exists to prevent.
+
+Each finding carries:
 
 ```json
 {

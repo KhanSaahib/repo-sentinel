@@ -204,6 +204,36 @@ class TestFileSizeLimit(unittest.TestCase):
         self.assertNotIn("size limit", output)
 
 
+class TestJsonScanFacts(unittest.TestCase):
+    """A pipeline cannot read the summary sentence, so it gets the facts."""
+
+    def scan(self, root, *extra):
+        _, output = run(["scan", root, "--format", "json", *extra])
+        return json.loads(output)
+
+    def test_the_json_says_how_much_was_read(self):
+        with sample_repo() as root:
+            payload = self.scan(root)
+        self.assertGreater(payload["scan"]["files"], 0)
+        self.assertIn("duration_seconds", payload["scan"])
+
+    def test_it_says_what_was_skipped_and_why(self):
+        with tempfile.TemporaryDirectory() as root:
+            with open(os.path.join(root, "dump.json"), "w", encoding="utf-8") as handle:
+                handle.write('{"x": "' + "a" * (3 * 1024 * 1024) + '"}')
+            payload = self.scan(root)
+        self.assertEqual(payload["scan"]["oversized"], ["dump.json"])
+        self.assertEqual(payload["scan"]["unreadable"], [])
+
+    def test_it_counts_the_suppression_markers(self):
+        with tempfile.TemporaryDirectory() as root:
+            with open(os.path.join(root, "app.py"), "w", encoding="utf-8") as handle:
+                handle.write(f'K = "{fixtures.REALISTIC_AWS_KEY_ID}"  # repo-sentinel: ignore\n')
+            payload = self.scan(root)
+        self.assertEqual(payload["scan"]["suppressed_lines"], 1)
+        self.assertEqual(payload["finding_count"], 0)
+
+
 class TestModuleEntryPoint(unittest.TestCase):
     """``python -m repo_sentinel`` is how the README says to run it."""
 

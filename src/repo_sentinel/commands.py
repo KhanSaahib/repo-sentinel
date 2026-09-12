@@ -153,7 +153,10 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
     if args.format in ("text", "markdown", "github"):
         notes.append(_scan_note(result))
 
-    exit_code = _emit(_render(args, findings, notes, result.duration), args.output)
+    exit_code = _emit(
+        _render(args, findings, notes, result.duration, _scan_facts(result)),
+        args.output,
+    )
     if exit_code != EXIT_OK:
         return exit_code
     if fail_on is not None and any(finding.severity >= fail_on for finding in findings):
@@ -161,14 +164,29 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
     return EXIT_OK
 
 
+def _scan_facts(result) -> "dict":
+    """What the run looked at, as data rather than as a sentence."""
+    return {
+        "files": result.file_count,
+        "duration_seconds": round(result.duration, 3),
+        "unreadable": list(result.unreadable),
+        "oversized": list(result.oversized),
+        "suppressed_lines": result.suppressed_lines,
+        "suppressed_files": result.suppressed_files,
+    }
+
+
 def _render(
     args: argparse.Namespace,
     findings: "list[Finding]",
     notes: "list[str]",
     duration: float = 0.0,
+    scan: "dict | None" = None,
 ) -> str:
     if args.format == "json":
-        return report.format_json(findings, version=__version__, notes=notes)
+        return report.format_json(
+            findings, version=__version__, notes=notes, scan=scan
+        )
     if args.format == "sarif":
         return report.format_sarif(findings, version=__version__)
     if args.format == "markdown":
