@@ -22,7 +22,10 @@ discovery.walk ──► Entry(path, text|None)
 Four things happen in that order and the order matters:
 
 **The walk yields every path it reaches**, with text where it could read it and
-`None` where it could not. Before that, a binary was dropped before any rule
+`None` where it could not. Two of the three reasons it could not are counted
+and reported -- a path it had no permission for, a file over the size limit --
+because both are gaps somebody should be able to see. A binary is the silent
+one: its bytes are not text in any sense a rule could read. Before that, a binary was dropped before any rule
 saw it, which made a committed `id_rsa` or `.p12` invisible. A scanner that
 only ever sees text cannot report a file that has none.
 

@@ -50,8 +50,9 @@ better outcome than a feature nobody wanted.
       the secrets, not the ref
 - [ ] Warn on `contents: write` without an obvious need — needs a notion of
       "obvious need" that does not just move the noise somewhere else
-- [ ] Composite actions in the repository itself (`action.yml`), which are
-      workflows in all but trigger
+- [x] Composite actions in the repository itself (`action.yml`), which are
+      workflows in all but trigger. WF012 is the rule that only makes sense
+      there: an action cannot tell a safe input from a dangerous one
 
 ## Beyond GitHub Actions
 
@@ -62,10 +63,11 @@ better outcome than a feature nobody wanted.
 - [ ] Kustomize overlays, where the patch and the base disagree
 - [ ] systemd units and cron files: the other two places a repository decides
       what runs as root
-- [ ] More application-code idioms, once AP001-AP003 have been measured against
-      enough repositories to know what the third one costs: shell execution
-      built from a request, deserialisation of untrusted input, a password
-      hashed with a fast digest
+- [ ] More application-code idioms, now that AP001-AP003 have been measured
+      against fourteen repositories -- 49 findings, every one of them a real
+      instance of the idiom, and AP003 has yet to fire outside the corpus.
+      Candidates: shell execution built from a request, deserialisation of
+      untrusted input, a password hashed with a fast digest
 
 ## Output and integration
 
@@ -75,6 +77,11 @@ better outcome than a feature nobody wanted.
 - [x] `--paths-from FILE` for per-PR runs, `--format markdown` for a PR comment,
       `--format github` for annotations
 - [x] `--quiet`, `--sort`, `--disable`, per-path configuration
+- [x] `--fail-on none`, so a reporting job need not borrow its CI's word for
+      "do not stop here"
+- [x] Every skip counted and named: unreadable paths, files over the size
+      limit, suppression markers -- in the sentence, in the JSON, and in the
+      SARIF invocation
 - [x] ~~`--explain RULE`~~ -- a flag was the wrong shape. `rules WF011` already
       names one rule; it now prints the card instead of the row, which is what
       the flag would have done and one fewer thing to know

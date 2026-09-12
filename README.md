@@ -43,8 +43,10 @@ Start here:
 repo-sentinel init .
 ```
 
-That scans the repository, tells you what is in it, records the findings at or
-above `high` as a baseline so your first pipeline run is green, writes a
+That scans the repository, tells you what is in it -- including which three
+rules are doing most of the talking, because a hundred findings that are all
+one rule is a decision to make once -- records the findings at or above `high`
+as a baseline so your first pipeline run is green, writes a
 `.repo-sentinel.json`, and prints the CI snippet for whichever CI system the
 repository already has -- GitHub Actions, GitLab, Azure Pipelines, CircleCI or
 Jenkins, the last four wired to draw the report rather than print it. Nothing
@@ -70,6 +72,7 @@ repo-sentinel scan . --min-confidence high    # only show what it is sure of
 repo-sentinel scan . --fail-on critical       # relax the CI gate
 repo-sentinel scan . --fail-on none           # report, never fail
 repo-sentinel scan . --exclude 'fixtures'     # skip a directory (repeatable)
+repo-sentinel scan . --max-file-size 8M       # read the big ones too
 repo-sentinel scan . --no-gitignore           # also scan git-ignored files
 repo-sentinel scan . --no-example-allowlist   # include documented and invented keys
 repo-sentinel scan . --no-suppression         # read past the ignore markers
@@ -151,6 +154,10 @@ neither flag and reads everything.
 
 The walk skips binaries, files over 2 MB, and a built-in list of generated or
 vendored directories (`.git`, `node_modules`, `.venv`, `dist`, `target`, …).
+The size limit is reported rather than assumed: every run says how many files
+it skipped and names the first, and `--max-file-size 8M` reads them. A binary
+is the one silent skip, because its bytes are not text in any sense a rule
+could read.
 
 It also honours `.gitignore`, including nested ones, which each govern their own
 subtree. The rules implemented are negation with `!`, anchoring with a leading or
@@ -193,7 +200,7 @@ and why; `repo-sentinel rules` prints the same catalogue from the tool.
 | [Terraform](docs/RULES.md#terraform) | TF001–TF008 | Open ingress, public storage, wildcard policies |
 | [Ansible](docs/RULES.md#ansible) | AN001–AN003 | Decisions applied to every host at once |
 | [CloudFormation](docs/RULES.md#cloudformation) | CF001–CF006 | The same, in AWS's other vocabulary |
-| [Kubernetes](docs/RULES.md#kubernetes) | K8S001–K8S012 | Container escape routes, secrets in manifests |
+| [Kubernetes](docs/RULES.md#kubernetes) | K8S001–K8S012 | Container escape routes, secrets in manifests, chart values |
 
 Three things are worth knowing before you read the list.
 
@@ -231,8 +238,8 @@ instead:
 ```
 
 The settings are `exclude`, `fail_on` (`"none"` included), `min_severity`,
-`min_confidence`, `baseline`, `sort`, `disable`, `gitignore` and
-`example_allowlist`. An unknown
+`min_confidence`, `baseline`, `max_file_size`, `sort`, `disable`, `gitignore`
+and `example_allowlist`. An unknown
 key is an error rather than a shrug: a typo in a security tool's configuration
 means a project believes it configured something it did not.
 
@@ -293,7 +300,14 @@ open would mean a truncated file silently accepts everything.
 
 ## The JSON output
 
-`--format json` is the one to build on. Each finding carries:
+`--format json` is the one to build on. Alongside the findings it carries a
+`scan` object -- how many files were read, how long it took, what was skipped
+for being unreadable or too large, and how many lines carry a suppression
+marker. A person reads that as a sentence under the report; a pipeline cannot,
+and a pipeline that cannot tell "no findings" from "nothing was read" is
+exactly what that sentence exists to prevent.
+
+Each finding carries:
 
 ```json
 {
@@ -319,7 +333,9 @@ path and the already-redacted evidence, with no line number in it, so it
 survives reformatting and changes when the value does. Paths always use forward
 slashes, on every platform, so a report reads the same wherever it was
 produced. `repo-sentinel rules --format json` describes the rules themselves,
-including the CWE each one reports.
+including the CWE each one reports and, for each family in the listing, what
+it reads and where it is written up -- so a consumer grouping by category need
+not invent a label the documentation does not use.
 
 ## Posting the result onto a pull request
 
@@ -394,6 +410,11 @@ actual gate in a separate job. This repository's own
 Each result carries a `partialFingerprint`, so code scanning follows a finding
 across the reformattings and line moves that would otherwise close it and
 immediately reopen it as new.
+
+The run also reports what it could not read, as SARIF `toolExecutionNotifications`.
+A Security tab showing no alerts because nothing was scanned looks exactly like
+one showing no alerts because everything is fine, and those notifications are
+the difference.
 
 ## Suppressing a false positive
 

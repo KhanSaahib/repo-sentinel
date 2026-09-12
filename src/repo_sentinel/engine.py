@@ -6,7 +6,7 @@ import dataclasses
 import time
 from collections.abc import Iterable
 
-from .discovery import DEFAULT_EXCLUDES, Entry, read_listed, walk
+from .discovery import DEFAULT_EXCLUDES, MAX_FILE_BYTES, Entry, read_listed, walk
 from . import suppression
 from . import wellknown
 from .findings import Confidence, Finding
@@ -78,6 +78,10 @@ class ScanReport:
     #: because "no findings" from a tree that was never read is the most
     #: dangerous answer this tool can give.
     unreadable: "tuple[str, ...]" = ()
+    #: Files skipped for being larger than the limit. Not a gap the tool could
+    #: not help -- a decision it made -- so the run says so and the flag that
+    #: changes it is named in the same sentence.
+    oversized: "tuple[str, ...]" = ()
 
 
 def scan(
@@ -88,6 +92,7 @@ def scan(
     use_gitignore: bool = True,
     only_paths: "Iterable[str] | None" = None,
     honour_markers: bool = True,
+    max_bytes: int = MAX_FILE_BYTES,
 ) -> ScanReport:
     """Run every scanner over ``path``, worst findings first.
 
@@ -98,15 +103,22 @@ def scan(
     """
     started = time.monotonic()
     unreadable: "list[str]" = []
+    oversized: "list[str]" = []
     if only_paths is None:
         entries = list(
-            walk(path, excludes=excludes, use_gitignore=use_gitignore, unreadable=unreadable)
+            walk(
+                path,
+                excludes=excludes,
+                max_bytes=max_bytes,
+                use_gitignore=use_gitignore,
+                unreadable=unreadable,
+                oversized=oversized,
+            )
         )
     else:
-        entries = [
-            walk_entry
-            for walk_entry in _entries_for(path, only_paths, excludes)
-        ]
+        entries = _entries_for(
+            path, only_paths, excludes, max_bytes, unreadable, oversized
+        )
     files = [(entry.path, entry.text) for entry in entries if entry.text is not None]
 
     found = filenames.scan_paths(
@@ -127,6 +139,7 @@ def scan(
         suppressed_lines=sum(marked),
         suppressed_files=sum(1 for count in marked if count),
         unreadable=tuple(unreadable),
+        oversized=tuple(oversized),
     )
 
 
@@ -168,10 +181,23 @@ def _count_markers(text: str) -> int:
 
 
 def _entries_for(
-    path: str, only_paths: "Iterable[str]", excludes: "tuple[str, ...]"
+    path: str,
+    only_paths: "Iterable[str]",
+    excludes: "tuple[str, ...]",
+    max_bytes: int,
+    unreadable: "list[str]",
+    oversized: "list[str]",
 ) -> "list[Entry]":
     """Explicit paths as walk entries, so the name rules see them too."""
-    return [Entry(name, text) for name, text in read_listed(path, only_paths, excludes=excludes)]
+    listed = read_listed(
+        path,
+        only_paths,
+        excludes=excludes,
+        max_bytes=max_bytes,
+        unreadable=unreadable,
+        oversized=oversized,
+    )
+    return [Entry(name, text) for name, text in listed]
 
 
 def collapse(findings: "Iterable[Finding]") -> "list[Finding]":

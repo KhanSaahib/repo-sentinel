@@ -199,7 +199,7 @@ auditing what the scanner chose not to tell you.
 | --- | --- | --- |
 | FN001 | A file that is private key material by name | critical for `id_rsa`, high for a keystore |
 | FN002 | A key-shaped file nothing could read | medium |
-| FN003 | A file whose purpose is to hold a credential | medium |
+| FN003 | A file whose purpose is to hold a credential | medium, high for a password database |
 | FN004 | A file that records secrets as a side effect | critical for Terraform state |
 
 Every other rule here reads text, which makes them all blind to the files that
@@ -221,6 +221,11 @@ the finding. `.npmrc`, `.pypirc`, `.env` and `terraform.tfvars` are judged on
 what is in them: an `.npmrc` saying `ignore-scripts=true` is not a leak, and a
 committed `.env` of documented defaults is a template. Both of those were real
 false positives, measured against a public repository of Compose examples.
+
+A password database -- `.kdbx`, `.psafe3`, a 1Password vault -- is the same rule
+at high severity. The file is encrypted, which is why it is not critical, and
+it is offline once committed, which is why it is not low: unlimited guesses at
+one master password, with every credential its owner has behind it.
 
 Files under `fixtures/` or `testdata/` are reported at low confidence rather
 than not at all. And `.example`, `.sample`, `.template` and `.dist` suffixes are
@@ -671,6 +676,26 @@ K8S007 decodes what it finds. A `Secret` stores values base64-encoded, which is
 not encryption but is enough to hide a credential from every rule that reads
 lines; when the decoded value is a shape the secret rules recognise, the
 finding says which and is critical.
+
+The family also reads a chart's **values file** -- `values.yaml` and its
+`values-production.yaml` relatives -- but only where a `Chart.yaml` sits beside
+it, because every application repository has a `values.yaml` somewhere. A
+values file has no `apiVersion`, no `kind` and no containers, so the manifest
+rules never look at it; what it does have is the settings the chart hands to
+its templates, and a handful of those carry their meaning with them.
+`privileged: true` under a `securityContext` is the container setting wherever
+it is written, because that is the only thing a chart can do with a key of that
+name. Six settings are read this way -- privileged, allowPrivilegeEscalation,
+added capabilities, an Unconfined seccomp profile, the three host namespaces,
+and a hostPath volume -- all at medium confidence, since the chart *should*
+pass them through and this reader has not read the template that does. A
+`hostPath` block with no `path` in it is a configuration section rather than a
+volume: Dagger's chart has one whose keys are `dataVolume` and `runVolume`.
+
+A `CustomResourceDefinition` is skipped whole. It carries an OpenAPI schema,
+and a schema names every field a resource may have -- `hostPath`,
+`privileged`, `capabilities` -- as keys, which is how a CRD comes to look like
+the worst workload ever written. Nothing in one runs.
 
 K8S012 reads the two places a manifest can switch confinement off by name: a
 `seccompProfile` of `Unconfined`, and the AppArmor annotation set to

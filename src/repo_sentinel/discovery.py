@@ -92,6 +92,7 @@ def walk(
     *,
     use_gitignore: bool = True,
     unreadable: "list[str] | None" = None,
+    oversized: "list[str] | None" = None,
 ) -> "Iterator[Entry]":
     """Yield an :class:`Entry` for every file under ``root`` worth considering.
 
@@ -106,7 +107,9 @@ def walk(
     without permission, a file that vanished mid-scan. Those are skipped
     either way, because a scanner that dies on one permission error is useless
     in CI, but skipping them silently means a tree can be reported clean when
-    most of it was never read.
+    most of it was never read. ``oversized`` collects what was skipped for
+    being larger than ``max_bytes``, for the same reason: that is a decision
+    made on the reader's behalf.
 
     With ``use_gitignore`` the walk honours every ``.gitignore`` in the tree,
     each governing its own subtree. Set it to ``False`` to audit what git was
@@ -116,7 +119,10 @@ def walk(
     root = os.path.abspath(root)
 
     if os.path.isfile(root):
-        yield Entry(os.path.basename(root), _read_text(root, max_bytes, unreadable))
+        yield Entry(
+            os.path.basename(root),
+            _read_text(root, max_bytes, unreadable, root, oversized),
+        )
         return
 
     # Each directory inherits the stack of its parent, so rules are consulted
@@ -164,7 +170,10 @@ def walk(
             if os.path.splitext(filename)[1].lower() in BINARY_SUFFIXES:
                 yield Entry(relative)
                 continue
-            yield Entry(relative, _read_text(absolute, max_bytes, unreadable, relative))
+            yield Entry(
+                relative,
+                _read_text(absolute, max_bytes, unreadable, relative, oversized),
+            )
 
 
 def read_listed(
@@ -172,6 +181,9 @@ def read_listed(
     paths: "Iterable[str]",
     excludes: "tuple[str, ...]" = (),
     max_bytes: int = MAX_FILE_BYTES,
+    *,
+    unreadable: "list[str] | None" = None,
+    oversized: "list[str] | None" = None,
 ) -> Iterator[tuple[str, str]]:
     """Yield ``(relative_path, text)`` for an explicit list of files.
 
@@ -183,7 +195,9 @@ def read_listed(
 
     ``.gitignore`` is deliberately not consulted here. The caller named these
     files, and second-guessing an explicit list is how a tool acquires a
-    reputation for missing things.
+    reputation for missing things. For the same reason ``unreadable`` and
+    ``oversized`` are collected here as well: a named file that went unread is
+    worth more of an explanation than one the walk happened upon.
     """
     root = os.path.abspath(root)
     seen: set = set()
@@ -204,7 +218,7 @@ def read_listed(
             continue
         if any(fnmatch.fnmatch(part, pattern) for part in relative.split("/") for pattern in excludes):
             continue
-        text = _read_text(absolute, max_bytes)
+        text = _read_text(absolute, max_bytes, unreadable, relative, oversized)
         if text is not None:
             yield relative, text
 
@@ -224,20 +238,26 @@ def _read_text(
     max_bytes: int,
     unreadable: "list[str] | None" = None,
     name: "str | None" = None,
+    oversized: "list[str] | None" = None,
 ) -> "str | None":
     """The file's text, or None when it is too large, binary, or unopenable.
 
-    Only the last of those is worth telling anyone about, which is what
-    ``unreadable`` collects: a file over the size limit and a file full of NUL
-    bytes are both deliberate skips, and a file the process cannot open -- a
-    permission, a dangling symlink -- is a gap in the scan.
+    Two of those are worth telling somebody about. ``unreadable`` collects what
+    the process could not open -- a permission, a dangling symlink -- which is
+    a gap in the scan. ``oversized`` collects what was skipped for its size,
+    which is a decision this tool made on the reader's behalf and should
+    therefore be able to defend: a 3 MB ``.env`` is exactly the file nobody
+    wants skipped quietly. A binary is the one silent skip, because its bytes
+    are not text in any sense a rule could read.
 
-    ``name`` is what to record if that happens, which is the path as the report
-    will show it. Without it the walk mixes absolute paths in among relative
-    ones, in the same sentence.
+    ``name`` is what to record if either happens, which is the path as the
+    report will show it. Without it the walk mixes absolute paths in among
+    relative ones, in the same sentence.
     """
     try:
         if os.path.getsize(path) > max_bytes:
+            if oversized is not None:
+                oversized.append(name if name is not None else path)
             return None
         with open(path, "rb") as handle:
             raw = handle.read()

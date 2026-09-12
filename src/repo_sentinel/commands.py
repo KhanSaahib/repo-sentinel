@@ -15,8 +15,14 @@ import os
 import sys
 from collections.abc import Sequence
 
-from . import __version__, baseline as baseline_module, config as config_module, report
-from .discovery import DEFAULT_EXCLUDES
+from . import (
+    __version__,
+    baseline as baseline_module,
+    config as config_module,
+    report,
+    rules as rules_module,
+)
+from .discovery import DEFAULT_EXCLUDES, MAX_FILE_BYTES
 from .engine import scan
 from .findings import Confidence, Finding, Severity
 from .rules import RULES
@@ -95,6 +101,7 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
         min_severity = Severity.parse(args.min_severity)
         min_confidence = Confidence.parse(args.min_confidence)
         fail_on = _fail_threshold(args.fail_on)
+        max_bytes = _file_size_limit(getattr(args, "max_file_size", None))
     except ValueError as error:
         parser.error(str(error))
         return EXIT_ERROR  # pragma: no cover - argparse exits first
@@ -112,6 +119,7 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
         use_gitignore=not args.no_gitignore,
         only_paths=only_paths,
         honour_markers=not args.no_suppression,
+        max_bytes=max_bytes,
     )
     findings: "list[Finding]" = [
         finding
@@ -148,10 +156,16 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
     if args.sort == "path":
         findings.sort(key=lambda finding: (finding.path, finding.line, finding.rule_id))
 
-    if args.format in ("text", "markdown", "github"):
+    # Every format that carries prose gets the summary sentence. json and
+    # sarif carry the same facts as structure instead, which is what a machine
+    # can act on.
+    if args.format in ("text", "markdown", "github", "junit"):
         notes.append(_scan_note(result))
 
-    exit_code = _emit(_render(args, findings, notes, result.duration), args.output)
+    exit_code = _emit(
+        _render(args, findings, notes, result.duration, _scan_facts(result)),
+        args.output,
+    )
     if exit_code != EXIT_OK:
         return exit_code
     if fail_on is not None and any(finding.severity >= fail_on for finding in findings):
@@ -159,16 +173,62 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
     return EXIT_OK
 
 
+#: How many rules to name when introducing a repository to itself. Three is
+#: enough to say what shape the noise is -- "it is all unpinned actions" is a
+#: different morning from "it is four different things" -- and short enough
+#: that the setup output stays readable.
+_LOUDEST = 3
+
+
+def _loudest_rules(findings: "Sequence[Finding]") -> "list[str]":
+    """The rules doing most of the talking, for someone meeting this repository.
+
+    A count and a severity say how much there is; this says what it *is*. A
+    hundred findings that are all one rule is a decision to make once, and the
+    baseline just recorded is mostly that rule.
+    """
+    if not findings:
+        return []
+    counts: "dict[str, int]" = {}
+    for finding in findings:
+        counts[finding.rule_id] = counts.get(finding.rule_id, 0) + 1
+    ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:_LOUDEST]
+    if len(ranked) < 2:
+        return []
+    lines = ["", "Most of it is:"]
+    for rule_id, count in ranked:
+        rule = rules_module.RULES.get(rule_id)
+        summary = rule.summary if rule else rule_id
+        lines.append(f"  {rule_id:<7} {count:>4}  {summary}")
+    lines.extend(["  'repo-sentinel rules <id>' explains any of them.", ""])
+    return lines
+
+
+def _scan_facts(result) -> "dict":
+    """What the run looked at, as data rather than as a sentence."""
+    return {
+        "files": result.file_count,
+        "duration_seconds": round(result.duration, 3),
+        "unreadable": list(result.unreadable),
+        "oversized": list(result.oversized),
+        "suppressed_lines": result.suppressed_lines,
+        "suppressed_files": result.suppressed_files,
+    }
+
+
 def _render(
     args: argparse.Namespace,
     findings: "list[Finding]",
     notes: "list[str]",
     duration: float = 0.0,
+    scan: "dict | None" = None,
 ) -> str:
     if args.format == "json":
-        return report.format_json(findings, version=__version__, notes=notes)
+        return report.format_json(
+            findings, version=__version__, notes=notes, scan=scan
+        )
     if args.format == "sarif":
-        return report.format_sarif(findings, version=__version__)
+        return report.format_sarif(findings, version=__version__, scan=scan)
     if args.format == "markdown":
         return report.format_markdown(findings, notes=notes)
     if args.format == "github":
@@ -181,6 +241,21 @@ def _render(
     return report.format_text(
         findings, colour=colour, notes=notes, by_file=args.sort == "path"
     )
+
+
+_SIZE_SUFFIXES = {"k": 1024, "m": 1024 ** 2, "g": 1024 ** 3}
+
+
+def _file_size_limit(value: "str | None") -> int:
+    """Bytes from "2M", "500k" or a plain number; the default when unset."""
+    if value is None:
+        return MAX_FILE_BYTES
+    text = value.strip().lower().rstrip("b")
+    scale = _SIZE_SUFFIXES.get(text[-1:], 1)
+    digits = text[:-1] if scale > 1 else text
+    if not digits.isdigit() or int(digits) <= 0:
+        raise ValueError(f"unreadable size {value!r} (try 2M, 500k, or a number of bytes)")
+    return int(digits) * scale
 
 
 def _fail_threshold(value: str) -> "Severity | None":
@@ -225,6 +300,12 @@ def _scan_note(result) -> str:
             + unread
         )
     note = f"Scanned {result.file_count} file(s) in {result.duration:.2f}s." + unread
+    if result.oversized:
+        note += (
+            f" {len(result.oversized)} file(s) were larger than the size limit "
+            f"and were not read, starting with {result.oversized[0]!r}; "
+            "--max-file-size raises it."
+        )
     if result.suppressed_lines:
         note += (
             f" {result.suppressed_lines} line(s) in {result.suppressed_files} file(s) "
@@ -407,6 +488,8 @@ def init_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
         f"Scanned {result.file_count} file(s) in {result.duration:.2f}s: "
         f"{report.summarise(findings) if findings else 'no findings'}."
     )
+    for line in _loudest_rules(findings):
+        print(line)
 
     config_path = os.path.join(root, config_module.DEFAULT_PATH)
     baseline_path = os.path.join(root, baseline_module.DEFAULT_PATH)

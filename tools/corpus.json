@@ -53,6 +53,12 @@
       "for": "a Helm chart, templates and all"
     },
     {
+      "name": "helm-charts",
+      "url": "https://github.com/prometheus-community/helm-charts",
+      "commit": "b2c38cff79e9f432a6194223beb1b172e8b7667f",
+      "for": "a hundred charts: templates, values, and the settings people really ship"
+    },
+    {
       "name": "grafana-operator",
       "url": "https://github.com/grafana/grafana-operator",
       "commit": "a0a582eff403bf81ad5413d5aaf62ee27efffbee",

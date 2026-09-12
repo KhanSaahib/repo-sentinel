@@ -36,6 +36,41 @@ class TestRecognition(unittest.TestCase):
         self.assertEqual(scan(text, "k8s/ci.yaml"), [])
 
 
+class TestSchemaDocuments(unittest.TestCase):
+    """A schema for a resource is not a resource."""
+
+    CRD = (
+        "apiVersion: apiextensions.k8s.io/v1\n"
+        "kind: CustomResourceDefinition\n"
+        "metadata:\n  name: grafanas.example.com\n"
+        "spec:\n"
+        "  versions:\n"
+        "    - schema:\n"
+        "        openAPIV3Schema:\n"
+        "          properties:\n"
+        "            containers:\n"
+        "              items:\n"
+        "                properties:\n"
+        "                  securityContext:\n"
+        "                    properties:\n"
+        "                      privileged:\n"
+        "                        type: boolean\n"
+        "            volumes:\n"
+        "              properties:\n"
+        "                hostPath:\n"
+        "                  type: object\n"
+    )
+
+    def test_a_crd_is_not_a_workload(self):
+        # Every field these rules look for appears in a schema by name, which
+        # is how a CRD comes to look like the worst workload ever written.
+        self.assertEqual(scan(self.CRD), [])
+
+    def test_a_resource_of_that_kind_is_still_read(self):
+        text = pod("      securityContext:\n        privileged: true\n")
+        self.assertIn("K8S001", rule_ids(scan(text)))
+
+
 class TestPrivilege(unittest.TestCase):
     def test_privileged_container(self):
         findings = scan(pod("      securityContext:\n        privileged: true\n"))
@@ -146,6 +181,19 @@ class TestConfinement(unittest.TestCase):
             "      resources:\n        limits:\n          memory: 64Mi\n"
         )
         self.assertNotIn("K8S012", rule_ids(scan(text)))
+
+
+class TestHostPathTitles(unittest.TestCase):
+    def test_a_named_path_is_named(self):
+        text = pod(spec_body="  volumes:\n    - hostPath:\n        path: /var/lib\n")
+        finding = next(f for f in scan(text) if f.rule_id == "K8S002")
+        self.assertIn("/var/lib", finding.title)
+
+    def test_a_path_the_reader_could_not_see_reads_as_a_sentence(self):
+        # "mounts host path unnamed" is not a sentence anybody wrote.
+        text = pod(spec_body="  volumes:\n    - hostPath:\n        type: Directory\n")
+        finding = next(f for f in scan(text) if f.rule_id == "K8S002")
+        self.assertIn("mounts a path from the node", finding.title)
 
 
 class TestUsersAndLimits(unittest.TestCase):
@@ -347,6 +395,90 @@ class TestJsonManifests(unittest.TestCase):
 
     def test_json_that_is_not_a_manifest_is_left_alone(self):
         self.assertEqual(scan('{"name": "app", "private": true}', "package.json"), [])
+
+
+class TestChartValues(unittest.TestCase):
+    """A chart's values are where most Kubernetes settings actually live."""
+
+    CHART = ("charts/web/Chart.yaml", "apiVersion: v2\nname: web\nversion: 0.1.0\n")
+
+    def scan_values(self, body, path="charts/web/values.yaml"):
+        return kubernetes.scan_files([self.CHART, (path, body)])
+
+    def test_a_privileged_security_context(self):
+        findings = self.scan_values("securityContext:\n  privileged: true\n")
+        finding = next(f for f in findings if f.rule_id == "K8S001")
+        self.assertEqual(finding.severity, Severity.CRITICAL)
+        # The chart should pass it through, and this reader has not read the
+        # template that does.
+        self.assertEqual(finding.confidence.value, "medium")
+
+    def test_the_host_namespace_flags(self):
+        for key in ("hostNetwork", "hostPID", "hostIPC"):
+            with self.subTest(key=key):
+                findings = self.scan_values(f"{key}: true\n")
+                self.assertIn("K8S003", rule_ids(findings))
+
+    def test_a_flag_left_off_is_not_a_finding(self):
+        self.assertEqual(self.scan_values("hostNetwork: false\n"), [])
+
+    def test_capabilities_written_as_a_flow_list(self):
+        body = 'securityContext:\n  capabilities:\n    add: ["SYS_ADMIN"]\n'
+        findings = [f for f in self.scan_values(body) if f.rule_id == "K8S006"]
+        self.assertEqual(len(findings), 1)
+        self.assertIn("SYS_ADMIN", findings[0].title)
+
+    def test_privilege_escalation_and_seccomp_in_values(self):
+        body = (
+            "securityContext:\n"
+            "  allowPrivilegeEscalation: true\n"
+            "  seccompProfile:\n    type: Unconfined\n"
+        )
+        found = rule_ids(self.scan_values(body))
+        self.assertIn("K8S006", found)
+        self.assertIn("K8S012", found)
+
+    def test_a_security_context_that_hardens_is_not_a_finding(self):
+        body = (
+            "securityContext:\n"
+            "  privileged: false\n"
+            "  allowPrivilegeEscalation: false\n"
+            "  seccompProfile:\n    type: RuntimeDefault\n"
+            "  capabilities:\n    drop: [ALL]\n"
+        )
+        self.assertEqual(self.scan_values(body), [])
+
+    def test_capabilities_written_as_a_block_list(self):
+        body = "securityContext:\n  capabilities:\n    add:\n      - NET_ADMIN\n"
+        self.assertIn("K8S006", rule_ids(self.scan_values(body)))
+
+    def test_a_host_path_volume_needs_a_path_to_be_one(self):
+        # Charts name sections after the feature they configure: Dagger has a
+        # hostPath block whose keys are dataVolume and runVolume.
+        option = "hostPath:\n  dataVolume:\n    enabled: true\n"
+        self.assertEqual(self.scan_values(option), [])
+        volume = "extraVolumes:\n  - hostPath:\n      path: /var/run/docker.sock\n"
+        self.assertIn("K8S002", rule_ids(self.scan_values(volume)))
+
+    def test_a_values_file_with_no_chart_beside_it_is_not_a_chart(self):
+        # Every application repository has a values.yaml somewhere.
+        findings = kubernetes.scan_files([("deploy/values.yaml", "hostNetwork: true\n")])
+        self.assertEqual(findings, [])
+
+    def test_an_environment_override_is_read_as_well(self):
+        findings = self.scan_files_override("charts/web/values-production.yaml")
+        self.assertIn("K8S003", rule_ids(findings))
+
+    def scan_files_override(self, path):
+        return kubernetes.scan_files([self.CHART, (path, "hostNetwork: true\n")])
+
+    def test_a_marker_silences_the_line(self):
+        body = "hostNetwork: true  # repo-sentinel: ignore[K8S003]\n"
+        self.assertEqual(self.scan_values(body), [])
+
+    def test_a_templated_values_file_is_still_read(self):
+        body = "hostNetwork: {{ .Values.host }}\nsecurityContext:\n  privileged: true\n"
+        self.assertIn("K8S001", rule_ids(self.scan_values(body)))
 
 
 class TestSuppression(unittest.TestCase):

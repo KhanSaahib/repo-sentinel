@@ -189,6 +189,21 @@ last of them is the first that reads code rather than configuration.
   `git` dependency carries a `rev` or a `tag`; without one it installs whatever
   the default branch holds at build time. No TOML parser behind it -- `tomllib`
   arrived in 3.11 and this runs on 3.9.
+- **A committed password database is a finding on its name**: `.kdbx`,
+  `.kdb`, `.psafe3`, `.opvault`, `.agilekeychain`. Encrypted, so not critical;
+  offline once committed, so not low -- unlimited guesses at one master
+  password, with everything its owner keeps behind it.
+- **A chart's values file is read**, where a `Chart.yaml` sits beside it.
+  `privileged: true` under a `securityContext` means the same thing in values
+  as in a manifest, and that is where most Kubernetes settings actually live --
+  a manifest in a chart is a template with `{{ .Values.securityContext }}` in
+  it. Six settings, all at medium confidence, since the chart should pass them
+  through and this reader has not read the template that does.
+- **A CustomResourceDefinition is no longer read as a workload.** It carries
+  an OpenAPI schema, and a schema names every field these rules look for --
+  `hostPath`, `privileged`, `capabilities` -- as keys. The Grafana operator
+  produced three critical findings that way, each of them a schema saying the
+  field exists.
 - **K8S012**: seccomp or AppArmor switched off by name -- `seccompProfile:
   Unconfined`, or the AppArmor annotation set to `unconfined`. Neither changes
   behaviour on a cluster with no Pod Security Standard, which is the reason the
@@ -208,6 +223,10 @@ last of them is the first that reads code rather than configuration.
   every CI has its own word for that -- continue-on-error, allow_failure,
   continueOnError, catchError. Saying it in the command means the gate and the
   report differ by one readable flag. A usage error still exits 2.
+- **`init` says what the findings *are***, not only how many: the three rules
+  doing most of the talking, with their summaries and a pointer at
+  `repo-sentinel rules <id>`. A hundred findings that are all one rule is a
+  decision to make once, and the baseline it just recorded is mostly that rule.
 - **`init` knows five CI systems, not two.** The snippet it prints is for the
   one the repository already has -- Azure, CircleCI and Jenkins included, each
   wired to draw the JUnit report. Suggesting GitHub Actions to a project that
@@ -218,6 +237,8 @@ last of them is the first that reads code rather than configuration.
   it needs no plugin and no permission. A clean run is one passing case rather
   than an empty suite, because an empty report renders as a broken job.
 
+- **`rules --format json` describes the families too**: what each one reads
+  and where its section is, for the rules in the listing.
 - **`rules <one rule>` prints a card rather than a row**: what the rule reads,
   which weakness it claims, how to silence it here and how to switch it off
   everywhere, and where the long version lives. A pattern that matches several
@@ -316,6 +337,18 @@ last of them is the first that reads code rather than configuration.
   the other characters something treats as a line break, leaving a corrupt
   command behind it. Found by a property test that now runs every format over
   findings built from the characters a real file can contain.
+- **SARIF reports what the run could not read**, as `toolExecutionNotifications`
+  on the invocation. A Security tab showing no alerts because nothing was
+  scanned looks exactly like one showing no alerts because everything is fine.
+- **`--format json` carries a `scan` object**: files read, duration, what was
+  skipped as unreadable or oversized, and the suppression counts. The text
+  report has always said this in a sentence; a pipeline cannot read a sentence,
+  and one that cannot tell "no findings" from "nothing was read" is exactly
+  what the sentence exists to prevent.
+- **A file skipped for its size is now counted and named**, with
+  `--max-file-size` (and a `max_file_size` config key) to raise the 2 MB limit.
+  A 3 MB `.env` was skipped silently, which is precisely the answer this tool
+  exists to avoid giving.
 - **A control character in a file could make the JUnit report unparseable**,
   and a lone carriage return could end a Markdown table row early. Both came
   from the same place -- evidence is a piece of a file, and a file with a stray

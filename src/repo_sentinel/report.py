@@ -159,12 +159,28 @@ def format_summary(findings: Sequence[Finding], *, notes: Sequence[str] = ()) ->
     return "\n".join([summarise(findings) if findings else _CLEAN, *notes])
 
 
-def format_json(findings: Sequence[Finding], *, version: str, notes: Sequence[str] = ()) -> str:
-    payload = {
+def format_json(
+    findings: Sequence[Finding],
+    *,
+    version: str,
+    notes: Sequence[str] = (),
+    scan: "dict | None" = None,
+) -> str:
+    """The format to build on, including what the run could not read.
+
+    ``scan`` carries the same facts the text summary puts in a sentence: how
+    many files were read, what was skipped and why, how many lines carry a
+    suppression marker. A person reads that sentence; a pipeline cannot, and a
+    pipeline that cannot tell "no findings" from "nothing was read" is exactly
+    the failure the sentence exists to prevent.
+    """
+    payload: "dict" = {
         "version": version,
         "finding_count": len(findings),
-        "findings": [finding.to_dict() for finding in findings],
     }
+    if scan is not None:
+        payload["scan"] = scan
+    payload["findings"] = [finding.to_dict() for finding in findings]
     if notes:
         payload["notes"] = list(notes)
     return json.dumps(payload, indent=2)
@@ -301,7 +317,15 @@ def format_github(findings: Sequence[Finding], *, notes: Sequence[str] = ()) -> 
     return "\n".join(lines)
 
 
-def format_sarif(findings: Sequence[Finding], *, version: str) -> str:
+#: How many skipped paths to name in the SARIF invocation before saying "and
+#: N more". A tree with two thousand unreadable files has one problem, not two
+#: thousand, and a notification list that long is scrolled past.
+SARIF_NOTIFICATION_LIMIT = 20
+
+
+def format_sarif(
+    findings: Sequence[Finding], *, version: str, scan: "dict | None" = None
+) -> str:
     """SARIF 2.1.0, the format GitHub's Security tab ingests.
 
     Rules are emitted once and referenced by index, which is what the schema
@@ -312,6 +336,11 @@ def format_sarif(findings: Sequence[Finding], *, version: str) -> str:
     The fingerprint travels as a ``partialFingerprint``, so that code scanning
     tracks a finding across the reformattings and line moves that would
     otherwise close it and reopen it as new.
+
+    ``scan`` becomes an ``invocation``, where the schema keeps exactly this:
+    what the tool could not read. A Security tab showing no alerts because
+    nothing was scanned looks identical to one showing no alerts because
+    everything is fine, and the notifications are the difference.
     """
     ordered_rules: list[str] = []
     for finding in findings:
@@ -337,11 +366,46 @@ def format_sarif(findings: Sequence[Finding], *, version: str) -> str:
                     }
                 },
                 "results": results,
+                "invocations": [_sarif_invocation(scan)],
                 "columnKind": "utf16CodeUnits",
             }
         ],
     }
     return json.dumps(document, indent=2)
+
+
+def _sarif_invocation(scan: "dict | None") -> "dict":
+    """What the run did, and what it could not read while doing it."""
+    invocation: "dict" = {"executionSuccessful": True}
+    if not scan:
+        return invocation
+    notifications = [
+        *_sarif_notifications(scan.get("unreadable", ()), "could not be opened"),
+        *_sarif_notifications(scan.get("oversized", ()), "was larger than the size limit"),
+    ]
+    if notifications:
+        invocation["toolExecutionNotifications"] = notifications
+    return invocation
+
+
+def _sarif_notifications(paths: "Sequence[str]", reason: str) -> "list[dict]":
+    named = list(paths)[:SARIF_NOTIFICATION_LIMIT]
+    notifications = [
+        {
+            "level": "warning",
+            "message": {"text": f"{path} {reason} and was not scanned."},
+        }
+        for path in named
+    ]
+    remaining = len(paths) - len(named)
+    if remaining > 0:
+        notifications.append(
+            {
+                "level": "warning",
+                "message": {"text": f"{remaining} further path(s) {reason}."},
+            }
+        )
+    return notifications
 
 
 #: Where a reader of the Security tab can find out what a rule is for. The
@@ -546,6 +610,14 @@ def format_rule_catalogue(pattern: "str | None" = None, *, as_json: bool = False
     """Print what the scanner checks for, without needing something to find."""
     matched = _matching_rules(pattern)
     if as_json:
+        # The families travel with the rules because a consumer grouping by
+        # category otherwise has to invent a label for each one, and would
+        # invent a different label from the documentation's.
+        families = {
+            name: {"reads": family.reads, "documentation": f"docs/RULES.md#{family.anchor}"}
+            for name, family in rules.FAMILIES.items()
+            if any(rule.category == name for rule in matched)
+        }
         return json.dumps(
             {
                 "rules": [
@@ -558,7 +630,8 @@ def format_rule_catalogue(pattern: "str | None" = None, *, as_json: bool = False
                         "cwe": rule.cwe,
                     }
                     for rule in matched
-                ]
+                ],
+                "families": families,
             },
             indent=2,
         )

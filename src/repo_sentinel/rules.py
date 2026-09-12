@@ -66,8 +66,12 @@ class Family:
 FAMILIES = {
     "secrets": Family("every text file", "secrets"),
     "filenames": Family("every path, including files nothing can read", "file-names"),
-    "dependencies": Family("package manifests and lockfiles", "dependencies"),
-    "workflows": Family(".github/workflows/*.yml and action.yml", "github-actions-workflows"),
+    "dependencies": Family(
+        "nine package manifests, from package.json to Cargo.toml", "dependencies"
+    ),
+    "workflows": Family(
+        ".github/workflows/*.yml and action.yml", "github-actions-workflows"
+    ),
     "gitlab": Family(".gitlab-ci.yml and files shaped like one", "gitlab-ci"),
     "azure": Family("azure-pipelines.yml and files shaped like one", "azure-pipelines"),
     "circleci": Family(".circleci/config.yml", "circleci"),
@@ -78,7 +82,10 @@ FAMILIES = {
     "compose": Family("YAML with a services map and no apiVersion", "docker-compose"),
     "terraform": Family("*.tf, read as blocks", "terraform"),
     "cloudformation": Family("templates with a Resources map, YAML or JSON", "cloudformation"),
-    "kubernetes": Family("YAML carrying apiVersion and kind", "kubernetes"),
+    "kubernetes": Family(
+        "YAML carrying apiVersion and kind, and a chart's values beside its Chart.yaml",
+        "kubernetes",
+    ),
     "ansible": Family("playbooks and task files, recognised by shape", "ansible"),
 }
 

@@ -135,6 +135,115 @@ class TestSeverityParsing(unittest.TestCase):
             Severity.parse("catastrophic")
 
 
+class TestFileSizeLimit(unittest.TestCase):
+    """A file skipped for its size is a decision, so the run says so."""
+
+    def repository(self, root, size=3 * 1024 * 1024):
+        with open(os.path.join(root, "dump.json"), "w", encoding="utf-8") as handle:
+            handle.write('{"x": "' + "a" * size + '"}')
+        with open(os.path.join(root, "app.py"), "w", encoding="utf-8") as handle:
+            handle.write("x = 1\n")
+
+    def test_the_summary_names_what_the_limit_skipped(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.repository(root)
+            _, output = run(["scan", root])
+        self.assertIn("larger than the size limit", output)
+        self.assertIn("dump.json", output)
+        self.assertIn("--max-file-size", output)
+
+    def test_raising_the_limit_reads_the_file(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.repository(root)
+            _, output = run(["scan", root, "--max-file-size", "4M"])
+        self.assertNotIn("larger than the size limit", output)
+
+    def test_a_config_file_can_raise_it_too(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.repository(root)
+            with open(
+                os.path.join(root, ".repo-sentinel.json"), "w", encoding="utf-8"
+            ) as handle:
+                handle.write('{"max_file_size": "4M"}')
+            _, output = run(["scan", root])
+        self.assertNotIn("larger than the size limit", output)
+
+    def test_every_spelling_of_a_size(self):
+        from repo_sentinel.commands import _file_size_limit
+
+        self.assertEqual(_file_size_limit("1024"), 1024)
+        self.assertEqual(_file_size_limit("2M"), 2 * 1024 * 1024)
+        self.assertEqual(_file_size_limit(" 500k "), 500 * 1024)
+        self.assertEqual(_file_size_limit("1GB"), 1024 ** 3)
+
+    def test_nonsense_is_a_usage_error_not_a_default(self):
+        # Falling back to the default would mean a typo silently changes what
+        # was scanned, which is the failure this whole tool is about.
+        with tempfile.TemporaryDirectory() as root, self.assertRaises(SystemExit) as caught:
+            run(["scan", root, "--max-file-size", "big"])
+        self.assertEqual(caught.exception.code, 2)
+
+    def test_an_explicit_file_list_honours_the_limit_and_says_so(self):
+        # --paths-from is the fast per-PR run. A file the caller named and the
+        # tool did not read is worth more of an explanation, not less.
+        with tempfile.TemporaryDirectory() as root:
+            self.repository(root)
+            listing = os.path.join(root, "changed.txt")
+            with open(listing, "w", encoding="utf-8") as handle:
+                handle.write("dump.json\napp.py\n")
+            _, skipped = run(["scan", root, "--paths-from", listing])
+            _, raised = run(["scan", root, "--paths-from", listing, "--max-file-size", "4M"])
+        self.assertIn("larger than the size limit", skipped)
+        self.assertNotIn("larger than the size limit", raised)
+
+    def test_a_clean_run_says_nothing_about_the_limit(self):
+        with tempfile.TemporaryDirectory() as root:
+            with open(os.path.join(root, "app.py"), "w", encoding="utf-8") as handle:
+                handle.write("x = 1\n")
+            _, output = run(["scan", root])
+        self.assertNotIn("size limit", output)
+
+
+class TestJunitOutput(unittest.TestCase):
+    def test_the_report_carries_the_scan_summary(self):
+        # The property is where a CI shows a note about the run, and the run
+        # saying how much it read is the note that matters.
+        with sample_repo() as root:
+            _, output = run(["scan", root, "--format", "junit"])
+        self.assertIn('name="note"', output)
+        self.assertIn("Scanned", output)
+
+
+class TestJsonScanFacts(unittest.TestCase):
+    """A pipeline cannot read the summary sentence, so it gets the facts."""
+
+    def scan(self, root, *extra):
+        _, output = run(["scan", root, "--format", "json", *extra])
+        return json.loads(output)
+
+    def test_the_json_says_how_much_was_read(self):
+        with sample_repo() as root:
+            payload = self.scan(root)
+        self.assertGreater(payload["scan"]["files"], 0)
+        self.assertIn("duration_seconds", payload["scan"])
+
+    def test_it_says_what_was_skipped_and_why(self):
+        with tempfile.TemporaryDirectory() as root:
+            with open(os.path.join(root, "dump.json"), "w", encoding="utf-8") as handle:
+                handle.write('{"x": "' + "a" * (3 * 1024 * 1024) + '"}')
+            payload = self.scan(root)
+        self.assertEqual(payload["scan"]["oversized"], ["dump.json"])
+        self.assertEqual(payload["scan"]["unreadable"], [])
+
+    def test_it_counts_the_suppression_markers(self):
+        with tempfile.TemporaryDirectory() as root:
+            with open(os.path.join(root, "app.py"), "w", encoding="utf-8") as handle:
+                handle.write(f'K = "{fixtures.REALISTIC_AWS_KEY_ID}"  # repo-sentinel: ignore\n')
+            payload = self.scan(root)
+        self.assertEqual(payload["scan"]["suppressed_lines"], 1)
+        self.assertEqual(payload["finding_count"], 0)
+
+
 class TestModuleEntryPoint(unittest.TestCase):
     """``python -m repo_sentinel`` is how the README says to run it."""
 
@@ -268,6 +377,29 @@ class TestInit(unittest.TestCase):
                     handle.write("# pipeline\n")
                 _, output = run(["init", root])
                 self.assertIn(expected, output)
+
+    def test_it_names_the_rules_doing_most_of_the_talking(self):
+        # A count says how much there is; this says what it is. A hundred
+        # findings that are all one rule is a decision to make once.
+        with tempfile.TemporaryDirectory() as root:
+            with open(os.path.join(root, "app.py"), "w", encoding="utf-8") as handle:
+                handle.write(f'K = "{fixtures.REALISTIC_AWS_KEY_ID}"\n')
+            os.makedirs(os.path.join(root, ".github", "workflows"))
+            with open(
+                os.path.join(root, ".github", "workflows", "ci.yml"), "w", encoding="utf-8"
+            ) as handle:
+                handle.write("jobs:\n  build:\n    steps:\n      - uses: acme/deploy@v1\n")
+            _, output = run(["init", root])
+        self.assertIn("Most of it is:", output)
+        self.assertIn("SEC001", output)
+        self.assertIn("repo-sentinel rules <id>", output)
+
+    def test_one_rule_alone_needs_no_breakdown(self):
+        with tempfile.TemporaryDirectory() as root:
+            with open(os.path.join(root, "app.py"), "w", encoding="utf-8") as handle:
+                handle.write(f'K = "{fixtures.REALISTIC_AWS_KEY_ID}"\n')
+            _, output = run(["init", root])
+        self.assertNotIn("Most of it is:", output)
 
     def test_the_snippet_matches_the_ci_system_the_repository_has(self):
         with tempfile.TemporaryDirectory() as root:
