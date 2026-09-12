@@ -5,11 +5,17 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 from enum import Enum
+from typing import TypeVar
 
 
 #: Declaration order is the ranking, memoised per enum class because ``rank``
 #: is read once per comparison and comparisons happen once per sort step.
 _RANKS: dict = {}
+
+
+#: So that Severity.parse() is typed as returning a Severity rather than the
+#: base class, which is what every caller actually needs.
+_RankedT = TypeVar("_RankedT", bound="_Ranked")
 
 
 class _Ranked(str, Enum):
@@ -45,7 +51,7 @@ class _Ranked(str, Enum):
         return self.rank < other.rank
 
     @classmethod
-    def parse(cls, value: str) -> "_Ranked":
+    def parse(cls: "type[_RankedT]", value: str) -> "_RankedT":
         try:
             return cls(value.strip().lower())
         except ValueError:

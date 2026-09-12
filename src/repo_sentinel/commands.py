@@ -195,9 +195,7 @@ def _fail_threshold(value: str) -> "Severity | None":
     """
     if value.strip().lower() == "none":
         return None
-    parsed = Severity.parse(value)
-    assert isinstance(parsed, Severity)  # parse() is classmethod-typed on the base
-    return parsed
+    return Severity.parse(value)
 
 
 def _listed_paths(source: "str | None") -> "list[str] | None":
