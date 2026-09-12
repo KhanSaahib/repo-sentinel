@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "repo-sentinel"
+name = "bluerayscan"
 version = "0.3.0"
 description = "Audit a repository for leaked secrets, risky CI workflows, and insecure container and infrastructure configuration."
 readme = "README.md"
@@ -38,6 +38,7 @@ Homepage = "https://github.com/KhanSaahib/repo-sentinel"
 Issues = "https://github.com/KhanSaahib/repo-sentinel/issues"
 
 [project.scripts]
+bluerayscan = "repo_sentinel.cli:main"
 repo-sentinel = "repo_sentinel.cli:main"
 
 [tool.setuptools.packages.find]

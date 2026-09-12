@@ -24,10 +24,10 @@ __all__ = ["EXIT_ERROR", "EXIT_FINDINGS", "EXIT_OK", "build_parser", "main", "sc
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="repo-sentinel",
+        prog="bluerayscan",
         description="Audit a repository for leaked secrets and insecure configuration.",
     )
-    parser.add_argument("--version", action="version", version=f"repo-sentinel {__version__}")
+    parser.add_argument("--version", action="version", version=f"bluerayscan {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     scan_parser = subparsers.add_parser("scan", help="scan a directory or file")

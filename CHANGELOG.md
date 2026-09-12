@@ -10,6 +10,10 @@ changes.
 repository the tool can read at all: two file formats became sixteen, and the
 last of them is the first that reads code rather than configuration.
 
+The PyPI distribution and primary executable are now named `bluerayscan`.
+`repo-sentinel` remains available as a compatibility command, and the Python
+import package remains `repo_sentinel`.
+
 ### Added
 
 - **Terraform** (TF001–TF008): security groups open to the internet, public
