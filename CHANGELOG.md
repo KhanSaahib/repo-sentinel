@@ -243,6 +243,9 @@ last of them is the first that reads code rather than configuration.
   `.kdb`, `.psafe3`, `.opvault`, `.agilekeychain`. Encrypted, so not critical;
   offline once committed, so not low -- unlimited guesses at one master
   password, with everything its owner keeps behind it.
+- **A kustomization's inline patches are read**, which to the file's own parse
+  are strings. An overlay exists to change what the base said, and what it
+  changes is often the security context.
 - **A chart's values file is read**, where a `Chart.yaml` sits beside it.
   `privileged: true` under a `securityContext` means the same thing in values
   as in a manifest, and that is where most Kubernetes settings actually live --

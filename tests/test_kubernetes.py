@@ -481,6 +481,56 @@ class TestChartValues(unittest.TestCase):
         self.assertIn("K8S001", rule_ids(self.scan_values(body)))
 
 
+class TestKustomizations(unittest.TestCase):
+    """An overlay is where the exception for production goes."""
+
+    OVERLAY = (
+        "apiVersion: kustomize.config.k8s.io/v1beta1\n"
+        "kind: Kustomization\n"
+        "resources:\n  - deployment.yaml\n"
+        "patches:\n"
+        "  - target:\n      kind: Deployment\n      name: web\n"
+        "    patch: |\n"
+        "      apiVersion: apps/v1\n"
+        "      kind: Deployment\n"
+        "      metadata:\n        name: web\n"
+        "      spec:\n        template:\n          spec:\n"
+        "            hostNetwork: true\n"
+        "            containers:\n              - name: app\n"
+        "                image: nginx:1.25\n"
+        "                resources:\n                  limits:\n                    memory: 64Mi\n"
+        "                securityContext:\n                  privileged: true\n"
+    )
+
+    def scan_overlay(self, text=None, path="overlays/prod/kustomization.yaml"):
+        return kubernetes.scan_files([(path, text if text is not None else self.OVERLAY)])
+
+    def test_a_patched_security_context_is_read(self):
+        found = rule_ids(self.scan_overlay())
+        self.assertIn("K8S001", found)
+        self.assertIn("K8S003", found)
+
+    def test_the_finding_points_at_the_patch(self):
+        finding = next(f for f in self.scan_overlay() if f.rule_id == "K8S001")
+        line = self.OVERLAY.splitlines()[finding.line - 1]
+        self.assertIn("privileged: true", line)
+
+    def test_a_kustomization_with_no_inline_patch_says_nothing(self):
+        text = (
+            "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\n"
+            "resources:\n  - deployment.yaml\n"
+        )
+        self.assertEqual(self.scan_overlay(text), [])
+
+    def test_a_file_that_is_not_a_kustomization_is_not_read_as_one(self):
+        self.assertFalse(kubernetes.is_kustomization_path("deploy/app.yaml"))
+        self.assertTrue(kubernetes.is_kustomization_path("overlays/prod/kustomization.yml"))
+
+    def test_a_marker_still_silences_the_file(self):
+        text = "# repo-sentinel: ignore-file\n" + self.OVERLAY
+        self.assertEqual(self.scan_overlay(text), [])
+
+
 class TestSuppression(unittest.TestCase):
     def test_line_marker_silences_a_finding(self):
         text = pod("      securityContext:\n        privileged: true  # repo-sentinel: ignore\n")

@@ -781,6 +781,13 @@ pass them through and this reader has not read the template that does. A
 `hostPath` block with no `path` in it is a configuration section rather than a
 volume: Dagger's chart has one whose keys are `dataVolume` and `runVolume`.
 
+A `kustomization.yaml` is read for the manifests it patches in. An overlay
+exists to change what the base said, and what it changes is often the security
+context -- an overlay is where the exception for production goes. The patch is
+a block scalar, so the file's own parse sees a string where a document is; the
+string is handed back to the same rules and the line numbers are shifted, so a
+finding points at the patched line rather than at the top of the file.
+
 A `CustomResourceDefinition` is skipped whole. It carries an OpenAPI schema,
 and a schema names every field a resource may have -- `hostPath`,
 `privileged`, `capabilities` -- as keys, which is how a CRD comes to look like
