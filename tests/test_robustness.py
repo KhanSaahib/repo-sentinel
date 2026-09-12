@@ -22,8 +22,7 @@ import unittest
 import xml.etree.ElementTree as ElementTree
 from pathlib import Path
 
-from repo_sentinel import report
-from repo_sentinel import hcl, heuristics, jsonish, yamlish
+from repo_sentinel import hcl, heuristics, jsonish, report, yamlish
 from repo_sentinel.findings import redact
 from repo_sentinel.scanners import secrets
 def _scanner_modules():
