@@ -107,6 +107,25 @@ what differ. The reason to share the rest is not brevity -- it is that a fix
 found in one system belongs in all of them, and the harmless-fields list was
 written for GitHub and then written again, identically, for Azure.
 
+## Configuration, and the one family that is not
+
+Every family but one reads configuration, and that is a deliberate line.
+Configuration says what a system *is*, so a reader that understands its shape
+can answer a question about it exactly: `privileged: true` under
+`securityContext` means one thing and there is nothing else it could mean.
+
+Code says what a system *does*, and answering a question about that needs
+something this tool does not have -- a parser, a call graph, and a notion of
+which values reach which calls. So the application-code family
+(:mod:`scanners.appcode`) asks a smaller question on purpose: does this file
+contain one of three idioms whose meaning is fixed, in a language where that
+spelling means what it looks like? `verify=False` is a Python spelling; the
+same characters in a Go file are a guess, so the rule does not apply there.
+
+That smallness is the point. A clean report from that family means "none of
+these idioms appears", and the documentation says so in those words rather
+than implying a coverage that would need a compiler.
+
 ## Two gates in front of the patterns
 
 Almost no line in a repository contains a credential, and the scanner's cost is
