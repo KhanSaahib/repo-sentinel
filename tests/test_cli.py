@@ -387,6 +387,9 @@ class TestRunSummary(unittest.TestCase):
                 _, output = run(["scan", root])
             finally:
                 os.chmod(locked, stat.S_IRWXU)
+        # Nothing was readable, so the file count is zero -- the case where a
+        # silent scan reads as "clean" and the warning matters most.
+        self.assertIn("Scanned 0 files", output)
         self.assertIn("could not be opened", output)
 
     def test_an_empty_scan_says_so_rather_than_looking_clean(self):

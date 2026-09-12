@@ -180,14 +180,22 @@ def _listed_paths(source: "str | None") -> "list[str] | None":
 
 
 def _scan_note(result) -> str:
-    if result.file_count == 0:
-        return "Scanned 0 files. Check the path, the excludes and your .gitignore."
-    note = f"Scanned {result.file_count} file(s) in {result.duration:.2f}s."
+    # The unreadable count is appended in both branches on purpose. A tree
+    # nothing could be read from scans zero files, which is precisely when
+    # "no findings" is most misleading and the reason is most worth saying.
     if result.unreadable:
-        note += (
+        unread = (
             f" {len(result.unreadable)} path(s) could not be opened and were not "
             f"scanned, starting with {result.unreadable[0]!r}."
         )
+    else:
+        unread = ""
+    if result.file_count == 0:
+        return (
+            "Scanned 0 files. Check the path, the excludes and your .gitignore."
+            + unread
+        )
+    note = f"Scanned {result.file_count} file(s) in {result.duration:.2f}s." + unread
     if result.suppressed_lines:
         note += (
             f" {result.suppressed_lines} line(s) in {result.suppressed_files} file(s) "
