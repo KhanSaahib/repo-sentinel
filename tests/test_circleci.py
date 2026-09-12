@@ -90,7 +90,7 @@ class TestImagesAndDownloads(unittest.TestCase):
 
 class TestSuppression(unittest.TestCase):
     def test_line_marker(self):
-        text = config('    steps:\n      - run: echo "$CIRCLE_BRANCH"  # repo-sentinel: ignore\n')
+        text = config('    steps:\n      - run: echo "$CIRCLE_BRANCH"  # bluerayscan: ignore\n')
         self.assertEqual(scan(text), [])
 
 

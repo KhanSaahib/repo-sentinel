@@ -152,7 +152,7 @@ def strip_comment(value: str) -> str:
     YAML starts a comment at a ``#`` that follows whitespace or begins the
     value, and nowhere else: ``image: nginx  # pinned later`` is a comment and
     ``url: http://x/#anchor`` is not. Without this, every value in a commented
-    file carries the comment with it -- ``true  # repo-sentinel: ignore`` is
+    file carries the comment with it -- ``true  # bluerayscan: ignore`` is
     not ``true``, so the rule reading it quietly finds nothing, which is the
     worst way for a scanner to be wrong.
     """

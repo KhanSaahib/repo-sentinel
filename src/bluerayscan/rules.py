@@ -8,7 +8,7 @@ rule.
 
 So the catalogue exists separately, for the two consumers that need the rule
 rather than the finding: SARIF, which describes rules once and then references
-them, and ``repo-sentinel rules``, which prints the table that would otherwise
+them, and ``bluerayscan rules``, which prints the table that would otherwise
 live only in the README and rot there.
 
 The obvious failure mode of a hand-maintained catalogue is drift, so the test

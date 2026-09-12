@@ -162,7 +162,7 @@ class TestSarif(unittest.TestCase):
 
     def test_shape_matches_the_schema_github_expects(self):
         self.assertEqual(self.document["version"], "2.1.0")
-        self.assertEqual(self.run["tool"]["driver"]["name"], "repo-sentinel")
+        self.assertEqual(self.run["tool"]["driver"]["name"], "bluerayscan")
         self.assertEqual(len(self.run["results"]), 2)
 
     def test_rules_are_described_once_and_referenced_by_index(self):
@@ -244,7 +244,7 @@ class TestMarkdown(unittest.TestCase):
         self.assertIn("| `SEC100` | `app.py:2` |", self.text)
 
     def test_the_heading_carries_the_summary(self):
-        self.assertTrue(self.text.startswith("### repo-sentinel: 2 finding(s)"))
+        self.assertTrue(self.text.startswith("### bluerayscan: 2 finding(s)"))
 
     def test_confidence_is_shown_only_when_it_is_not_certain(self):
         self.assertEqual(self.text.count("confidence"), 1)
@@ -328,7 +328,7 @@ class TestRuleDetail(unittest.TestCase):
 
     def test_it_says_how_to_silence_the_rule_in_both_scopes(self):
         card = self.card()
-        self.assertIn("# repo-sentinel: ignore[WF011]", card)
+        self.assertIn("# bluerayscan: ignore[WF011]", card)
         self.assertIn("--disable WF011", card)
 
     def test_it_links_the_weakness_and_the_documentation(self):
@@ -387,7 +387,7 @@ class TestJunit(unittest.TestCase):
 
     def test_the_family_is_the_classname_so_a_ci_can_group_by_it(self):
         case = self.parse([CRITICAL]).find("./testsuite/testcase")
-        self.assertEqual(case.get("classname"), "repo-sentinel.secrets")
+        self.assertEqual(case.get("classname"), "bluerayscan.secrets")
 
     def test_a_clean_run_is_one_passing_case_not_an_empty_suite(self):
         root = self.parse([])

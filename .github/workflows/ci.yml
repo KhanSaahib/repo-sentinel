@@ -113,7 +113,7 @@ jobs:
           python-version: "3.13"
 
       # The test suite contains deliberate fake credentials, so it is excluded.
-      - name: Scan this repository with repo-sentinel
+      - name: Scan this repository with bluerayscan
         run: python -m bluerayscan scan . --exclude tests --fail-on medium
         env:
           PYTHONPATH: src
@@ -144,12 +144,12 @@ jobs:
       - name: Produce a SARIF report
         run: >-
           python -m bluerayscan scan . --format sarif
-          --output repo-sentinel.sarif --fail-on none
+          --output bluerayscan.sarif --fail-on none
         env:
           PYTHONPATH: src
 
       - name: Upload to code scanning
         uses: github/codeql-action/upload-sarif@faaca9a8f6edddba5725ffe5adefdab6669a2eca # v3
         with:
-          sarif_file: repo-sentinel.sarif
-          category: repo-sentinel
+          sarif_file: bluerayscan.sarif
+          category: bluerayscan

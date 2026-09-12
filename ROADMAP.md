@@ -1,6 +1,6 @@
 # Roadmap
 
-The backlog for repo-sentinel, roughly in priority order. Work moves top-down.
+The backlog for bluerayscan, roughly in priority order. Work moves top-down.
 Tick an item when it lands on `main` with tests and a green CI run.
 
 Anything here can be reordered, rewritten, or dropped if it turns out to be a
@@ -97,7 +97,7 @@ better outcome than a feature nobody wanted.
       names one rule; it now prints the card instead of the row, which is what
       the flag would have done and one fewer thing to know
 - [x] Group findings by file in text output, under `--sort path`
-- [ ] Publish to PyPI so `pipx run repo-sentinel` works — the release workflow
+- [ ] Publish to PyPI so `pipx run bluerayscan` works — the release workflow
       is written and uses trusted publishing; it needs the project registered
 
 ## Engineering health

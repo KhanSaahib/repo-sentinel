@@ -27,7 +27,13 @@ from . import gitignore, rules
 from collections.abc import Iterable, Sequence
 
 #: Looked for beside the scanned tree when ``--config`` is not given.
-DEFAULT_PATH = ".repo-sentinel.json"
+DEFAULT_PATH = ".bluerayscan.json"
+
+#: What that file was called before the project was renamed. Still read when
+#: the current name is absent, because a configuration file that quietly stops
+#: being found turns off every exclusion in it at once, and the person it
+#: happens to learns that from a screen of findings rather than from a message.
+LEGACY_PATH = ".repo-sentinel.json"
 
 #: Recognised keys, each mapping to the ``scan`` argument it supplies.
 #: Anything else is a typo, and a typo in a security tool's configuration
@@ -55,8 +61,12 @@ def find(root: str, explicit: "str | None") -> "str | None":
     """The config file to use: the one named, or the one beside the tree."""
     if explicit is not None:
         return explicit
-    candidate = os.path.join(root if os.path.isdir(root) else os.path.dirname(root) or ".", DEFAULT_PATH)
-    return candidate if os.path.isfile(candidate) else None
+    directory = root if os.path.isdir(root) else os.path.dirname(root) or "."
+    for name in (DEFAULT_PATH, LEGACY_PATH):
+        candidate = os.path.join(directory, name)
+        if os.path.isfile(candidate):
+            return candidate
+    return None
 
 
 def load(path: str) -> dict:

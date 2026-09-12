@@ -228,7 +228,7 @@ class TestSuppression(unittest.TestCase):
     def test_line_marker(self):
         text = template(
             "  B:\n    Type: AWS::S3::Bucket\n    Properties:\n"
-            "      AccessControl: PublicRead  # repo-sentinel: ignore\n"
+            "      AccessControl: PublicRead  # bluerayscan: ignore\n"
         )
         self.assertEqual(scan(text), [])
 

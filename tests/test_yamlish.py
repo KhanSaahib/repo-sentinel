@@ -76,7 +76,7 @@ class TestScalarsAndGaps(unittest.TestCase):
 
 class TestComments(unittest.TestCase):
     def test_a_trailing_comment_is_not_part_of_the_value(self):
-        self.assertEqual(parse("a: true  # repo-sentinel: ignore\n").get("a").text, "true")
+        self.assertEqual(parse("a: true  # bluerayscan: ignore\n").get("a").text, "true")
         self.assertEqual(parse("a: nginx # pin me\n").get("a").text, "nginx")
 
     def test_a_hash_inside_quotes_stays(self):

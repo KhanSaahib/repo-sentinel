@@ -34,11 +34,13 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/KhanSaahib/repo-sentinel"
-Issues = "https://github.com/KhanSaahib/repo-sentinel/issues"
+Homepage = "https://github.com/KhanSaahib/bluerayscan"
+Issues = "https://github.com/KhanSaahib/bluerayscan/issues"
 
 [project.scripts]
 bluerayscan = "bluerayscan.cli:main"
+# Kept for anyone who installed 0.3.0 and wrote the old name into a
+# pipeline. It costs one line and removing it costs somebody a red build.
 repo-sentinel = "bluerayscan.cli:main"
 
 [tool.setuptools.packages.find]

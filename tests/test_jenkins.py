@@ -92,7 +92,7 @@ class TestAgentsAndDownloads(unittest.TestCase):
 
 class TestSuppression(unittest.TestCase):
     def test_line_marker(self):
-        text = pipeline('        sh "echo ${env.BRANCH_NAME}"  // repo-sentinel: ignore\n')
+        text = pipeline('        sh "echo ${env.BRANCH_NAME}"  // bluerayscan: ignore\n')
         self.assertEqual(scan(text), [])
 
 

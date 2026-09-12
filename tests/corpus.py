@@ -107,7 +107,7 @@ ENV_FILE = "\n".join(
 RUNAWAY_SUPPRESSION_FILE = "\n".join(
     (
         "settings = {}",
-        "# repo-sentinel: ignore-start",
+        "# bluerayscan: ignore-start",
         "generated = 1",
     )
 )

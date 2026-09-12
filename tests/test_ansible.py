@@ -115,7 +115,7 @@ class TestSuppression(unittest.TestCase):
     def test_line_marker(self):
         text = play(
             "    - name: Fetch\n      get_url:\n        url: https://x.invalid\n"
-            "        validate_certs: no  # repo-sentinel: ignore\n"
+            "        validate_certs: no  # bluerayscan: ignore\n"
         )
         self.assertEqual(scan(text), [])
 

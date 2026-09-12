@@ -42,7 +42,7 @@ def _emit(text: str, destination: "str | None") -> int:
         with open(destination, "w", encoding="utf-8") as handle:
             handle.write(text if text.endswith("\n") else text + "\n")
     except OSError as error:
-        print(f"repo-sentinel: could not write {destination!r}: {error}", file=sys.stderr)
+        print(f"bluerayscan: could not write {destination!r}: {error}", file=sys.stderr)
         return EXIT_ERROR
     return EXIT_OK
 
@@ -85,7 +85,7 @@ def _apply_disabled(
         if not pattern.endswith("*") and pattern.upper() not in RULES
     ]
     if unknown:
-        notes.append(f"No such rule: {', '.join(unknown)}. Check 'repo-sentinel rules'.")
+        notes.append(f"No such rule: {', '.join(unknown)}. Check 'bluerayscan rules'.")
     return kept
 
 
@@ -94,7 +94,7 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
     # would print "no findings", which is the one answer this tool must never
     # give for a tree it did not read.
     if not os.path.exists(args.path):
-        print(f"repo-sentinel: no such file or directory: {args.path}", file=sys.stderr)
+        print(f"bluerayscan: no such file or directory: {args.path}", file=sys.stderr)
         return EXIT_ERROR
 
     try:
@@ -109,7 +109,7 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
     try:
         only_paths = _listed_paths(args.paths_from)
     except OSError as error:
-        print(f"repo-sentinel: could not read {args.paths_from!r}: {error}", file=sys.stderr)
+        print(f"bluerayscan: could not read {args.paths_from!r}: {error}", file=sys.stderr)
         return EXIT_ERROR
 
     result = scan(
@@ -142,7 +142,7 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
         try:
             recorded = baseline_module.load(args.baseline)
         except baseline_module.BaselineError as error:
-            print(f"repo-sentinel: {error}", file=sys.stderr)
+            print(f"bluerayscan: {error}", file=sys.stderr)
             return EXIT_ERROR
         findings, accepted, stale = recorded.partition(findings)
         if accepted:
@@ -312,7 +312,7 @@ def _prune_baseline(path: str, findings: "list[Finding]") -> int:
     try:
         recorded = baseline_module.load(path)
     except baseline_module.BaselineError as error:
-        print(f"repo-sentinel: {error}", file=sys.stderr)
+        print(f"bluerayscan: {error}", file=sys.stderr)
         return EXIT_ERROR
 
     _, accepted, stale = recorded.partition(findings)
@@ -323,7 +323,7 @@ def _prune_baseline(path: str, findings: "list[Finding]") -> int:
     try:
         kept = baseline_module.write(path, accepted, version=__version__)
     except baseline_module.BaselineError as error:
-        print(f"repo-sentinel: {error}", file=sys.stderr)
+        print(f"bluerayscan: {error}", file=sys.stderr)
         return EXIT_ERROR
 
     print(
@@ -339,7 +339,7 @@ def _write_baseline(path: str, findings: "list[Finding]") -> int:
     try:
         count = baseline_module.write(path, findings, version=__version__)
     except baseline_module.BaselineError as error:
-        print(f"repo-sentinel: {error}", file=sys.stderr)
+        print(f"bluerayscan: {error}", file=sys.stderr)
         return EXIT_ERROR
     print(f"Recorded {count} finding(s) as accepted in {path}.")
     print("Commit it, then fix them: a baseline is a list of debts, not exemptions.")
@@ -351,8 +351,8 @@ def _write_baseline(path: str, findings: "list[Finding]") -> int:
 #: a tool whose own getting-started copy trips WF001 has a credibility problem.
 #: Four of the five ask for JUnit, because those four CI systems draw it.
 _ACTIONS_SNIPPET = """\
-# .github/workflows/repo-sentinel.yml
-name: repo-sentinel
+# .github/workflows/bluerayscan.yml
+name: bluerayscan
 on: [push, pull_request]
 permissions:
   contents: read
@@ -364,62 +364,62 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: KhanSaahib/repo-sentinel@main
+      - uses: KhanSaahib/bluerayscan@main
 """
 
 _GITLAB_SNIPPET = """\
 # .gitlab-ci.yml
-repo-sentinel:
+bluerayscan:
   image: python:3.13
   script:
-    - pip install git+https://github.com/KhanSaahib/repo-sentinel@main
-    - repo-sentinel scan . --format junit --output repo-sentinel.xml
+    - pip install git+https://github.com/KhanSaahib/bluerayscan@main
+    - bluerayscan scan . --format junit --output bluerayscan.xml
   artifacts:
     when: always
     reports:
-      junit: repo-sentinel.xml
+      junit: bluerayscan.xml
 """
 
-_INSTALL = "pip install git+https://github.com/KhanSaahib/repo-sentinel@main"
+_INSTALL = "pip install git+https://github.com/KhanSaahib/bluerayscan@main"
 
 _AZURE_SNIPPET = f"""\
 # azure-pipelines.yml
 steps:
   - script: |
       {_INSTALL}
-      repo-sentinel scan . --format junit --output repo-sentinel.xml
-    displayName: repo-sentinel
+      bluerayscan scan . --format junit --output bluerayscan.xml
+    displayName: bluerayscan
   - task: PublishTestResults@2
     condition: always()
     inputs:
-      testResultsFiles: repo-sentinel.xml
+      testResultsFiles: bluerayscan.xml
 """
 
 _CIRCLECI_SNIPPET = f"""\
 # .circleci/config.yml
 jobs:
-  repo-sentinel:
+  bluerayscan:
     docker:
       - image: cimg/python:3.13
     steps:
       - checkout
       - run: {_INSTALL}
       - run: mkdir -p test-results
-      - run: repo-sentinel scan . --format junit --output test-results/repo-sentinel.xml
+      - run: bluerayscan scan . --format junit --output test-results/bluerayscan.xml
       - store_test_results:
           path: test-results
 """
 
 _JENKINS_SNIPPET = f"""\
 // Jenkinsfile
-stage('repo-sentinel') {{
+stage('bluerayscan') {{
   steps {{
     sh '{_INSTALL}'
-    sh 'repo-sentinel scan . --format junit --output repo-sentinel.xml'
+    sh 'bluerayscan scan . --format junit --output bluerayscan.xml'
   }}
   post {{
     always {{
-      junit 'repo-sentinel.xml'
+      junit 'bluerayscan.xml'
     }}
   }}
 }}

@@ -1,8 +1,24 @@
 # Changelog
 
-All notable changes to repo-sentinel. This project follows [semantic
+All notable changes to bluerayscan. This project follows [semantic
 versioning](https://semver.org/); until 1.0 the minor number carries breaking
 changes.
+
+## Unreleased
+
+### Changed
+
+- **The rename finished.** 0.3.0 renamed the distribution and the executable
+  and left everything underneath them alone. The import package is now
+  `bluerayscan` rather than `repo_sentinel`, the config file is
+  `.bluerayscan.json`, the baseline is `.bluerayscan-baseline.json`, and the
+  suppression marker is `# bluerayscan: ignore`.
+- **Nothing written in an older release stops working.** The `repo-sentinel`
+  command is still installed; the old config and baseline file names are still
+  read when the current ones are absent; and `# repo-sentinel: ignore` is still
+  obeyed, in all four of its scopes. A marker lives in somebody else's file,
+  and a release that turned every one of them back on would be a screen of
+  findings arriving with no explanation attached.
 
 ## 0.3.0
 
@@ -10,9 +26,10 @@ changes.
 repository the tool can read at all: two file formats became sixteen, and the
 last of them is the first that reads code rather than configuration.
 
-The PyPI distribution and primary executable are now named `bluerayscan`.
-`repo-sentinel` remains available as a compatibility command, and the Python
-import package remains `bluerayscan`.
+The PyPI distribution and primary executable were renamed to `bluerayscan` in
+this release. `repo-sentinel` remained available as a compatibility command,
+and the import package was still `repo_sentinel`; the rest of the rename
+landed afterwards.
 
 ### Added
 
@@ -41,7 +58,7 @@ import package remains `bluerayscan`.
 - **`--paths-from FILE`** (`-` for stdin) to scan only the files a pull request
   touched, **`--quiet`** for the summary alone, and **`--sort path`** for
   reading a report rather than triaging it.
-- **`repo-sentinel init`**, which scans a repository, records what is already
+- **`bluerayscan init`**, which scans a repository, records what is already
   there as a baseline so the first pipeline run is green, writes a config, and
   prints the CI snippet for whichever CI system the repository already has.
 - **Per-path configuration**: a `paths` table switches rules off under one glob
@@ -76,7 +93,7 @@ import package remains `bluerayscan`.
   every other family leaves unasked.
 - **`--prune-baseline`**, which removes the entries that match nothing and
   accepts nothing new -- the safe half of re-running `--write-baseline`.
-- **`--no-suppression`**, which reads the `repo-sentinel: ignore` markers but
+- **`--no-suppression`**, which reads the `bluerayscan: ignore` markers but
   does not obey them, and a count of marker lines in every run's summary
   whether or not they were obeyed.
 - **JSON is read wherever YAML is**: CloudFormation templates, Kubernetes
@@ -144,12 +161,12 @@ import package remains `bluerayscan`.
   request does not have; annotations need no permission at all.
 - **`--format markdown`**, a table meant to be posted as a pull request comment,
   with fixes collapsed underneath once per rule and long reports truncated.
-- **`.repo-sentinel.json`**, a project config file supplying defaults for the
+- **`.bluerayscan.json`**, a project config file supplying defaults for the
   scan flags, plus `disable` for rules a project has decided not to run and
   `--disable` for doing it ad hoc. Disabled findings are counted in the output
   rather than silently dropped. Unknown settings are an error; unknown rule ids
   are reported, since that typo leaves the rule switched on.
-- **Rule-scoped suppression markers**: `# repo-sentinel: ignore[K8S008]`, on any
+- **Rule-scoped suppression markers**: `# bluerayscan: ignore[K8S008]`, on any
   of the three scopes, with family prefixes and lists. An unqualified marker
   stays exempt from rules that did not exist when it was written; a qualified
   one keeps the exemption as narrow as its reason.
@@ -304,7 +321,7 @@ import package remains `bluerayscan`.
   all one rule is a decision to make once. It is the same block `init` prints.
 - **`init` says what the findings *are***, not only how many: the three rules
   doing most of the talking, with their summaries and a pointer at
-  `repo-sentinel rules <id>`. A hundred findings that are all one rule is a
+  `bluerayscan rules <id>`. A hundred findings that are all one rule is a
   decision to make once, and the baseline it just recorded is mostly that rule.
 - **`init` knows five CI systems, not two.** The snippet it prints is for the
   one the repository already has -- Azure, CircleCI and Jenkins included, each
@@ -439,7 +456,7 @@ import package remains `bluerayscan`.
   and a lone carriage return could end a Markdown table row early. Both came
   from the same place -- evidence is a piece of a file, and a file with a stray
   control byte in it is not binary enough to be skipped.
-- **A path that does not exist scanned clean.** `repo-sentinel scan tests/fixtues`
+- **A path that does not exist scanned clean.** `bluerayscan scan tests/fixtues`
   walked nothing, found nothing and said "no findings" -- the one answer this
   tool must never give for a tree it did not read. It is an error now.
 - **The baseline is named the way findings are.** A config resolves it against
@@ -527,7 +544,7 @@ way to stop reporting the ones that were never worth reporting.
   survives reformatting. Stale entries are reported so the file shrinks.
 - **SARIF output** (`--format sarif`) with stable partial fingerprints, plus
   `--output FILE`, so findings land in the GitHub Security tab as annotations.
-- **`repo-sentinel rules`**, which prints the whole rule catalogue in text or
+- **`bluerayscan rules`**, which prints the whole rule catalogue in text or
   JSON without needing something to find.
 - A **GitHub Action** (`action.yml`) and a **pre-commit hook**
   (`.pre-commit-hooks.yaml`).

@@ -14,7 +14,7 @@ labels: missed-finding
      indentation style -->
 
 **Which rule you expected**
-<!-- `repo-sentinel rules` lists them. "None of them, this needs a new one" is
+<!-- `bluerayscan rules` lists them. "None of them, this needs a new one" is
      a fine answer. -->
 
 **Is it a documented shape?**

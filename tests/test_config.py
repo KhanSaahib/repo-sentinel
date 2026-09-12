@@ -210,3 +210,26 @@ class TestPathScopedDisabling(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTheOldName(unittest.TestCase):
+    """A config file written before the rename is still the config file."""
+
+    def test_the_old_name_is_read_when_the_new_one_is_absent(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = os.path.join(root, config.LEGACY_PATH)
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(json.dumps({"fail_on": "critical"}))
+            self.assertEqual(config.find(root, None), path)
+
+    def test_the_current_name_wins_when_both_are_there(self):
+        # Two files and no rule for which one counts is the worst outcome:
+        # whichever the tool happens to read, somebody is reading the other.
+        with tempfile.TemporaryDirectory() as root:
+            current = write(root, {"fail_on": "high"})
+            with open(os.path.join(root, config.LEGACY_PATH), "w", encoding="utf-8") as handle:
+                handle.write(json.dumps({"fail_on": "critical"}))
+            self.assertEqual(config.find(root, None), current)
+
+    def test_a_named_file_is_the_named_file(self):
+        self.assertEqual(config.find(".", "somewhere/else.json"), "somewhere/else.json")

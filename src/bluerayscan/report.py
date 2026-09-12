@@ -176,7 +176,7 @@ def loudest_rules(findings: "Sequence[Finding]") -> "list[str]":
         rule = rules.RULES.get(rule_id)
         summary = rule.summary if rule else rule_id
         lines.append(f"  {rule_id:<7} {count:>4}  {summary}")
-    lines.extend(["  'repo-sentinel rules <id>' explains any of them.", ""])
+    lines.extend(["  'bluerayscan rules <id>' explains any of them.", ""])
     return lines
 
 
@@ -259,9 +259,9 @@ def format_markdown(
     learn to collapse without reading.
     """
     if not findings:
-        return "\n".join(["### repo-sentinel", "", _CLEAN, *(f"_{note}_" for note in notes)])
+        return "\n".join(["### bluerayscan", "", _CLEAN, *(f"_{note}_" for note in notes)])
 
-    lines = [f"### repo-sentinel: {summarise(findings)}", ""]
+    lines = [f"### bluerayscan: {summarise(findings)}", ""]
     lines.append("| | Rule | Location | Finding |")
     lines.append("| --- | --- | --- | --- |")
     for finding in findings[:limit]:
@@ -396,9 +396,9 @@ def format_sarif(
             {
                 "tool": {
                     "driver": {
-                        "name": "repo-sentinel",
+                        "name": "bluerayscan",
                         "version": version,
-                        "informationUri": "https://github.com/KhanSaahib/repo-sentinel",
+                        "informationUri": "https://github.com/KhanSaahib/bluerayscan",
                         "rules": driver_rules,
                     }
                 },
@@ -448,7 +448,7 @@ def _sarif_notifications(paths: "Sequence[str]", reason: str) -> "list[dict]":
 #: Where a reader of the Security tab can find out what a rule is for. The
 #: anchor is the family's heading, because that is where the paragraph
 #: explaining the rule lives; a per-rule anchor would point at a table row.
-_DOCUMENTATION = "https://github.com/KhanSaahib/repo-sentinel/blob/main/docs/RULES.md"
+_DOCUMENTATION = "https://github.com/KhanSaahib/bluerayscan/blob/main/docs/RULES.md"
 
 
 def _sarif_rule(rule_id: str, findings: Sequence[Finding]) -> dict:
@@ -533,7 +533,7 @@ def format_junit(
         )
         cases.append(
             f"    <testcase name={_attribute(name)} "
-            f"classname={_attribute('repo-sentinel.' + family)}>\n"
+            f"classname={_attribute('bluerayscan.' + family)}>\n"
             f"      <failure message={_attribute(finding.title)} "
             f"type={_attribute(finding.severity.value)}>{_text(body)}</failure>\n"
             "    </testcase>"
@@ -541,7 +541,7 @@ def format_junit(
     if not cases:
         cases.append(
             f"    <testcase name={_attribute('no findings')} "
-            f"classname={_attribute('repo-sentinel')} />"
+            f"classname={_attribute('bluerayscan')} />"
         )
 
     properties = ""
@@ -558,8 +558,8 @@ def format_junit(
     failures = len(findings)
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
-        f'<testsuites name="repo-sentinel" tests="{count}" failures="{failures}">\n'
-        f'  <testsuite name="repo-sentinel" tests="{count}" failures="{failures}" '
+        f'<testsuites name="bluerayscan" tests="{count}" failures="{failures}">\n'
+        f'  <testsuite name="bluerayscan" tests="{count}" failures="{failures}" '
         f'time="{duration:.3f}">\n'
         f"{properties}"
         + "\n".join(cases)
@@ -592,7 +592,7 @@ def _matching_rules(pattern: "str | None") -> "list[rules.Rule]":
 
     A pattern matches a rule id or its prefix (``SEC``, ``k8s001``), a family
     name (``terraform``), or any word in the summary (``bucket``). One
-    argument, three meanings, because a person typing "repo-sentinel rules
+    argument, three meanings, because a person typing "bluerayscan rules
     kubernetes" does not want to learn which of the three it was.
     """
     catalogue = list(rules.RULES.values())
@@ -635,7 +635,7 @@ def format_rule_detail(rule: "rules.Rule") -> str:
     lines.extend(
         [
             "",
-            f"  Wrong here      # repo-sentinel: ignore[{rule.id}]",
+            f"  Wrong here      # bluerayscan: ignore[{rule.id}]",
             f"  Wrong always    --disable {rule.id}",
             f"  The long form   docs/RULES.md#{family.anchor}",
         ]

@@ -148,7 +148,7 @@ class TestEntropyAssignments(unittest.TestCase):
 
 class TestIgnoreMarker(unittest.TestCase):
     def test_marker_suppresses_the_line(self):
-        line = f'key = "{fixtures.REALISTIC_AWS_KEY_ID}"  # repo-sentinel: ignore'
+        line = f'key = "{fixtures.REALISTIC_AWS_KEY_ID}"  # bluerayscan: ignore'
         self.assertEqual(secrets.scan_text("a.py", line), [])
 
 
@@ -389,7 +389,7 @@ class TestValuesWrittenBeneathTheirName(unittest.TestCase):
         self.assertEqual(secrets.scan_text("notes.md", text), [])
 
     def test_a_marker_on_the_key_silences_it(self):
-        text = "api_key: |  # repo-sentinel: ignore\n  Xk92mQp7Lz4TvB8nRw1Y\n"
+        text = "api_key: |  # bluerayscan: ignore\n  Xk92mQp7Lz4TvB8nRw1Y\n"
         self.assertEqual(self.scan(text), [])
 
 

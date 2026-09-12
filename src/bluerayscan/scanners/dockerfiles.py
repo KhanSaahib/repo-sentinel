@@ -29,7 +29,7 @@ _INSTRUCTION = re.compile(r"^\s*(?P<name>[A-Za-z]+)\s+(?P<rest>.*)$")
 #: otherwise become part of the image reference and stop it parsing. The
 #: marker is this tool's, so this tool removes it; every other "#" is left
 #: exactly where the author put it.
-_MARKER_COMMENT = re.compile(r"\s+#\s*repo-sentinel:.*$")
+_MARKER_COMMENT = re.compile(r"\s+#\s*bluerayscan:.*$")
 _FROM = re.compile(
     r"^(?P<image>[^\s]+?)(?::(?P<tag>[^\s@]+))?(?:@(?P<digest>sha256:[0-9a-f]{64}))?"
     r"(?:\s+[Aa][Ss]\s+(?P<stage>\S+))?\s*$"

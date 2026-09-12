@@ -33,7 +33,13 @@ from collections.abc import Iterable, Sequence
 from .findings import Finding
 
 #: Where ``--baseline`` looks when given no path of its own.
-DEFAULT_PATH = ".repo-sentinel-baseline.json"
+DEFAULT_PATH = ".bluerayscan-baseline.json"
+
+#: What that file was called before the project was renamed. A baseline that
+#: stops being found fails safely -- every accepted finding comes back -- but
+#: it comes back as a wall of them, so the old name is still read when the
+#: current one is absent and nobody asked for a particular file.
+LEGACY_PATH = ".repo-sentinel-baseline.json"
 
 #: Bumped only for a change that older readers could not interpret.
 SCHEMA_VERSION = 1
@@ -87,8 +93,22 @@ class Baseline:
         return new, accepted, stale
 
 
+def resolve(path: str) -> str:
+    """The baseline file to read for ``path``, allowing for the old name.
+
+    Only the default name falls back. Somebody who named a file has named it,
+    and silently reading a different one would be worse than saying it is not
+    there.
+    """
+    if os.path.basename(path) != DEFAULT_PATH or os.path.isfile(path):
+        return path
+    legacy = os.path.join(os.path.dirname(path), LEGACY_PATH)
+    return legacy if os.path.isfile(legacy) else path
+
+
 def load(path: str) -> Baseline:
     """Read a baseline file, or raise :class:`BaselineError` explaining why not."""
+    path = resolve(path)
     try:
         with open(path, encoding="utf-8") as handle:
             payload = json.load(handle)
@@ -102,7 +122,7 @@ def load(path: str) -> Baseline:
         raise BaselineError(f"{path!r} is not valid JSON: {error}") from None
 
     if not isinstance(payload, dict) or "findings" not in payload:
-        raise BaselineError(f"{path!r} does not look like a repo-sentinel baseline")
+        raise BaselineError(f"{path!r} does not look like a bluerayscan baseline")
 
     version = payload.get("baseline_version")
     if version != SCHEMA_VERSION:
@@ -144,7 +164,7 @@ def dumps(findings: Iterable[Finding], *, version: str) -> str:
     """Serialise ``findings`` as a baseline document."""
     document = {
         "baseline_version": SCHEMA_VERSION,
-        "generated_by": f"repo-sentinel {version}",
+        "generated_by": f"bluerayscan {version}",
         "note": (
             "Findings accepted as pre-existing. Entries hold a hash of already "
             "redacted evidence, never a credential. Shrink this file; do not grow it."

@@ -157,16 +157,16 @@ class TestSuppression(unittest.TestCase):
 
     def test_a_marker_in_the_file_silences_the_name_rule(self):
         found = filenames.scan_paths(
-            [(".npmrc", "# repo-sentinel: ignore-file\nAPI_TOKEN=Tv8nRw1YXk92mQp7Lz4T\n")]
+            [(".npmrc", "# bluerayscan: ignore-file\nAPI_TOKEN=Tv8nRw1YXk92mQp7Lz4T\n")]
         )
         self.assertEqual(found, [])
 
     def test_a_rule_scoped_marker_works_too(self):
-        text = "# repo-sentinel: ignore-file[FN003]\nAPI_TOKEN=Tv8nRw1YXk92mQp7Lz4T\n"
+        text = "# bluerayscan: ignore-file[FN003]\nAPI_TOKEN=Tv8nRw1YXk92mQp7Lz4T\n"
         self.assertEqual(filenames.scan_paths([(".npmrc", text)]), [])
 
     def test_no_suppression_reads_past_it(self):
-        text = "# repo-sentinel: ignore-file\nAPI_TOKEN=Tv8nRw1YXk92mQp7Lz4T\n"
+        text = "# bluerayscan: ignore-file\nAPI_TOKEN=Tv8nRw1YXk92mQp7Lz4T\n"
         found = filenames.scan_paths([(".npmrc", text)], honour_markers=False)
         self.assertEqual([finding.rule_id for finding in found], ["FN003"])
 

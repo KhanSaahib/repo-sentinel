@@ -473,7 +473,7 @@ class TestChartValues(unittest.TestCase):
         return kubernetes.scan_files([self.CHART, (path, "hostNetwork: true\n")])
 
     def test_a_marker_silences_the_line(self):
-        body = "hostNetwork: true  # repo-sentinel: ignore[K8S003]\n"
+        body = "hostNetwork: true  # bluerayscan: ignore[K8S003]\n"
         self.assertEqual(self.scan_values(body), [])
 
     def test_a_templated_values_file_is_still_read(self):
@@ -535,13 +535,13 @@ class TestKustomizations(unittest.TestCase):
         self.assertTrue(kubernetes.is_kustomization_path("overlays/prod/kustomization.yml"))
 
     def test_a_marker_still_silences_the_file(self):
-        text = "# repo-sentinel: ignore-file\n" + self.OVERLAY
+        text = "# bluerayscan: ignore-file\n" + self.OVERLAY
         self.assertEqual(self.scan_overlay(text), [])
 
 
 class TestSuppression(unittest.TestCase):
     def test_line_marker_silences_a_finding(self):
-        text = pod("      securityContext:\n        privileged: true  # repo-sentinel: ignore\n")
+        text = pod("      securityContext:\n        privileged: true  # bluerayscan: ignore\n")
         self.assertNotIn("K8S001", rule_ids(scan(text)))
 
 

@@ -90,7 +90,7 @@ HOSTILE = (
     "ports:\n" + "".join(f'  - "{port}:{port}"\n' for port in range(500)),
     "\t" * 100 + "key: value",
     "é" * 2000,
-    "# repo-sentinel: ignore-start\n" * 100,
+    "# bluerayscan: ignore-start\n" * 100,
 )
 
 

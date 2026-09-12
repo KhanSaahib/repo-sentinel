@@ -124,7 +124,7 @@ class TestImages(unittest.TestCase):
 
 class TestSuppression(unittest.TestCase):
     def test_line_marker(self):
-        self.assertEqual(scan(stack("    privileged: true  # repo-sentinel: ignore\n")), [])
+        self.assertEqual(scan(stack("    privileged: true  # bluerayscan: ignore\n")), [])
 
 
 if __name__ == "__main__":

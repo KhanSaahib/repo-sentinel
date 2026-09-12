@@ -127,7 +127,7 @@ class TestDebugTrace(unittest.TestCase):
 
 class TestSuppression(unittest.TestCase):
     def test_line_marker(self):
-        text = job('  script:\n    - echo $CI_COMMIT_TITLE  # repo-sentinel: ignore\n')
+        text = job('  script:\n    - echo $CI_COMMIT_TITLE  # bluerayscan: ignore\n')
         self.assertEqual(scan(text), [])
 
 
