@@ -110,5 +110,37 @@ class TestLoad(unittest.TestCase):
         self.assertIn("regenerate", str(caught.exception))
 
 
+class TestTheOldName(unittest.TestCase):
+    """A baseline written before the rename is still the baseline."""
+
+    def _write(self, root, name):
+        path = os.path.join(root, name)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(baseline.dumps([finding()], version="0.3.1"))
+        return path
+
+    def test_the_old_file_is_read_when_the_current_one_is_absent(self):
+        with tempfile.TemporaryDirectory() as root:
+            self._write(root, baseline.LEGACY_PATH)
+            asked = os.path.join(root, baseline.DEFAULT_PATH)
+            self.assertEqual(len(baseline.load(asked).entries), 1)
+
+    def test_the_current_file_wins_when_both_are_there(self):
+        with tempfile.TemporaryDirectory() as root:
+            current = self._write(root, baseline.DEFAULT_PATH)
+            self._write(root, baseline.LEGACY_PATH)
+            self.assertEqual(baseline.resolve(current), current)
+
+    def test_a_named_file_is_not_quietly_swapped_for_another(self):
+        # Somebody who named a file has named it. Reading a different one
+        # because the named one is missing would be worse than saying so.
+        with tempfile.TemporaryDirectory() as root:
+            self._write(root, baseline.LEGACY_PATH)
+            asked = os.path.join(root, "accepted.json")
+            self.assertEqual(baseline.resolve(asked), asked)
+            with self.assertRaises(baseline.BaselineError):
+                baseline.load(asked)
+
+
 if __name__ == "__main__":
     unittest.main()
