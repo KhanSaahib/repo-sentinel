@@ -268,6 +268,13 @@ def _check_permissions(path: str, lines: list[str], jobs: list[Job]) -> Iterator
     its own ``permissions`` is already explicit and a file-level warning about
     it is just noise. A workflow with no jobs at all still gets one report, so
     that an unparseable file is never silently treated as compliant.
+
+    When *no* job declares permissions the report is one finding for the file,
+    because the fix is one top-level block however many jobs there are.
+    Measured on authentik: four jobs in a file meant four copies of the same
+    one-line instruction, which is how a rule teaches people to skip its
+    output. A file where some jobs are explicit and others are not is reported
+    per job, because there the fix genuinely is per job.
     """
     for number, line in enumerate(lines, start=1):
         if _WRITE_ALL.match(line):
@@ -291,11 +298,20 @@ def _check_permissions(path: str, lines: list[str], jobs: list[Job]) -> Iterator
         yield _missing_permissions(path, 1, "no top-level 'permissions:' block")
         return
 
-    for job in jobs:
-        if not job.matches(_PERMISSIONS):
-            yield _missing_permissions(
-                path, job.line, f"job {job.name!r} inherits the default token permissions"
-            )
+    silent = [job for job in jobs if not job.matches(_PERMISSIONS)]
+    if not silent:
+        return
+    if len(silent) == len(jobs) > 1:
+        yield _missing_permissions(
+            path,
+            silent[0].line,
+            f"{len(silent)} jobs inherit the default token permissions",
+        )
+        return
+    for job in silent:
+        yield _missing_permissions(
+            path, job.line, f"job {job.name!r} inherits the default token permissions"
+        )
 
 
 def _missing_permissions(path: str, line: int, evidence: str) -> Finding:

@@ -256,7 +256,9 @@ inside that trust boundary.
 WF002 is asked per job rather than per file. A job that declares its own
 `permissions:` block is already explicit, and warning about it because the file
 has no top-level block is the kind of finding that teaches people to skip the
-output. WF007 is asked per step, for actions outside the `actions/` and `github/`
+output. When *no* job declares them, the file gets one finding rather than one
+per job: the fix there is a single top-level block, and four copies of a
+one-line instruction teach the same lesson. WF007 is asked per step, for actions outside the `actions/` and `github/`
 namespaces **that are not pinned to a commit SHA**. An action reads every input
 it is given, so handing one a secret extends that secret's blast radius to the
 action's supply chain — which is often necessary, since pushing an image needs a

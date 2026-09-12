@@ -258,6 +258,31 @@ class TestPerJobPermissions(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertIn("build", findings[0].evidence)
 
+    def test_a_file_where_no_job_declares_permissions_is_one_finding(self):
+        # The fix is one top-level block, however many jobs there are.
+        text = workflow_with_jobs(
+            "  build:\n    steps:\n      - run: make\n"
+            "  test:\n    steps:\n      - run: make test\n"
+            "  deploy:\n    steps:\n      - run: make deploy\n"
+        )
+        findings = [
+            f
+            for f in workflows.scan_workflow(".github/workflows/a.yml", text)
+            if f.rule_id == "WF002"
+        ]
+        self.assertEqual(len(findings), 1)
+        self.assertIn("3 jobs", findings[0].evidence)
+
+    def test_a_single_job_is_still_named(self):
+        text = workflow_with_jobs("  build:\n    steps:\n      - run: make\n")
+        findings = [
+            f
+            for f in workflows.scan_workflow(".github/workflows/a.yml", text)
+            if f.rule_id == "WF002"
+        ]
+        self.assertEqual(len(findings), 1)
+        self.assertIn("'build'", findings[0].evidence)
+
     def test_write_all_is_its_own_finding(self):
         text = workflow_with_jobs("  build:\n    permissions: write-all\n    steps: []\n")
         findings = workflows.scan_workflow(".github/workflows/a.yml", text)

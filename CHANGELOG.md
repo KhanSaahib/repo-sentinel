@@ -196,6 +196,10 @@ repository the tool can read at all: it grew from two file formats to six.
 
 ### Fixed
 
+- **WF002 reports a file once when no job declares permissions**, rather than
+  once per job. The fix is a single top-level block however many jobs there
+  are; a file where some jobs are explicit and others are not is still reported
+  per job, because there the fix genuinely is per job.
 - **Six more, measured against authentik**, whose OAuth and SAML code is made
   of identifiers that end in the word "password": URNs
   (`urn:oasis:names:tc:SAML:1.0:am:password`), space-separated response types
