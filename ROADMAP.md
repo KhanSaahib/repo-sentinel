@@ -48,8 +48,11 @@ better outcome than a feature nobody wanted.
       ref~~ -- already covered: WF001 reads any `uses:`, with or without the
       list dash. WF011 is the part that was actually missing, and it is about
       the secrets, not the ref
-- [ ] Warn on `contents: write` without an obvious need — needs a notion of
-      "obvious need" that does not just move the noise somewhere else
+- [x] Warn on `contents: write` without an obvious need (WF013). The notion of
+      "obvious need" turned out to be: anything that could be writing counts,
+      including a local composite action and a reusable workflow, because the
+      reader cannot see inside either. One finding across twenty-one
+      repositories, and it is real
 - [x] Composite actions in the repository itself (`action.yml`), which are
       workflows in all but trigger. WF012 is the rule that only makes sense
       there: an action cannot tell a safe input from a dangerous one
