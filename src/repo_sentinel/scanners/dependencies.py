@@ -65,6 +65,8 @@ _PINNED_AT = re.compile(r"@(?:[0-9a-f]{7,40}|v?\d+\.\d+[\w.-]*)(?:#|$)", re.IGNO
 
 _MANIFESTS = {
     "package.json": "npm",
+    "pyproject.toml": "pip",
+    "cargo.toml": "cargo",
     ".npmrc": "npm",
     "requirements.txt": "pip",
     "pip.conf": "pip",
@@ -184,6 +186,168 @@ def _looks_like_a_source(kind: str, line: str) -> bool:
     if kind == "maven":
         return "<url>" in lowered or "<repository" in lowered
     return any(marker in lowered for marker in markers)
+
+
+_TOML_SECTION = re.compile(r"^\s*\[\[?(?P<name>[^\]\[]+)\]\]?\s*$")
+_TOML_KEY = re.compile(r"^\s*(?P<key>[\w.\"'-]+)\s*=\s*(?P<value>.+?)\s*$")
+
+#: TOML tables that name somewhere packages are fetched from. A URL anywhere
+#: else in a pyproject is metadata -- the homepage, the issue tracker, the
+#: documentation -- and reporting those is the mistake this scanner already
+#: made once, in npm's manifest, fourteen times in one repository.
+_TOML_SOURCE_SECTIONS = (
+    "tool.poetry.source",
+    "tool.poetry.repositories",
+    "tool.uv.index",
+    "tool.pdm.source",
+    "source",       # Cargo: [source.crates-io], [source.mirror]
+    "registries",   # Cargo: [registries.internal]
+)
+#: Keys that name a source wherever they appear, because nothing else is
+#: called this.
+_TOML_SOURCE_KEYS = ("index-url", "extra-index-url", "registry", "index")
+#: ...and keys that only mean a source inside one of the tables above.
+_TOML_SCOPED_KEYS = ("url",)
+
+#: A reference that stays where it is. A branch does not.
+_TOML_PINNED = ("rev", "tag")
+
+
+def _toml_value(raw: str) -> str:
+    return raw.split("#")[0].strip().strip("\"'")
+
+
+def _check_toml(path: str, kind: str, text: str) -> "Iterator[Finding]":
+    """SC001 and SC003 for the two TOML manifests people actually have.
+
+    TOML is read by section rather than by line, because both questions are
+    about a table: which one a URL sits in decides whether it is a package
+    source, and a git dependency spread over three lines is one dependency.
+    There is no TOML parser here -- ``tomllib`` arrived in 3.11 and this runs
+    on 3.9 -- so the reader knows headers, keys and nothing else, and a value
+    it cannot make sense of produces no finding rather than a wrong one.
+    """
+    section = ""
+    pending: "dict[str, tuple[int, str]]" = {}
+    seen_hosts: "set[str]" = set()
+
+    def flush() -> "Iterator[Finding]":
+        finding = _toml_git_dependency(path, section, pending)
+        if finding is not None:
+            yield finding
+
+    for number, line in enumerate(text.splitlines(), start=1):
+        if suppression.marker_scope(line) is not None:
+            continue
+        header = _TOML_SECTION.match(line)
+        if header is not None:
+            yield from flush()
+            section, pending = header.group("name").strip(), {}
+            continue
+
+        entry = _TOML_KEY.match(line)
+        if entry is None:
+            continue
+        key = entry.group("key").strip().strip("\"'").lower()
+        raw = entry.group("value")
+
+        if key in _TOML_PINNED or key == "git":
+            pending[key] = (number, _toml_value(raw))
+
+        source = key in _TOML_SOURCE_KEYS or (
+            key in _TOML_SCOPED_KEYS and section.startswith(_TOML_SOURCE_SECTIONS)
+        )
+        if source:
+            match = _HTTP_URL.search(raw)
+            host = match.group("host").split(":")[0].lower() if match else ""
+            if host and host not in _LOCAL_HOSTS and host not in seen_hosts:
+                seen_hosts.add(host)
+                yield Finding(
+                    rule_id="SC001",
+                    severity=Severity.HIGH,
+                    title=f"{kind} fetches packages from {host} over plain HTTP",
+                    path=path,
+                    line=number,
+                    evidence=line.strip()[:120],
+                    remediation=(
+                        "Anything on the path can replace what this downloads, "
+                        "and a package manager runs what it downloads. Use "
+                        "https, and if the host has no certificate, that is "
+                        "the finding."
+                    ),
+                )
+
+        inline = _inline_git_dependency(path, kind, number, key, raw)
+        if inline is not None:
+            yield inline
+
+    yield from flush()
+
+
+def _inline_git_dependency(
+    path: str, kind: str, number: int, key: str, raw: str
+) -> "Finding | None":
+    """``foo = { git = "...", branch = "main" }``, all on one line."""
+    value = raw.strip()
+    if not value.startswith("{") or "git" not in value:
+        return None
+    if re.search(r"\b(?:rev|tag)\s*=", value):
+        return None
+    if not re.search(r"\bgit\s*=", value):
+        return None
+    return _moving_source(path, key, number, value)
+
+
+def _toml_git_dependency(
+    path: str, section: str, pending: "dict[str, tuple[int, str]]"
+) -> "Finding | None":
+    """``[dependencies.foo]`` with ``git`` and no ``rev`` or ``tag``."""
+    if "git" not in pending or any(key in pending for key in _TOML_PINNED):
+        return None
+    line, url = pending["git"]
+    name = section.rsplit(".", 1)[-1] if section else "dependency"
+    return _moving_source(path, name, line, f"git = {url}")
+
+
+def _moving_source(path: str, name: str, line: int, evidence: str) -> Finding:
+    return Finding(
+        rule_id="SC003",
+        severity=Severity.MEDIUM,
+        title=f"Dependency {name!r} comes from a source that can move",
+        path=path,
+        line=line,
+        evidence=evidence[:100],
+        remediation=(
+            "A git dependency with no rev or tag installs whatever the "
+            "default branch holds at build time. Pin it to a commit, or "
+            "publish it to a registry."
+        ),
+        confidence=Confidence.MEDIUM,
+    )
+
+
+_GEM_LINE = re.compile(r"""^\s*gem\s+['"](?P<name>[^'"]+)['"](?P<rest>.*)$""")
+_GEM_SOURCE = re.compile(r"\b(?:git|github|gist|bitbucket)\s*:\s*['\"]")
+_GEM_PINNED = re.compile(r"\b(?:ref|tag)\s*:\s*['\"]")
+
+
+def _check_gemfile_dependencies(path: str, text: str) -> "Iterator[Finding]":
+    """SC003 for Bundler: a gem from a repository with nothing pinning it.
+
+    ``gem "x", github: "acme/x"`` installs whatever the default branch holds
+    the next time the lockfile is regenerated. ``ref:`` and ``tag:`` are the
+    two spellings that stop that, and ``branch:`` is not one of them.
+    """
+    for number, line in enumerate(text.splitlines(), start=1):
+        if suppression.marker_scope(line) is not None:
+            continue
+        entry = _GEM_LINE.match(line)
+        if entry is None:
+            continue
+        rest = entry.group("rest")
+        if not _GEM_SOURCE.search(rest) or _GEM_PINNED.search(rest):
+            continue
+        yield _moving_source(path, entry.group("name"), number, line.strip())
 
 
 def _check_verification(path: str, kind: str, text: str) -> "Iterator[Finding]":
@@ -331,10 +495,14 @@ def scan_manifest(
         findings = list(_check_json_sources(path, kind, text))
         findings += _check_npm_scripts(path, text)
         findings += _check_npm_dependencies(path, text)
+    elif name.endswith(".toml"):
+        findings = list(_check_toml(path, kind, text))
     else:
         findings = list(_check_plaintext_sources(path, kind, text))
         if kind == "pip" and name.startswith("requirement"):
             findings += _check_requirement_urls(path, text)
+        if kind == "bundler":
+            findings += _check_gemfile_dependencies(path, text)
     findings += _check_verification(path, kind, text)
     return marks.filter_findings(findings)
 

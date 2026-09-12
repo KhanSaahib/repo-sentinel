@@ -180,6 +180,15 @@ last of them is the first that reads code rather than configuration.
   of every credential the repository holds. Medium confidence when the call is
   pinned to a SHA, which at least fixes the code that will read them.
 
+- **SC003 reads a Gemfile too**, where the source is a keyword rather than a
+  URL: `github: "acme/x"` installs whatever that default branch holds. Found
+  one in Discourse's own Gemfile.
+- **`pyproject.toml` and `Cargo.toml` are read**, by table rather than by line:
+  a URL in `[[tool.poetry.source]]` or `[source.mirror]` is a package source
+  and one in `[project.urls]` is a link in a README. SC003 asks there whether a
+  `git` dependency carries a `rev` or a `tag`; without one it installs whatever
+  the default branch holds at build time. No TOML parser behind it -- `tomllib`
+  arrived in 3.11 and this runs on 3.9.
 - **K8S012**: seccomp or AppArmor switched off by name -- `seccompProfile:
   Unconfined`, or the AppArmor annotation set to `unconfined`. Neither changes
   behaviour on a cluster with no Pod Security Standard, which is the reason the
@@ -258,6 +267,32 @@ last of them is the first that reads code rather than configuration.
   with a leading underscore, a full sentence, and -- a parsing bug rather than
   a heuristic -- an escaped quote inside a quoted value, which cut a translated
   string in half and measured the half.
+- **A name that labels a credential no longer counts as one.**
+  `credentialType` names a kind, `secretName` names a Kubernetes Secret,
+  `tokenPattern` is a regular expression -- none of them holds the thing
+  itself, and n8n writes the first of those seven hundred times. The quoted
+  rule now asks the same question the unquoted one always did.
+- **A password hash is not a password.** `$2a$10$...`, `$argon2id$...`,
+  `$pbkdf2-sha256$...`: the output of hashing one, which is the one thing that
+  cannot be used as one, and what a fixture assigns to a key called `password`.
+- **A documented shape with invented bytes is no longer a credential.**
+  `sk-aaaaaaaaaaaa`, `xoxb-...-xxxxxxxxxxxx`, anything containing `CHANGE_ME`:
+  a repeated character, a counted-out run of eight, or a word a human typed.
+  Three questions with no plausible false answer, and
+  `--no-example-allowlist` still reports them. n8n at `--min-confidence
+  medium`: 249 findings → 219. The test fixtures that were written this way --
+  `"a" * 28`, `abcdefghij0123456789` -- now look generated, which is what they
+  were always meant to represent.
+- **A PEM header with no key under it is no longer a private key.** When the
+  `-----END-----` marker sits on the same line, what is between them is the
+  key, and `\n${'FAKEKEYMATERIAL'}\n` is not one -- which is what a test of a
+  redactor and a document about the format both look like. n8n writes that
+  forty-three times. A header with the body on the lines below is untouched.
+- **Four more false-positive classes from n8n**: a template binding
+  (`!areAllCredentialsSet`), a nullish-coalescing expression, a string being
+  concatenated, and a sentinel constant beginning with a double underscore.
+  n8n: 990 findings → 537, with the two deliberately vulnerable repositories
+  unchanged.
 - **Six more, measured against authentik**, whose OAuth and SAML code is made
   of identifiers that end in the word "password": URNs
   (`urn:oasis:names:tc:SAML:1.0:am:password`), space-separated response types

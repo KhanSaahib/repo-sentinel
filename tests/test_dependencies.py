@@ -207,6 +207,104 @@ class TestSourceDependencies(unittest.TestCase):
         self.assertEqual(scan("requirements.txt", "requests==2.31.0\n# a comment\n\n"), [])
 
 
+class TestGemfileDependencies(unittest.TestCase):
+    """SC003 for Bundler, where the source is a keyword rather than a URL."""
+
+    def gemfile(self, line):
+        return 'source "https://rubygems.org"\n' + line + "\n"
+
+    def test_a_gem_from_a_github_shorthand(self):
+        findings = scan("Gemfile", self.gemfile('gem "shared", github: "acme/shared"'))
+        finding = next(f for f in findings if f.rule_id == "SC003")
+        self.assertIn("'shared'", finding.title)
+
+    def test_a_gem_on_a_branch_is_still_moving(self):
+        text = self.gemfile(
+            'gem "branchy", git: "https://github.com/acme/b", branch: "main"'
+        )
+        self.assertIn("SC003", rule_ids(scan("Gemfile", text)))
+
+    def test_a_ref_or_a_tag_pins_it(self):
+        for pin in ('ref: "abc1234"', 'tag: "v1.0"'):
+            with self.subTest(pin=pin):
+                text = self.gemfile(f'gem "pinned", git: "https://github.com/acme/p", {pin}')
+                self.assertNotIn("SC003", rule_ids(scan("Gemfile", text)))
+
+    def test_an_ordinary_version_constraint_says_nothing(self):
+        self.assertEqual(scan("Gemfile", self.gemfile('gem "rails", "~> 7.0"')), [])
+
+
+class TestTomlManifests(unittest.TestCase):
+    """pyproject.toml and Cargo.toml, read by table rather than by line."""
+
+    def test_both_are_recognised(self):
+        self.assertEqual(dependencies.manifest_kind("pyproject.toml"), "pip")
+        self.assertEqual(dependencies.manifest_kind("Cargo.toml"), "cargo")
+
+    def test_a_source_table_over_plain_http(self):
+        text = (
+            "[[tool.poetry.source]]\nname = \"internal\"\n"
+            'url = "http://packages.internal/simple"\n'
+        )
+        findings = scan("pyproject.toml", text)
+        self.assertIn("SC001", rule_ids(findings))
+        self.assertIn("packages.internal", findings[0].title)
+
+    def test_a_cargo_registry_over_plain_http(self):
+        text = '[source.mirror]\nregistry = "http://crates.internal/index"\n'
+        self.assertIn("SC001", rule_ids(scan("Cargo.toml", text)))
+
+    def test_project_metadata_is_not_a_package_source(self):
+        # The npm manifest taught this lesson: a homepage is not a supply
+        # chain, and reporting one is a false positive per project.
+        text = (
+            "[project.urls]\n"
+            'Homepage = "http://example.invalid/billing"\n'
+            'Repository = "http://github.com/acme/billing"\n'
+        )
+        self.assertEqual(scan("pyproject.toml", text), [])
+
+    def test_an_inline_git_dependency_with_a_branch(self):
+        text = (
+            "[tool.poetry.dependencies]\n"
+            'shared = { git = "https://github.com/acme/shared.git", branch = "main" }\n'
+        )
+        findings = [f for f in scan("pyproject.toml", text) if f.rule_id == "SC003"]
+        self.assertEqual(len(findings), 1)
+        self.assertIn("'shared'", findings[0].title)
+
+    def test_an_inline_git_dependency_pinned_to_a_revision(self):
+        text = (
+            "[dependencies]\n"
+            'pinned = { git = "https://github.com/acme/pinned", rev = "abc1234" }\n'
+        )
+        self.assertNotIn("SC003", rule_ids(scan("Cargo.toml", text)))
+
+    def test_a_git_dependency_spread_over_a_table(self):
+        text = "[dependencies.other]\ngit = \"https://github.com/acme/other\"\n"
+        findings = [f for f in scan("Cargo.toml", text) if f.rule_id == "SC003"]
+        self.assertEqual(len(findings), 1)
+        self.assertIn("'other'", findings[0].title)
+
+    def test_a_tagged_table_dependency_is_pinned_enough(self):
+        text = (
+            "[dependencies.pinned]\n"
+            'git = "https://github.com/acme/pinned"\ntag = "v1.2.3"\n'
+        )
+        self.assertNotIn("SC003", rule_ids(scan("Cargo.toml", text)))
+
+    def test_an_ordinary_version_dependency_says_nothing(self):
+        text = '[dependencies]\nserde = "1.0"\ntokio = { version = "1", features = ["full"] }\n'
+        self.assertEqual(scan("Cargo.toml", text), [])
+
+    def test_a_marker_still_silences_a_line(self):
+        text = (
+            "[source.mirror]\n"
+            'registry = "http://crates.internal/index"  # repo-sentinel: ignore\n'
+        )
+        self.assertEqual(scan("Cargo.toml", text), [])
+
+
 class TestSuppression(unittest.TestCase):
     def test_line_marker(self):
         text = "registry=http://registry.internal/  # repo-sentinel: ignore\n"

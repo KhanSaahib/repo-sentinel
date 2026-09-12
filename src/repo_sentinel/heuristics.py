@@ -81,6 +81,15 @@ _STRUCTURED = (
     # header. Real tokens in this shape do not exist; they carry mixed case,
     # digits and punctuation.
     re.compile(r"^_?[A-Z][A-Z0-9]*(?:[-_][A-Z0-9]+)+$"),
+    # A snake- or kebab-cased identifier whose words may carry digits:
+    # "shared_credentials_2". Each word is two or more letters or a short run
+    # of digits, and the separators are what make this safe -- a generated
+    # credential does not contain them, and a JWT's base64 segments do not
+    # break into words.
+    re.compile(
+        r"^(?:[A-Z]?[a-z]{2,}[0-9]{0,2}|[0-9]{1,4})"
+        r"(?:[-_](?:[A-Z]?[a-z]{2,}[0-9]{0,2}|[0-9]{1,4}))+$"
+    ),
     # Camel or Pascal case with no digits: "ImagePullSecret", "privateToken".
     # Identifiers assigned to identifier-shaped names, which is what a
     # constants file is. A generated credential carries digits or punctuation.
@@ -109,9 +118,17 @@ _STRUCTURED = (
     # trailing colon a prefix carries: "user_api_key:device:lock:". Cache and
     # queue keys live in constants whose names end in KEY or TOKEN.
     re.compile(r"^[a-z][\w.-]*(?::[\w.-]+)+:?$"),
-    # A modular crypt identifier: "$pbkdf2-sha256$i=64000,l=32$". It names the
-    # algorithm and its parameters; the hash, when there is one, comes after.
-    re.compile(r"^\$[a-z0-9-]+\$[^$]*\$?$", re.I),
+    # A modular crypt string: "$2a$10$N9qo8uLOickgx2ZMRZo...", "$argon2id$v=19$...",
+    # "$pbkdf2-sha256$i=64000,l=32$". This is the *output* of hashing a
+    # password, which is the one thing that cannot be used as one -- and it is
+    # what a fixture assigns to a key called password. The prefixes are
+    # enumerated rather than matched loosely, because "$something$" is also
+    # what a shell writes.
+    re.compile(
+        r"^\$(?:2[abxy]?|1|5|6|y|7|sha1|md5|argon2[a-z]*|scrypt|bcrypt|"
+        r"pbkdf2[\w-]*|s?sha\d*)\$\S*$",
+        re.I,
+    ),
     # A sentence in any Latin-script language: letters, digits, punctuation,
     # and -- the part that matters -- a space in it. Translated interface
     # strings are assigned to names like password_too_long in every locale a
@@ -146,10 +163,18 @@ _STRUCTURED = (
     # "list[Secret] | None". Python annotations are strings wherever they are
     # forward references, and a generated client is thousands of them.
     re.compile(r"^[A-Za-z_][\w.\[\], ]*(?:\s*\|\s*[A-Za-z_][\w.\[\], ]*)+$"),
-    # A fragment of code: `+fmt.Sprintf(`, picked up where a name inside one
-    # string literal meets a value inside the next. Brackets and operators do
-    # not appear in credentials; they appear in expressions.
-    re.compile(r"[()]|^[+*/&|]"),
+    # A fragment of code: `+fmt.Sprintf(` picked up where a name inside one
+    # string literal meets a value inside the next, `!areAllCredentialsSet` or
+    # `item.credentials ?? []` in a template binding, `access_token=' +` where
+    # a string is being concatenated. Brackets and operators do not appear in
+    # credentials; they appear in expressions.
+    # (The filters are applied with match(), so anything that asks "does this
+    # contain" says so with a leading .* -- as the comparison pattern below
+    # already does.)
+    re.compile(r"^[+*/&|!?~]|.*[()]|.*\s(?:\?\??|&&|\|\||\+)\s"),
+    # A sentinel constant, which by convention starts where an identifier
+    # cannot: "__n8n_BLANK_VALUE_e5362baf-...". Credentials do not.
+    re.compile(r"^__"),
     # A reference into a document: "#/components/schemas/PasswordChallenge".
     # An OpenAPI schema is tens of thousands of these, and the ones that end in
     # a word like "Challenge" or "Token" are the ones a secret rule reads.
@@ -220,7 +245,10 @@ def entropy_floor(value: str) -> float:
 
 #: Interpolation anywhere in a value, not only at its start:
 #: ``"GITHUB_TOKEN_${org^^}"`` is a variable name being assembled.
-_EMBEDDED_INTERPOLATION = re.compile(r"\$\{|\$\(|\{\{|%\(|%\{|#\{")
+#: A value with a brace-delimited placeholder in it: "${VAR}", "{{ x }}",
+#: "%{count}", "#{Rails.env}", "Bearer {env:TOKEN}". Credentials have no
+#: braces in them, so the last of these is as safe as the rest.
+_EMBEDDED_INTERPOLATION = re.compile(r"\$\{|\$\(|\{\{|%\(|%\{|#\{|\{[^\s{}]{1,64}\}")
 
 #: An angle-bracket placeholder anywhere in a value: "glrt-<TOKEN>" is what
 #: documentation writes where a real token will go.
@@ -240,9 +268,26 @@ def looks_like_placeholder(value: str) -> bool:
     return len(set(stripped)) <= 2
 
 
+#: Words that turn a credential-ish name into a label for one. "credentialType"
+#: holds the name of a credential kind, "secretName" the name of a Kubernetes
+#: Secret, "tokenPattern" a regular expression -- none of them holds the thing
+#: itself. Measured on n8n, whose nodes assign a credential *type* to a key
+#: called credentialType seven hundred times over.
+#:
+#: "header" is deliberately absent: an auth header's value is the credential.
+_LABEL_SUFFIXES = (
+    "type", "types", "kind", "kinds", "name", "names", "field", "fields",
+    "label", "labels", "prefix", "suffix", "pattern", "patterns",
+    "placeholder", "example", "format", "scheme", "column", "table",
+)
+
+
 def is_secret_name(name: str) -> bool:
     """True when an identifier announces that its value is a credential."""
-    return SECRET_NAME.search(name) is not None
+    if SECRET_NAME.search(name) is None:
+        return False
+    trimmed = re.sub(r"[^a-z]", "", name.lower())
+    return not trimmed.endswith(_LABEL_SUFFIXES)
 
 
 def looks_generated(value: str) -> bool:

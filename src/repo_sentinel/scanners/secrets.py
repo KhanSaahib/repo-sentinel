@@ -218,6 +218,12 @@ def _scan_assignments(
 
     if '"' in line or "'" in line:
         for match in _QUOTED_ASSIGNMENT.finditer(line):
+            # The pattern finds a credential-ish name; whether it is a name
+            # *for* a credential rather than one holding a credential is the
+            # question is_secret_name answers -- credentialType, secretName,
+            # tokenPattern. The bare-assignment path below has always asked it.
+            if not is_secret_name(match.group("name")):
+                continue
             candidates.append(
                 (
                     "SEC100",

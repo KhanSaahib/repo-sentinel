@@ -116,12 +116,14 @@ python3 tools/measure.py --corpus ~/corpora --save before.json
 python3 tools/measure.py --corpus ~/corpora --compare before.json
 ```
 
-`tools/corpus.json` is the corpus, pinned to the commit each repository was
-measured at, with a line saying what each is there for: a clean Go repository
-as the false-positive floor, a Ruby monolith with a translated interface, an
-OAuth implementation whose constants are named after passwords, a Helm chart,
-a Django codebase, and two deliberately vulnerable repositories that measure
-the other direction -- what the rules fail to notice.
+`tools/corpus.json` is the corpus, fourteen repositories pinned to the commit
+each was measured at, with a line saying what each is there for: a clean Go
+repository as the false-positive floor, a Ruby monolith with a translated
+interface, an OAuth implementation whose constants are named after passwords,
+a TypeScript monorepo full of credential *type* names, a Helm chart, a
+Terraform module written by people who know the rules, a Django codebase, and
+two deliberately vulnerable repositories that measure the other direction --
+what the rules fail to notice.
 
 Pinning is what makes the comparison mean something. A filter that removes
 1,400 findings and costs nothing is a different thing from one that removes

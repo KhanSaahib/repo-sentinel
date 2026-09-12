@@ -71,7 +71,7 @@ repo-sentinel scan . --fail-on critical       # relax the CI gate
 repo-sentinel scan . --fail-on none           # report, never fail
 repo-sentinel scan . --exclude 'fixtures'     # skip a directory (repeatable)
 repo-sentinel scan . --no-gitignore           # also scan git-ignored files
-repo-sentinel scan . --no-example-allowlist   # include documented example keys
+repo-sentinel scan . --no-example-allowlist   # include documented and invented keys
 repo-sentinel scan . --no-suppression         # read past the ignore markers
 
 repo-sentinel scan . --write-baseline         # accept what is already there
@@ -182,7 +182,7 @@ and why; `repo-sentinel rules` prints the same catalogue from the tool.
 | [File names](docs/RULES.md#file-names) | FN001–FN004 | Key material and credential files, which have no text to read |
 | [Shell scripts](docs/RULES.md#shell-scripts-and-makefiles) | SH001–SH003 | Where `curl \| sh` actually lives |
 | [Application code](docs/RULES.md#application-code) | AP001–AP003 | Verification off, debug on, predictable tokens |
-| [Dependencies](docs/RULES.md#dependencies) | SC001–SC004 | Where the rest of the build comes from |
+| [Dependencies](docs/RULES.md#dependencies) | SC001–SC004 | Where the rest of the build comes from, in nine manifests |
 | [GitHub Actions](docs/RULES.md#github-actions-workflows) | WF001–WF012 | Script injection, token scope, privileged triggers |
 | [GitLab CI](docs/RULES.md#gitlab-ci) | GL001–GL004 | The same injection class, and debug tracing |
 | [Azure Pipelines](docs/RULES.md#azure-pipelines) | AZ001–AZ004 | The same injection, a third time |

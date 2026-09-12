@@ -121,6 +121,13 @@ class TestLooksGenerated(unittest.TestCase):
             "dpop+id_token",
             "authentik_policies_password.passwordpolicy",
             "#/components/schemas/PasswordChallenge",
+            # From n8n: a template binding, a nullish coalescing expression,
+            # a string being concatenated, a sentinel constant, and a table
+            # name in a migration.
+            "!areAllCredentialsSet",
+            "item.credentials ?? []",
+            "__n8n_BLANK_VALUE_e5362baf-c777-4d57",
+            "shared_credentials_2",
             # From Discourse: a translated interface string, a Ruby constant
             # path, a Redis key prefix, a hyphenated label, a modular crypt
             # identifier, and an environment variable name with a private
@@ -131,6 +138,11 @@ class TestLooksGenerated(unittest.TestCase):
             "user_api_key:device:lock:",
             "OAuth-clientgeheim",
             "$pbkdf2-sha256$i=64000,l=32$",
+            # A password hash is the output of hashing a password, which is
+            # the one thing that cannot be used as one. n8n's fixtures assign
+            # these to keys called password.
+            "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy",
+            "$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$RdescudvJCsgt3ub",
             "_DISCOURSE_USER_TOKEN",
         ):
             with self.subTest(value=value):
@@ -187,6 +199,26 @@ class TestTestPaths(unittest.TestCase):
         for path in ("src/app/main.go", "cmd/server/config.py", "latest/index.html"):
             with self.subTest(path=path):
                 self.assertFalse(wellknown.is_test_path(path))
+
+
+class TestNamesThatAreLabels(unittest.TestCase):
+    """A name for a credential is not a name holding one."""
+
+    def test_a_label_suffix_ends_the_question(self):
+        for name in (
+            "credentialType", "secretName", "tokenPattern", "password_field",
+            "apiKeyPlaceholder", "secret_table", "AUTH_TOKEN_FORMAT",
+        ):
+            with self.subTest(name=name):
+                self.assertFalse(heuristics.is_secret_name(name))
+
+    def test_the_names_that_do_hold_one_are_untouched(self):
+        for name in (
+            "password", "api_key", "AUTH_TOKEN", "client_secret", "authHeader",
+            "authorization", "privateKey",
+        ):
+            with self.subTest(name=name):
+                self.assertTrue(heuristics.is_secret_name(name))
 
 
 class TestSecretNames(unittest.TestCase):

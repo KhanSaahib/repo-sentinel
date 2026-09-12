@@ -83,6 +83,21 @@ a payment token (SEC034) as what it can move, and a Terraform Cloud token
 the rest and say so through their confidence: SEC014 is a two-letter prefix in
 front of 32 hex characters, and SEC020 is any `scheme://user:password@host`.
 
+Every provider rule also asks whether the bytes were generated or typed. A
+documented shape is what makes these rules certain, and it is also what makes
+them fire on every fixture that needs a well-formed key: `sk-aaaaaaaa...`,
+`xoxb-...-xxxxxxxxxxxx`, `...CHANGE_ME`. A repeated character, a counted-out
+run of eight, or a word somebody typed are the three questions with no
+plausible false answer, and `--no-example-allowlist` reports them anyway --
+that flag exists to show what the scanner chose not to say.
+
+SEC004 asks one further question, because a PEM header is quoted far more
+often than it is committed: when the `-----END-----` marker is on the *same*
+line, the thing between the two is the key, and a dozen characters of
+placeholder is not one. A header with the body on the lines below it is the
+ordinary case and is always reported -- the rule reads one line at a time, so
+"cannot see the body" has to mean "assume it is real".
+
 SEC021 and SEC022 are the two rules a line-at-a-time scanner cannot express.
 SEC021 reports a Google service account key file -- `"type": "service_account"`
 plus a private key field, neither of which means anything alone and no single
@@ -137,6 +152,16 @@ and environment variables that are ASCII, and text in another script is not --
 its entropy per character is high because its alphabet is large, which has
 nothing to do with randomness. Discourse's translated interface produced 1,600
 findings before this rule existed: "password", forty times per locale.
+
+A name that *labels* a credential is not a name that holds one, and both rules
+check: `credentialType` names a kind of credential, `secretName` names a
+Kubernetes Secret, `tokenPattern` is a regular expression. n8n assigns a
+credential type to a key called `credentialType` seven hundred times.
+
+A password *hash* is filtered too. `$2a$10$...`, `$argon2id$...` and their
+relatives are the output of hashing a password, which is the one thing that
+cannot be used as one -- and they are what a test fixture assigns to a key
+called `password`.
 
 Placeholders are filtered before entropy is measured at all — `your-password-here`,
 `${DB_PASSWORD}`, `xxxxxxxx`, `changeme` — and so is structure that is not a
@@ -225,10 +250,19 @@ install` is enough to execute them, on every machine and every CI runner. The
 same command inside `build` is a different proposition and is not reported.
 
 Covered: `package.json`, `composer.json`, `.npmrc`, `requirements*.txt`,
-`pip.conf`, `Gemfile`, `pom.xml`. SC001 reads the JSON manifests structurally,
-because there the field is available and it decides: `publishConfig.registry`
-is somewhere packages come from, and `repository`, `homepage` and `bugs` are
-metadata npm has never downloaded anything from. The checks are shallow on purpose -- this is not a resolver, and it
+`pip.conf`, `Gemfile`, `pom.xml`, `pyproject.toml`, `Cargo.toml`. SC001 reads
+the JSON manifests structurally, because there the field is available and it
+decides: `publishConfig.registry` is somewhere packages come from, and
+`repository`, `homepage` and `bugs` are metadata npm has never downloaded
+anything from. The two TOML manifests are read by table for the same reason --
+a URL in `[[tool.poetry.source]]` is a package source and one in
+`[project.urls]` is a link in a README -- with no TOML parser behind it, since
+`tomllib` arrived in 3.11 and this runs on 3.9. In those two, SC003 asks
+whether a `git` dependency carries a `rev` or a `tag`: without one it installs
+whatever the default branch holds at build time. It asks the same of a
+`Gemfile`, where the source is a keyword rather than a URL -- `github:`,
+`git:`, `gist:` -- and where `ref:` and `tag:` are the two spellings that pin
+it. `branch:` is not one of them. The checks are shallow on purpose -- this is not a resolver, and it
 does not know what a version means -- because these four mistakes are visible
 in the text.
 
