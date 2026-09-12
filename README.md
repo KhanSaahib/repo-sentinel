@@ -43,7 +43,7 @@ pip install .
 Or from a tag, without a checkout:
 
 ```bash
-pip install git+https://github.com/KhanSaahib/bluerayscan@v0.3.0
+pip install git+https://github.com/KhanSaahib/bluerayscan@v0.3.1
 ```
 
 Or run it straight from a checkout, with no install at all:
