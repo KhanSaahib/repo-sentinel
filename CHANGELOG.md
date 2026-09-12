@@ -180,6 +180,11 @@ last of them is the first that reads code rather than configuration.
   of every credential the repository holds. Medium confidence when the call is
   pinned to a SHA, which at least fixes the code that will read them.
 
+- **K8S012**: seccomp or AppArmor switched off by name -- `seccompProfile:
+  Unconfined`, or the AppArmor annotation set to `unconfined`. Neither changes
+  behaviour on a cluster with no Pod Security Standard, which is the reason the
+  written-down version is worth reading: somebody needed it for one syscall,
+  and it removes the filter from all of them.
 - **TF008 and CF006**: a policy that names every principal. TF004 says the principal may
   do anything; this says anybody may be the principal -- `identifiers = ["*"]`,
   or `"Principal": "*"` in a JSON policy. On a role's trust policy that is any

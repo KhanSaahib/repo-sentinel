@@ -603,6 +603,7 @@ Service principal is a named one, and is how half of AWS works.
 | K8S009 | Role grants every verb on every resource | critical for a ClusterRole |
 | K8S010 | Binding grants to anonymous or all authenticated users | critical |
 | K8S011 | Container port bound on the node itself | high for a privileged port |
+| K8S012 | Syscall or AppArmor confinement switched off by name | high |
 
 Manifests are found by content, not by filename: a Kubernetes document is one
 with `apiVersion` and `kind` at its root, in YAML or in JSON. That beats guessing at `deploy/`,
@@ -636,6 +637,15 @@ K8S007 decodes what it finds. A `Secret` stores values base64-encoded, which is
 not encryption but is enough to hide a credential from every rule that reads
 lines; when the decoded value is a shape the secret rules recognise, the
 finding says which and is critical.
+
+K8S012 reads the two places a manifest can switch confinement off by name: a
+`seccompProfile` of `Unconfined`, and the AppArmor annotation set to
+`unconfined`. Neither is a change of behaviour on a cluster with no Pod
+Security Standard -- unconfined is what you already had -- which is exactly why
+the written-down version is worth reporting: somebody needed it, usually for
+one syscall, and it removes the filter from all of them. A profile set at pod
+level is reported as the pod's, once, rather than again for every container
+underneath it.
 
 ## Docker Compose
 

@@ -163,6 +163,88 @@ def _check_host_paths(path: str, document: "yamlish.Node") -> "Iterator[Finding]
         )
 
 
+#: The value both confinement mechanisms use to mean "none of it". seccomp
+#: spells it in a securityContext, AppArmor in an annotation, and the word is
+#: the same.
+_UNCONFINED = "unconfined"
+_APPARMOR_PREFIX = "container.apparmor.security.beta.kubernetes.io/"
+
+
+def _check_confinement(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
+    """K8S012: a syscall or AppArmor profile turned off by name.
+
+    Both are written down on purpose. Unconfined is what a cluster without a
+    Pod Security Standard gives you anyway, so the value is not a change of
+    behaviour -- it is somebody recording that they needed it, usually to make
+    one syscall work, and it removes the filter from all of them.
+    """
+    for name, container in _containers(document):
+        profile = container.get("securityContext", "seccompProfile", "type")
+        if profile is not None and profile.text.strip().strip("\"'").lower() == _UNCONFINED:
+            yield _unconfined_finding(
+                path, profile.line, f"Container {name!r} runs without a seccomp profile",
+                "seccompProfile: Unconfined",
+                "Unconfined leaves every syscall available to the container, "
+                "which is most of what a container escape needs. "
+                "RuntimeDefault is the profile the runtime already ships.",
+            )
+
+    for key, node in document.walk():
+        if not key.startswith(_APPARMOR_PREFIX):
+            continue
+        if node.text.strip().strip("\"'").lower() != _UNCONFINED:
+            continue
+        yield _unconfined_finding(
+            path, node.line,
+            f"Container {key[len(_APPARMOR_PREFIX):]!r} runs without an AppArmor profile",
+            f"{key}: unconfined",
+            "The annotation switches AppArmor off for that container by name. "
+            "Use runtime/default, or a profile written for the workload.",
+        )
+
+    for key, node in document.walk():
+        if key != "seccompProfile" or not node.is_map:
+            continue
+        kind = node.get("type")
+        if kind is None or kind.text.strip().strip("\"'").lower() != _UNCONFINED:
+            continue
+        if _inside_container(document, node):
+            continue
+        yield _unconfined_finding(
+            path, kind.line, "Pod runs without a seccomp profile",
+            "seccompProfile: Unconfined",
+            "Set at pod level this covers every container in it. "
+            "RuntimeDefault is the profile the runtime already ships.",
+        )
+
+
+def _unconfined_finding(
+    path: str, line: int, title: str, evidence: str, remediation: str
+) -> Finding:
+    return Finding(
+        rule_id="K8S012",
+        severity=Severity.HIGH,
+        title=title,
+        path=path,
+        line=line,
+        evidence=evidence,
+        remediation=remediation,
+    )
+
+
+def _inside_container(document: "yamlish.Node", node: "yamlish.Node") -> bool:
+    """True when this seccompProfile belongs to a container, not to the pod.
+
+    The container form is reported by name above, and reporting it again as
+    the pod's is the same finding with the wrong subject on one of them.
+    """
+    for _, container in _containers(document):
+        context = _security_context(container)
+        if context is not None and context.get("seccompProfile") is node:
+            return True
+    return False
+
+
 def _check_capabilities(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
     """K8S006: privilege handed back after it was dropped."""
     for name, container in _containers(document):
@@ -493,6 +575,7 @@ _POSITIVE_RULES: "tuple[_Rule, ...]" = (
     _check_host_paths,
     _check_host_namespaces,
     _check_capabilities,
+    _check_confinement,
     _check_root,
     _check_host_ports,
     _check_secret_data,

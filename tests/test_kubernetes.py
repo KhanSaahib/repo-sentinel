@@ -93,6 +93,61 @@ class TestHostAccess(unittest.TestCase):
         self.assertEqual(finding.severity, Severity.HIGH)
 
 
+class TestConfinement(unittest.TestCase):
+    """K8S012: a syscall or AppArmor profile switched off by name."""
+
+    def test_a_container_without_a_seccomp_profile(self):
+        text = pod(
+            "      securityContext:\n        seccompProfile:\n          type: Unconfined\n"
+        )
+        findings = [f for f in scan(text) if f.rule_id == "K8S012"]
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].severity, Severity.HIGH)
+        self.assertIn("'app'", findings[0].title)
+
+    def test_the_runtime_default_profile_is_the_fix_and_is_not_reported(self):
+        text = pod(
+            "      securityContext:\n        seccompProfile:\n          type: RuntimeDefault\n"
+        )
+        self.assertNotIn("K8S012", rule_ids(scan(text)))
+
+    def test_a_pod_level_profile_is_reported_once_as_the_pods(self):
+        text = pod(
+            spec_body="  securityContext:\n    seccompProfile:\n      type: Unconfined\n"
+        )
+        findings = [f for f in scan(text) if f.rule_id == "K8S012"]
+        self.assertEqual(len(findings), 1)
+        self.assertIn("Pod", findings[0].title)
+
+    def test_a_container_profile_is_not_also_reported_as_the_pods(self):
+        text = pod(
+            "      securityContext:\n        seccompProfile:\n          type: Unconfined\n"
+        )
+        findings = [f for f in scan(text) if f.rule_id == "K8S012"]
+        self.assertEqual(len(findings), 1)
+        self.assertIn("Container", findings[0].title)
+
+    def test_the_apparmor_annotation(self):
+        text = (
+            "apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  annotations:\n"
+            "    container.apparmor.security.beta.kubernetes.io/app: unconfined\n"
+            "spec:\n  containers:\n    - name: app\n      image: nginx:1.25\n"
+            "      resources:\n        limits:\n          memory: 64Mi\n"
+        )
+        findings = [f for f in scan(text) if f.rule_id == "K8S012"]
+        self.assertEqual(len(findings), 1)
+        self.assertIn("'app'", findings[0].title)
+
+    def test_an_apparmor_profile_by_name_is_not_reported(self):
+        text = (
+            "apiVersion: v1\nkind: Pod\nmetadata:\n  name: web\n  annotations:\n"
+            "    container.apparmor.security.beta.kubernetes.io/app: runtime/default\n"
+            "spec:\n  containers:\n    - name: app\n      image: nginx:1.25\n"
+            "      resources:\n        limits:\n          memory: 64Mi\n"
+        )
+        self.assertNotIn("K8S012", rule_ids(scan(text)))
+
+
 class TestUsersAndLimits(unittest.TestCase):
     def test_explicit_root(self):
         self.assertIn("K8S005", rule_ids(scan(pod("      securityContext:\n        runAsUser: 0\n"))))

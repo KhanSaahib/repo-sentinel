@@ -213,6 +213,7 @@ RULES: "dict[str, Rule]" = _rules(
     ("K8S009", "rbac-wildcard", "Role grants every verb on every resource", Severity.CRITICAL),
     ("K8S010", "rbac-binds-everyone", "Binding grants to anonymous or all authenticated users", Severity.CRITICAL),
     ("K8S011", "host-port", "Container port bound on the node itself", Severity.HIGH),
+    ("K8S012", "unconfined-profile", "Syscall or AppArmor confinement switched off by name", Severity.HIGH),
     ("DC001", "privileged-service", "Compose service runs privileged", Severity.CRITICAL),
     ("DC002", "host-bind-mount", "Service bind-mounts a path that grants the host", Severity.CRITICAL),
     ("DC003", "host-namespace-share", "Service shares a host namespace", Severity.HIGH),
@@ -282,7 +283,7 @@ _claim("CWE-295", "SC004", "DK006", "AN001", "SH002", "AP001")
 _claim("CWE-330", "AP003")
 _claim("CWE-489", "AP002")
 # Execution with unnecessary privileges.
-_claim("CWE-250", "DK002", "DC001", "DC004", "K8S001", "K8S005", "K8S006")
+_claim("CWE-250", "DK002", "DC001", "DC004", "K8S001", "K8S005", "K8S006", "K8S012")
 # Incorrect permission assignment for a critical resource.
 _claim(
     "CWE-732",

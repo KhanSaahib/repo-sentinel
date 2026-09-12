@@ -207,6 +207,8 @@ spec:
           securityContext:
             privileged: true
             runAsUser: 0
+            seccompProfile:
+              type: Unconfined
             capabilities:
               add: ["SYS_ADMIN"]
       volumes:
