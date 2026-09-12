@@ -251,6 +251,9 @@ last of them is the first that reads code rather than configuration.
 - **A path that does not exist scanned clean.** `repo-sentinel scan tests/fixtues`
   walked nothing, found nothing and said "no findings" -- the one answer this
   tool must never give for a tree it did not read. It is an error now.
+- **An unreadable file is named the way the report names everything else.** A
+  dangling symlink -- the common case, and kubernetes-goat has one -- was
+  reported by absolute path, in a sentence otherwise full of relative ones.
 - **A tree that could not be opened said nothing about it.** The count of
   unreadable paths was attached only to the line reporting how many files were
   scanned, and a locked directory scans zero files: the run that most needed

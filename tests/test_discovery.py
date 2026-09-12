@@ -66,6 +66,15 @@ class TestUnreadablePaths(unittest.TestCase):
         self.assertEqual([entry.path for entry in entries], ["ok.py"])
         self.assertEqual(problems, ["locked"])
 
+    def test_a_file_that_cannot_be_read_is_named_as_the_report_shows_it(self):
+        # A dangling symlink is the common case, and a scan that names it
+        # /tmp/xyz/repo/a/b among a list of relative paths reads as a bug.
+        root = tree({"ok.py": "y = 2\n"})
+        os.symlink(os.path.join(root, "gone.py"), os.path.join(root, "link.py"))
+        problems = []
+        list(discovery.walk(root, unreadable=problems))
+        self.assertEqual(problems, ["link.py"])
+
     def test_a_readable_tree_reports_nothing(self):
         problems = []
         list(discovery.walk(tree({"a.py": "1\n"}), unreadable=problems))

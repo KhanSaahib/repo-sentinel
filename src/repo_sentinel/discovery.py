@@ -164,7 +164,7 @@ def walk(
             if os.path.splitext(filename)[1].lower() in BINARY_SUFFIXES:
                 yield Entry(relative)
                 continue
-            yield Entry(relative, _read_text(absolute, max_bytes, unreadable))
+            yield Entry(relative, _read_text(absolute, max_bytes, unreadable, relative))
 
 
 def read_listed(
@@ -220,14 +220,21 @@ def _relative_dir(dirpath: str, root: str) -> str:
 
 
 def _read_text(
-    path: str, max_bytes: int, unreadable: "list[str] | None" = None
+    path: str,
+    max_bytes: int,
+    unreadable: "list[str] | None" = None,
+    name: "str | None" = None,
 ) -> "str | None":
     """The file's text, or None when it is too large, binary, or unopenable.
 
     Only the last of those is worth telling anyone about, which is what
     ``unreadable`` collects: a file over the size limit and a file full of NUL
-    bytes are both deliberate skips, and a file the process cannot open is a
-    gap in the scan.
+    bytes are both deliberate skips, and a file the process cannot open -- a
+    permission, a dangling symlink -- is a gap in the scan.
+
+    ``name`` is what to record if that happens, which is the path as the report
+    will show it. Without it the walk mixes absolute paths in among relative
+    ones, in the same sentence.
     """
     try:
         if os.path.getsize(path) > max_bytes:
@@ -236,7 +243,7 @@ def _read_text(
             raw = handle.read()
     except OSError:
         if unreadable is not None:
-            unreadable.append(path)
+            unreadable.append(name if name is not None else path)
         return None
     if is_probably_binary(raw[:8192]):
         return None
