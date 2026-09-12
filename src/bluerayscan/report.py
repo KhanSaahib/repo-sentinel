@@ -93,6 +93,11 @@ def _repeat_note(finding: Finding) -> str:
 
 def _body(finding: Finding, indent: str) -> "list[str]":
     lines = [f"{indent}{finding.title}{_repeat_note(finding)}"]
+    if finding.origin:
+        # Only a scan of history sets this, and when it is set it is the most
+        # actionable line in the block: it is the difference between "this is
+        # in the file" and "this has been public since March".
+        lines.append(f"{indent}added in: {finding.origin}")
     if finding.evidence:
         lines.append(f"{indent}evidence: {finding.evidence}")
     if finding.remediation:
@@ -269,6 +274,8 @@ def format_markdown(
         detail = _escape(finding.title) + _escape(_repeat_note(finding))
         if finding.confidence < Confidence.HIGH:
             detail += f" _({finding.confidence.value} confidence)_"
+        if finding.origin:
+            detail += f" _(added in {_escape(finding.origin)})_"
         lines.append(
             f"| {marker} | `{finding.rule_id}` | `{finding.path}:{finding.line}` | {detail} |"
         )
@@ -344,6 +351,8 @@ def format_github(findings: Sequence[Finding], *, notes: Sequence[str] = ()) -> 
         message = finding.title
         if finding.occurrences > 1:
             message = f"{message} (repeated on {finding.occurrences} lines in this file)"
+        if finding.origin:
+            message = f"{message} (added in {finding.origin})"
         if finding.remediation:
             message = f"{message} — {finding.remediation}"
         lines.append(f"::{level} {location}::{_annotation_escape(message, in_property=False)}")
