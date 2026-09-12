@@ -42,8 +42,8 @@ class TestProviderPatterns(unittest.TestCase):
         self.assertIn("SEC004", rule_ids(findings))
 
     def test_live_and_test_stripe_keys_differ_in_severity(self):
-        live = secrets.scan_text("a.py", 'k = "sk_live_abcdefghij0123456789"')[0]
-        test = secrets.scan_text("a.py", 'k = "sk_test_abcdefghij0123456789"')[0]
+        live = secrets.scan_text("a.py", 'k = "sk_live_Xk92mQp7Lz4TvB8nRw1Y"')[0]
+        test = secrets.scan_text("a.py", 'k = "sk_test_Qq7Zx9Lm2Pv4Rt8WcY6h"')[0]
         self.assertGreater(live.severity, test.severity)
 
     def test_reports_correct_line_number(self):
@@ -51,6 +51,35 @@ class TestProviderPatterns(unittest.TestCase):
             ["import os", "", f'KEY = "{fixtures.REALISTIC_AWS_KEY_ID}"']
         )
         self.assertEqual(secrets.scan_text("a.py", text)[0].line, 3)
+
+
+class TestInventedCredentials(unittest.TestCase):
+    """A documented shape with made-up bytes in it is still made up."""
+
+    def scan(self, value):
+        return rule_ids(secrets.scan_text("app.py", f'k = "{value}"\n'))
+
+    def test_a_repeated_character_is_nobody_key(self):
+        self.assertEqual(self.scan("sk-" + "a" * 40), set())
+
+    def test_a_counted_out_run_is_nobody_key(self):
+        # Split, like every other well-formed shape in this suite: GitHub's
+        # push protection reads a contiguous literal and is right to.
+        self.assertEqual(self.scan("xox" + "b-8403192576-abcdefghijklmnop"), set())
+
+    def test_a_word_somebody_typed_is_nobody_key(self):
+        self.assertEqual(self.scan("sk-ant-api03-CHANGE_ME-0a1b0a1b0a1b"), set())
+
+    def test_the_same_shape_with_generated_bytes_is_reported(self):
+        self.assertIn("SEC001", self.scan("AKIA" + "ZZ7Q4TWFN2XKLM3D"))
+
+    def test_opting_out_reports_the_invented_ones_too(self):
+        # --no-example-allowlist is for auditing what the scanner chose not to
+        # say, and this is one of the things it chose not to say.
+        text = 'k = "' + "AKIA" + "AAAAAAAAAAAAAAAA" + '"\n'
+        self.assertEqual(secrets.scan_text("app.py", text), [])
+        loud = secrets.scan_text("app.py", text, allow_examples=False)
+        self.assertIn("SEC001", rule_ids(loud))
 
 
 class TestPrivateKeyBlocks(unittest.TestCase):
@@ -128,6 +157,17 @@ class TestScanFiles(unittest.TestCase):
         self.assertEqual({finding.path for finding in findings}, {"a.py", "c.py"})
 
 
+#: Filler that looks generated rather than typed. A repeated character or a
+#: counted-out run ("aaaa...", "abcdefgh", "1234567890") is what somebody
+#: invents, and the provider rules reject those on purpose -- so a fixture
+#: written that way tests nothing.
+_ALPHABET = "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4z"
+
+
+def filler(length):
+    return (_ALPHABET * (length // len(_ALPHABET) + 1))[:length]
+
+
 class TestAdditionalProviders(unittest.TestCase):
     """The rules added after the first ten, spot-checked one apiece."""
 
@@ -138,25 +178,25 @@ class TestAdditionalProviders(unittest.TestCase):
         self.assert_rule("SEC011", "AccountKey=" + "aB3dEf7h" * 10 + "aB3dEf" + "==")
 
     def test_google_oauth_client_secret(self):
-        self.assert_rule("SEC012", 'secret = "GOC' + "SPX-" + "a" * 28 + '"')
+        self.assert_rule("SEC012", 'secret = "GOC' + "SPX-" + filler(28) + '"')
 
     def test_sendgrid_key(self):
-        self.assert_rule("SEC013", 'k = "S' + "G." + "a" * 22 + "." + "b" * 43 + '"')
+        self.assert_rule("SEC013", 'k = "S' + "G." + filler(22) + "." + filler(43) + '"')
 
     def test_npm_token(self):
-        self.assert_rule("SEC015", "//registry.npmjs.org/:_authToken=np" + "m_" + "a" * 36)
+        self.assert_rule("SEC015", "//registry.npmjs.org/:_authToken=np" + "m_" + filler(36))
 
     def test_pypi_token(self):
-        self.assert_rule("SEC016", "password = pyp" + "i-AgEIcHlwaS5vcmc" + "a" * 60)
+        self.assert_rule("SEC016", "password = pyp" + "i-AgEIcHlwaS5vcmc" + filler(60))
 
     def test_docker_hub_token(self):
-        self.assert_rule("SEC017", 'token = "dck' + "r_pat_" + "a" * 24 + '"')
+        self.assert_rule("SEC017", 'token = "dck' + "r_pat_" + filler(24) + '"')
 
     def test_slack_webhook_url(self):
-        self.assert_rule("SEC018", "https://hooks.sl" + "ack.com/services/T" + "a" * 32)
+        self.assert_rule("SEC018", "https://hooks.sl" + "ack.com/services/T" + filler(32))
 
     def test_huggingface_token(self):
-        self.assert_rule("SEC019", 'HF = "h' + "f_" + "a" * 34 + '"')
+        self.assert_rule("SEC019", 'HF = "h' + "f_" + filler(34) + '"')
 
     def test_the_provider_rules_added_for_the_tokens_people_actually_leak(self):
         # One apiece: the shapes are documented, so the test is that the
@@ -169,7 +209,7 @@ class TestAdditionalProviders(unittest.TestCase):
             ("SEC027", "dap" + "i" + "0a1b" * 8),
             ("SEC028", "dp" + ".pt." + "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4zaB3dEf7h"),
             ("SEC029", "gls" + "a_" + "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4z_1a2b3c4d"),
-            ("SEC030", "1234567890" + ":AA" + "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4zQ"),
+            ("SEC030", "8403192576" + ":AA" + "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4zQ"),
             ("SEC031", "PMA" + "K-" + "0a1b" * 6 + "-" + "0a1b" * 8 + "aa"),
             ("SEC032", "lin" + "_api_" + "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4zaB3dEf7h"),
             ("SEC033", "ATA" + "TT3x" + "aB3dEf7h" * 13),
@@ -180,13 +220,13 @@ class TestAdditionalProviders(unittest.TestCase):
 
     def test_the_second_batch_of_provider_rules(self):
         for rule_id, value in (
-            ("SEC035", "xap" + "p-1-A01B02C03-1234567890-" + "0a1b" * 8),
+            ("SEC035", "xap" + "p-1-A01B02C03-8403192576-" + "0a1b" * 8),
             ("SEC036", "M" + "TA1B2c3D4e5F6g7H8i9J0k1L" + ".Ab3dEf." + "aB3dEf7hIj0kLm2nOp5qRs8tUv1"),
             ("SEC037", "key" + "-" + "0a1b" * 8),
             ("SEC038", "0a1b" * 8 + "-us21"),
-            ("SEC039", "NRA" + "K-" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ1"),
-            ("SEC040", "https://" + "0a1b" * 8 + "@o123.ingest.example.invalid/456"),
-            ("SEC041", "1/" + "1234567890123456" + ":" + "0a1b" * 8),
+            ("SEC039", "NRA" + "K-" + "ZQMXDPLBKWRTFHNCVGJSYAE" + "3X70"),
+            ("SEC040", "https://" + "0a1b" * 8 + "@o314.ingest.example.invalid/592"),
+            ("SEC041", "1/" + "8403192576418302" + ":" + "0a1b" * 8),
             ("SEC042", "sl" + "." + "aB3dEf7h" * 17),
             ("SEC043", "fig" + "d_" + "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4zaB3dEf7h"),
             ("SEC044", "pat" + "aB3dEf7hIj0kLm" + "." + "0a1b" * 16),

@@ -272,6 +272,14 @@ last of them is the first that reads code rather than configuration.
   `tokenPattern` is a regular expression -- none of them holds the thing
   itself, and n8n writes the first of those seven hundred times. The quoted
   rule now asks the same question the unquoted one always did.
+- **A documented shape with invented bytes is no longer a credential.**
+  `sk-aaaaaaaaaaaa`, `xoxb-...-xxxxxxxxxxxx`, anything containing `CHANGE_ME`:
+  a repeated character, a counted-out run of eight, or a word a human typed.
+  Three questions with no plausible false answer, and
+  `--no-example-allowlist` still reports them. n8n at `--min-confidence
+  medium`: 249 findings → 219. The test fixtures that were written this way --
+  `"a" * 28`, `abcdefghij0123456789` -- now look generated, which is what they
+  were always meant to represent.
 - **A PEM header with no key under it is no longer a private key.** When the
   `-----END-----` marker sits on the same line, what is between them is the
   key, and `\n${'FAKEKEYMATERIAL'}\n` is not one -- which is what a test of a

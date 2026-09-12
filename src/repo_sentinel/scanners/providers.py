@@ -96,6 +96,52 @@ def _pem_block_is_empty(match: "re.Match[str]") -> bool:
     return len(material) < _PEM_MINIMUM
 
 
+#: Words that only appear in a credential somebody made up. Not a
+#: comprehensive list and not meant to be: each of these is a word a human
+#: typed where a generated value would be, which is the whole signal.
+#: "example" is deliberately absent: a Sentry DSN or a webhook URL carries its
+#: host inside the match, and example.invalid is what a documentation host is
+#: called. The allowlist handles the vendor conventions built on that word.
+_INVENTED_WORDS = (
+    "changeme", "change_me", "placeholder", "yourkey", "your_key",
+    "youraccount", "fakekey", "dummykey", "redacted", "notarealkey", "xxxxxxxx",
+)
+#: How long a run of consecutive characters has to be before it can only be
+#: somebody counting. Eight is already one chance in billions for a generated
+#: value, and "abcdefgh" or "12345678" is most of what a test fixture is made
+#: of.
+_SEQUENCE_LENGTH = 8
+
+
+def _is_counted_out(secret: str) -> bool:
+    """True when part of the value is somebody counting: abcdefgh, 12345678."""
+    run = 1
+    for previous, current in zip(secret, secret[1:]):
+        run = run + 1 if ord(current) - ord(previous) == 1 else 1
+        if run >= _SEQUENCE_LENGTH:
+            return True
+    return False
+
+
+def looks_invented(secret: str) -> bool:
+    """True when a value has the documented shape and obviously made-up bytes.
+
+    A provider rule matches structure, which is what makes it certain -- and
+    what makes it fire on every fixture that needs a well-formed key. A test
+    writes "sk-aaaaaaaaaaaaaaaaaaaa", a README writes "CHANGE_ME", and neither
+    is a credential anybody can use. This asks only questions with no plausible
+    false answer: a repeated character, a counted-out run, or a word a human
+    typed.
+    """
+    lowered = secret.lower()
+    if any(word in lowered for word in _INVENTED_WORDS):
+        return True
+    body = re.sub(r"^[A-Za-z]{1,12}[-_]", "", secret)
+    if len(body) >= 12 and len(set(body)) <= 3:
+        return True
+    return _is_counted_out(secret)
+
+
 RULES: tuple[ProviderRule, ...] = (
     ProviderRule(
         "SEC001",
@@ -555,6 +601,6 @@ def findings_in(
             matched_spans.append(match.span(rule.secret_group))
             if rule.reject is not None and rule.reject(match):
                 continue
-            if allow_examples and is_known_example(secret):
+            if allow_examples and (is_known_example(secret) or looks_invented(secret)):
                 continue
             yield rule, secret, evidence_for(match, rule)

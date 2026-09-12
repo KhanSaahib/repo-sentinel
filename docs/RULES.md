@@ -83,6 +83,14 @@ a payment token (SEC034) as what it can move, and a Terraform Cloud token
 the rest and say so through their confidence: SEC014 is a two-letter prefix in
 front of 32 hex characters, and SEC020 is any `scheme://user:password@host`.
 
+Every provider rule also asks whether the bytes were generated or typed. A
+documented shape is what makes these rules certain, and it is also what makes
+them fire on every fixture that needs a well-formed key: `sk-aaaaaaaa...`,
+`xoxb-...-xxxxxxxxxxxx`, `...CHANGE_ME`. A repeated character, a counted-out
+run of eight, or a word somebody typed are the three questions with no
+plausible false answer, and `--no-example-allowlist` reports them anyway --
+that flag exists to show what the scanner chose not to say.
+
 SEC004 asks one further question, because a PEM header is quoted far more
 often than it is committed: when the `-----END-----` marker is on the *same*
 line, the thing between the two is the key, and a dozen characters of

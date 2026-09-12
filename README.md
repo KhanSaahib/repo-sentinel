@@ -71,7 +71,7 @@ repo-sentinel scan . --fail-on critical       # relax the CI gate
 repo-sentinel scan . --fail-on none           # report, never fail
 repo-sentinel scan . --exclude 'fixtures'     # skip a directory (repeatable)
 repo-sentinel scan . --no-gitignore           # also scan git-ignored files
-repo-sentinel scan . --no-example-allowlist   # include documented example keys
+repo-sentinel scan . --no-example-allowlist   # include documented and invented keys
 repo-sentinel scan . --no-suppression         # read past the ignore markers
 
 repo-sentinel scan . --write-baseline         # accept what is already there
