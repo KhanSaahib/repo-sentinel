@@ -73,6 +73,11 @@ class TestCoverageOfTheScanners(unittest.TestCase):
         self.assertEqual(modules, set(CONTENT_SCANNERS))
 
 
+def _documentation() -> str:
+    root = pathlib.Path(__file__).resolve().parents[1]
+    return (root / "docs" / "RULES.md").read_text(encoding="utf-8")
+
+
 class TestCatalogue(unittest.TestCase):
     def test_every_emitted_rule_is_catalogued(self):
         undescribed = emitted_rule_ids() - set(rules.RULES)
@@ -84,6 +89,23 @@ class TestCatalogue(unittest.TestCase):
         # README grows a row for a check that no longer exists.
         unreachable = set(rules.RULES) - emitted_rule_ids()
         self.assertEqual(unreachable, set(), "catalogue describes rules nothing emits")
+
+    def test_every_family_says_what_it_reads_and_where_it_is_written_up(self):
+        categories = {rule.category for rule in rules.RULES.values()}
+        self.assertEqual(categories, set(rules.FAMILIES))
+
+    def test_every_family_anchor_is_a_real_heading(self):
+        # The card printed for a single rule sends people to docs/RULES.md by
+        # anchor, and a link into a document is exactly the kind of thing that
+        # goes stale without anyone noticing.
+        headings = {
+            line[3:].strip().lower().replace(" ", "-").replace("&", "")
+            for line in _documentation().splitlines()
+            if line.startswith("## ")
+        }
+        for name, family in rules.FAMILIES.items():
+            with self.subTest(family=name):
+                self.assertIn(family.anchor, headings)
 
     def test_the_candidate_gate_lets_every_provider_rule_through(self):
         # providers.CANDIDATE decides which lines are worth looking at closely,

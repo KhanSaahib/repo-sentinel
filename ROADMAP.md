@@ -67,9 +67,10 @@ better outcome than a feature nobody wanted.
 - [x] `--paths-from FILE` for per-PR runs, `--format markdown` for a PR comment,
       `--format github` for annotations
 - [x] `--quiet`, `--sort`, `--disable`, per-path configuration
-- [ ] `--explain RULE`: the catalogue entry, the reasoning, the remediation and
-      the CWE in one place, so a reviewer does not have to open the docs
-- [ ] Group findings by file in text output when there are many
+- [x] ~~`--explain RULE`~~ -- a flag was the wrong shape. `rules WF011` already
+      names one rule; it now prints the card instead of the row, which is what
+      the flag would have done and one fewer thing to know
+- [x] Group findings by file in text output, under `--sort path`
 - [ ] Publish to PyPI so `pipx run repo-sentinel` works — the release workflow
       is written and uses trusted publishing; it needs the project registered
 

@@ -171,6 +171,11 @@ repository the tool can read at all: it grew from two file formats to six.
   of every credential the repository holds. Medium confidence when the call is
   pinned to a SHA, which at least fixes the code that will read them.
 
+- **`rules <one rule>` prints a card rather than a row**: what the rule reads,
+  which weakness it claims, how to silence it here and how to switch it off
+  everywhere, and where the long version lives. A pattern that matches several
+  rules still lists them, and the JSON shape does not change.
+
 - **`--sort path` groups the text report by file**: the path is printed once
   and its findings sit under it. Sorting by path means reading a report rather
   than triaging one, and repeating the path on every line pushes the part that

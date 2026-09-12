@@ -392,6 +392,40 @@ def _matching_rules(pattern: "str | None") -> "list[rules.Rule]":
     ]
 
 
+_CWE_URL = "https://cwe.mitre.org/data/definitions/{number}.html"
+
+
+def format_rule_detail(rule: "rules.Rule") -> str:
+    """Everything the catalogue knows about one rule, as a card.
+
+    Printed when a pattern narrows to a single rule, because at that point the
+    person is not browsing -- they have a finding in front of them and want to
+    know what it means, whether it applies to their repository, and how to make
+    it stop if it is wrong. A one-line table entry answers none of those.
+    """
+    family = rules.FAMILIES[rule.category]
+    lines = [
+        f"{rule.id}  {rule.name}",
+        "",
+        f"  {rule.summary}.",
+        "",
+        f"  Severity   {rule.severity.value} at worst; context can lower it, never raise it",
+        f"  Family     {rule.category} -- {family.reads}",
+    ]
+    if rule.cwe:
+        number = rule.cwe.split("-")[-1]
+        lines.append(f"  Weakness   {rule.cwe}  {_CWE_URL.format(number=number)}")
+    lines.extend(
+        [
+            "",
+            f"  Wrong here      # repo-sentinel: ignore[{rule.id}]",
+            f"  Wrong always    --disable {rule.id}",
+            f"  The long form   docs/RULES.md#{family.anchor}",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def format_rule_catalogue(pattern: "str | None" = None, *, as_json: bool = False) -> str:
     """Print what the scanner checks for, without needing something to find."""
     matched = _matching_rules(pattern)
@@ -418,6 +452,9 @@ def format_rule_catalogue(pattern: "str | None" = None, *, as_json: bool = False
             f"No rule matches {pattern!r}. "
             "Try a family (secrets, kubernetes, terraform), an id, or a word."
         )
+
+    if len(matched) == 1:
+        return format_rule_detail(matched[0])
 
     grouped: "dict[str, list[rules.Rule]]" = {}
     for rule in matched:

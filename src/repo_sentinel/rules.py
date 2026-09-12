@@ -49,6 +49,38 @@ class Rule:
         return _CWE.get(self.id)
 
 
+@dataclasses.dataclass(frozen=True)
+class Family:
+    """One family of rules: what it reads, and where it is written up."""
+
+    reads: str
+    anchor: str
+
+
+#: What each family looks at, and the heading in ``docs/RULES.md`` that
+#: explains why. Both are here rather than in the report because they answer
+#: the first question anyone asks about a rule they have never seen -- "does
+#: this even apply to my repository" -- and the answer should not depend on
+#: which output format asked. A test asserts every category has an entry and
+#: every anchor is a real heading.
+FAMILIES = {
+    "secrets": Family("every text file", "secrets"),
+    "filenames": Family("every path, including files nothing can read", "file-names"),
+    "dependencies": Family("package manifests and lockfiles", "dependencies"),
+    "workflows": Family(".github/workflows/*.yml and action.yml", "github-actions-workflows"),
+    "gitlab": Family(".gitlab-ci.yml and files shaped like one", "gitlab-ci"),
+    "azure": Family("azure-pipelines.yml and files shaped like one", "azure-pipelines"),
+    "circleci": Family(".circleci/config.yml", "circleci"),
+    "jenkins": Family("Jenkinsfile and *.jenkinsfile", "jenkins"),
+    "shell": Family("shell scripts and Makefiles", "shell-scripts-and-makefiles"),
+    "dockerfiles": Family("Dockerfile and *.dockerfile", "dockerfiles"),
+    "compose": Family("YAML with a services map and no apiVersion", "docker-compose"),
+    "terraform": Family("*.tf, read as blocks", "terraform"),
+    "cloudformation": Family("templates with a Resources map, YAML or JSON", "cloudformation"),
+    "kubernetes": Family("YAML carrying apiVersion and kind", "kubernetes"),
+    "ansible": Family("playbooks and task files, recognised by shape", "ansible"),
+}
+
 _CATEGORIES = {"SEC": "secrets", "WF0": "workflows", "DK0": "dockerfiles", "TF0": "terraform", "K8S": "kubernetes", "DC0": "compose", "FN0": "filenames", "GL0": "gitlab", "CF0": "cloudformation", "SC0": "dependencies", "AN0": "ansible", "AZ0": "azure", "CC0": "circleci", "JK0": "jenkins", "SH0": "shell"}
 
 

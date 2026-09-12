@@ -223,6 +223,38 @@ class TestGitHubAnnotations(unittest.TestCase):
         self.assertIn("::notice::3 accepted.", report.format_github([CRITICAL], notes=["3 accepted."]))
 
 
+class TestRuleDetail(unittest.TestCase):
+    """A pattern that narrows to one rule prints the card, not the row."""
+
+    def card(self, pattern="WF011"):
+        return report.format_rule_catalogue(pattern)
+
+    def test_it_says_which_files_the_rule_even_looks_at(self):
+        self.assertIn(".github/workflows", self.card())
+
+    def test_it_says_how_to_silence_the_rule_in_both_scopes(self):
+        card = self.card()
+        self.assertIn("# repo-sentinel: ignore[WF011]", card)
+        self.assertIn("--disable WF011", card)
+
+    def test_it_links_the_weakness_and_the_documentation(self):
+        card = self.card()
+        self.assertIn("cwe.mitre.org/data/definitions/668", card)
+        self.assertIn("docs/RULES.md#github-actions-workflows", card)
+
+    def test_a_rule_with_no_weakness_class_simply_omits_it(self):
+        self.assertNotIn("CWE", self.card("SEC900"))
+
+    def test_a_pattern_matching_several_rules_still_lists_them(self):
+        listing = report.format_rule_catalogue("kubernetes")
+        self.assertIn("K8S001", listing)
+        self.assertNotIn("--disable", listing)
+
+    def test_json_output_is_the_same_shape_for_one_rule_as_for_many(self):
+        payload = json.loads(report.format_rule_catalogue("WF011", as_json=True))
+        self.assertEqual(len(payload["rules"]), 1)
+
+
 class TestCatalogueOutput(unittest.TestCase):
     def test_text_lists_every_rule_under_its_category(self):
         text = report.format_rule_catalogue()
