@@ -168,6 +168,7 @@ RULES: "dict[str, Rule]" = _rules(
     ("WF010", "secret-exported", "Secret written to a job output or environment", Severity.HIGH),
     ("WF011", "secrets-inherited-offsite", "Every secret passed to a workflow in another repository", Severity.HIGH),
     ("WF012", "action-input-interpolated", "Composite action interpolates an input into a shell command", Severity.MEDIUM),
+    ("WF013", "unused-write-permission", "Write access granted to a job that never writes", Severity.MEDIUM),
     ("GL001", "floating-job-image", "Pipeline image tag can point elsewhere tomorrow", Severity.MEDIUM),
     ("GL002", "gitlab-script-injection", "Outsider-supplied variable interpolated into a script", Severity.CRITICAL),
     ("GL003", "gitlab-pipe-to-shell", "Job pipes a download into a shell", Severity.HIGH),
@@ -305,7 +306,7 @@ _claim("CWE-502", "AP004")
 _claim("CWE-916", "AP005")
 _claim("CWE-489", "AP002")
 # Execution with unnecessary privileges.
-_claim("CWE-250", "DK002", "DC001", "DC004", "K8S001", "K8S005", "K8S006", "K8S012")
+_claim("CWE-250", "DK002", "DC001", "DC004", "K8S001", "K8S005", "K8S006", "K8S012", "WF013")
 # Incorrect permission assignment for a critical resource.
 _claim(
     "CWE-732",
