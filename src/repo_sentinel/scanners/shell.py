@@ -21,7 +21,8 @@ import re
 from collections.abc import Iterable, Iterator
 
 from .. import suppression, wellknown
-from ..findings import Confidence, Finding, Severity
+from ..heuristics import looks_like_placeholder
+from ..findings import Confidence, Finding, Severity, redact
 
 _SHELL_SUFFIXES = (".sh", ".bash", ".zsh", ".ksh", ".command", ".mk")
 _MAKEFILE_NAMES = ("makefile", "gnumakefile", "bsdmakefile")
@@ -163,7 +164,69 @@ def _check_permissions(path: str, text: str) -> "Iterator[Finding]":
         )
 
 
-_RULES = (_check_downloads, _check_verification, _check_permissions)
+#: Credentials passed where a command line takes them. Each is the documented
+#: flag for that tool, and each puts the value in two places at once: the file,
+#: and the process table of whatever machine runs it.
+_COMMAND_LINE_CREDENTIALS = (
+    # curl takes user and password together. The password is the half worth
+    # measuring: "-u admin:something" is a name and a secret, and the name is
+    # not the finding.
+    re.compile(r"\bcurl\b[^|;&]*?\s(?:-u|--user)[= ]\s*[^\s'\":]+:(?P<secret>[^\s'\"]+)"),
+    re.compile(r"\bwget\b[^|;&]*?\s--(?:http-)?password=(?P<secret>[^\s'\"]+)"),
+    re.compile(r"\bsshpass\b[^|;&]*?\s-p\s*(?P<secret>[^\s'\"]+)"),
+    re.compile(r"\bmysql(?:dump|admin)?\b[^|;&]*?\s-p(?P<secret>[^\s'\"-][^\s'\"]*)"),
+    re.compile(r"\bPGPASSWORD=(?P<secret>[^\s'\"]+)"),
+)
+
+
+def _check_command_line_credentials(path: str, text: str) -> "Iterator[Finding]":
+    """SH004: a password handed to a command as an argument.
+
+    Two problems in one line. The credential is in the file, which is this
+    tool's usual business, and it is also in the process table of whichever
+    machine runs the script, where every other user on that machine can read
+    it -- which is why each of these tools documents a file or an environment
+    variable to use instead.
+
+    A value that came from somewhere else at run time is not a leak, so
+    anything interpolated is skipped: "$PASSWORD", "${CI_TOKEN}", "$(vault
+    read ...)". What is left is a literal somebody typed.
+    """
+    for number, line in _lines(text):
+        if _is_comment(line):
+            continue
+        for pattern in _COMMAND_LINE_CREDENTIALS:
+            match = pattern.search(line)
+            if match is None:
+                continue
+            secret = match.group("secret")
+            if wellknown.is_interpolated(secret) or looks_like_placeholder(secret):
+                continue
+            yield Finding(
+                rule_id="SH004",
+                severity=Severity.HIGH,
+                title="A command is given a credential on its command line",
+                path=path,
+                line=number,
+                evidence=redact(secret),
+                remediation=(
+                    "Every other user on the machine can read this out of the "
+                    "process table while the command runs, and it is in the "
+                    "file besides. These tools all take the value another way: "
+                    "curl has --netrc and a config file, mysql has a defaults "
+                    "file, and PGPASSWORD has a .pgpass."
+                ),
+                subject=redact(secret),
+            )
+            break
+
+
+_RULES = (
+    _check_downloads,
+    _check_verification,
+    _check_permissions,
+    _check_command_line_credentials,
+)
 
 
 def scan_script(

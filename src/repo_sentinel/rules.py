@@ -192,6 +192,7 @@ RULES: "dict[str, Rule]" = _rules(
     ("SH001", "script-downloads-and-runs", "Script downloads code and runs it in one step", Severity.HIGH),
     ("SH002", "script-skips-verification", "Script disables certificate verification", Severity.MEDIUM),
     ("SH003", "script-world-writable", "Script makes something world-writable", Severity.MEDIUM),
+    ("SH004", "command-line-credential", "Password handed to a command as an argument", Severity.HIGH),
     ("SC001", "plaintext-package-source", "Packages fetched over plain HTTP", Severity.HIGH),
     ("SC002", "install-script-executes-download", "Install-time script downloads code and runs it", Severity.HIGH),
     ("SC003", "unpinned-source-dependency", "Dependency comes from a source that can move", Severity.MEDIUM),
@@ -268,6 +269,7 @@ _claim(
     "FN003",
     "DK004",
     "K8S007",
+    "SH004",
 )
 # Sensitive information in a file that should not hold it.
 _claim("CWE-538", "FN004")

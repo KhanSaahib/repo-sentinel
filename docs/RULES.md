@@ -493,10 +493,19 @@ helper function, or a shared library, is invisible to it.
 | SH001 | Script downloads code and runs it in one step | high |
 | SH002 | Script disables certificate verification | medium |
 | SH003 | Script makes something world-writable | medium |
+| SH004 | Password handed to a command as an argument | high |
 
 Every other family finds `curl \| sh` inside something -- a Dockerfile, a
 pipeline, a package manifest. This one finds it where it usually lives: in the
 script those things point at, which nobody re-reads once it works.
+
+SH004 is two problems in one line. `curl -u admin:hunter2`, `mysql -phunter2`,
+`sshpass -p hunter2`, `PGPASSWORD=hunter2 psql`: the credential is in the file,
+which is this scanner's usual business, and it is also in the process table of
+whichever machine runs the script, where every other user on that machine can
+read it while it runs. Each of these tools documents a file or an environment
+variable to use instead, which is why the flag exists to be found. A value that
+arrives at run time is not a leak, so anything interpolated is skipped.
 
 Files are recognised by extension, by name (`Makefile`), or by shebang, which
 matters because a setup script with no extension is still a shell script and is

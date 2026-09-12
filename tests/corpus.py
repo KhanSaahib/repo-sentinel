@@ -391,6 +391,7 @@ JENKINSFILE = """pipeline {
 SHELL_SCRIPT = """#!/usr/bin/env bash
 set -euo pipefail
 
+curl -u deploy:Qq7Zx9Lm2Pv4Rt8W https://api.example.invalid/release
 curl -sSL https://get.example.invalid/install.sh | sudo bash
 wget --no-check-certificate https://example.invalid/pkg.tar.gz
 chmod -R 777 /opt/app

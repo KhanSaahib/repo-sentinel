@@ -191,6 +191,11 @@ last of them is the first that reads code rather than configuration.
   `git` dependency carries a `rev` or a `tag`; without one it installs whatever
   the default branch holds at build time. No TOML parser behind it -- `tomllib`
   arrived in 3.11 and this runs on 3.9.
+- **SH004**: a password handed to a command as an argument. `curl -u
+  admin:hunter2`, `mysql -phunter2`, `sshpass -p`, `PGPASSWORD=`. Two problems
+  in one line: the credential is in the file, and it is in the process table of
+  whichever machine runs the script, where every other user can read it. A value
+  that arrives at run time is not a leak, so anything interpolated is skipped.
 - **A systemd unit and a crontab are value-position formats.** A unit is an
   INI file that runs as root, and the place a credential lands in one is
   `Environment=DB_PASSWORD=…` -- an assignment wrapped in an assignment, where
