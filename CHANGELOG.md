@@ -19,6 +19,11 @@ changes.
   obeyed, in all four of its scopes. A marker lives in somebody else's file,
   and a release that turned every one of them back on would be a screen of
   findings arriving with no explanation attached.
+- **The pre-commit hook id is now `bluerayscan`**, and this one has no alias.
+  A config naming the old id fails with "hook id not found", which says what
+  happened and what to type instead; pinning `rev: v0.3.0`, which is what
+  pre-commit asks for, is unaffected either way. The fallbacks above exist
+  because those failures are silent or bulk. This one is neither.
 
 ## 0.3.0
 
