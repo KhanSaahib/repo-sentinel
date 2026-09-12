@@ -58,9 +58,12 @@ better outcome than a feature nobody wanted.
 
 - [x] Dockerfiles, Compose, Terraform, CloudFormation, Kubernetes, Ansible,
       dependency manifests, shell scripts and Makefiles
-- [ ] Helm `values.yaml` read against its chart's templates, so a value that
-      lands in a `securityContext` is judged as one
-- [ ] Kustomize overlays, where the patch and the base disagree
+- [x] Helm `values.yaml` -- read where a `Chart.yaml` sits beside it, for the
+      settings that carry their meaning wherever they are written. Reading it
+      *against the templates* is still open, and would answer the question
+      this cannot: whether the chart passes the value through at all
+- [x] Kustomize overlays: the manifests a kustomization patches in are read,
+      with the line numbers shifted so a finding points at the patched line
 - [x] ~~systemd units and cron files as a family~~ -- they did not need one.
       A unit is an INI file and a crontab is assignments, so both became
       value-position formats for the rules that already read those

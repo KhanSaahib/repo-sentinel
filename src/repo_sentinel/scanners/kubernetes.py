@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import dataclasses
 import posixpath
 import re
 from collections.abc import Callable, Iterable, Iterator
@@ -850,6 +851,67 @@ def _values_security_context(path: str, context: "yamlish.Node") -> "Iterator[Fi
         )
 
 
+#: Where a kustomization keeps a manifest as text: "patch: |" and the older
+#: "patchesStrategicMerge: |". The block that follows is a manifest fragment,
+#: and the file's own parse sees a string where a document is -- so this reads
+#: the raw lines, the way the workflow scanner reads a run: block.
+_PATCH_OPENS = re.compile(r"^(?P<indent>\s*)(?:-\s+)?(?:patch|patchesStrategicMerge):\s*[|>][+-]?\d*\s*$")
+
+
+def is_kustomization_path(path: str) -> bool:
+    """True for the file that names an overlay, whatever its extension."""
+    return posixpath.basename(path.replace("\\", "/")).lower().startswith("kustomization.")
+
+
+def _inline_patches(text: str) -> "Iterator[tuple[int, str]]":
+    """Every manifest a kustomization carries inline, with the line it starts on."""
+    lines = text.splitlines()
+    index = 0
+    while index < len(lines):
+        opening = _PATCH_OPENS.match(lines[index])
+        if opening is None:
+            index += 1
+            continue
+        indent = len(opening.group("indent"))
+        start = index + 1
+        index = start
+        while index < len(lines) and (
+            not lines[index].strip()
+            or len(lines[index]) - len(lines[index].lstrip()) > indent
+        ):
+            index += 1
+        block = lines[start:index]
+        if not block:
+            continue
+        margin = min(
+            (len(line) - len(line.lstrip()) for line in block if line.strip()), default=0
+        )
+        yield start + 1, "\n".join(line[margin:] for line in block)
+
+
+def scan_kustomization(
+    path: str, text: str, marks: "suppression.Suppressions | None" = None
+) -> "list[Finding]":
+    """Read the manifests a kustomization patches in, which to it are strings.
+
+    An overlay exists to change what the base said, and what it changes is
+    often the security context -- an overlay is where the exception for
+    production goes. The patch is a block scalar, so the file's own parse sees
+    a string; this hands the string back to the same rules and shifts the line
+    numbers, so a finding points at the patch rather than at the top of the
+    file.
+    """
+    marks = suppression.parse(text) if marks is None else marks
+    if marks.whole_file or "patch" not in text:
+        return []
+
+    findings: "list[Finding]" = []
+    for offset, patch in _inline_patches(text):
+        for finding in scan_manifest(path, patch, suppression.NONE):
+            findings.append(dataclasses.replace(finding, line=finding.line + offset - 1))
+    return marks.filter_findings(findings)
+
+
 def scan_files(
     files: "Iterable[tuple[str, str]]", *, honour_markers: bool = True
 ) -> "list[Finding]":
@@ -868,4 +930,6 @@ def scan_files(
             findings.extend(scan_manifest(path, text, markers))
         if is_values_path(path) and posixpath.dirname(path.replace("\\", "/")) in charts:
             findings.extend(scan_values(path, text, markers))
+        if is_kustomization_path(path):
+            findings.extend(scan_kustomization(path, text, markers))
     return findings
