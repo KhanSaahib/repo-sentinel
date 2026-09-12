@@ -13,13 +13,16 @@ unhandled index or an infinite loop, and where "degrades to silence" has to be
 true rather than intended.
 """
 
+import json
 import random
 import re
 import string
 import time
 import unittest
+import xml.etree.ElementTree as ElementTree
 from pathlib import Path
 
+from repo_sentinel import report
 from repo_sentinel import hcl, heuristics, jsonish, yamlish
 from repo_sentinel.findings import redact
 from repo_sentinel.scanners import secrets
@@ -197,6 +200,71 @@ class TestFuzz(unittest.TestCase):
             jsonish.parse(document)
             for _name, scan in SCANNERS:
                 scan("a.txt", document)
+
+
+class TestReportFormatsSurviveAnything(unittest.TestCase):
+    """Every format, over findings whose text came out of a real file.
+
+    A title or a piece of evidence is a fragment of somebody's repository, so
+    it can hold a control byte, a line separator, a lone surrogate's worth of
+    strangeness, or a character that means something structural in whichever
+    format is being written. A report that will not parse says nothing about
+    the repository at all, which is worse than saying too much.
+    """
+
+    ALPHABET = string.printable + "éü中\u200b\u2028\u2029|<>&\"'\x00\x01\x0b\x1f"
+
+    def findings(self, seed, count=120):
+        from repo_sentinel.findings import Confidence, Finding, Severity
+
+        rng = random.Random(seed)
+        severities = list(Severity)
+        confidences = list(Confidence)
+        for index in range(count):
+            def text(limit=60):
+                return "".join(rng.choice(self.ALPHABET) for _ in range(rng.randint(0, limit)))
+
+            yield Finding(
+                rule_id=rng.choice(("SEC100", "WF001", "K8S001", "AP001", "ZZ999")),
+                severity=rng.choice(severities),
+                title=text() or "untitled",
+                path=text(30) or "a.py",
+                line=rng.randint(0, 10_000),
+                evidence=text(),
+                remediation=text(120),
+                confidence=rng.choice(confidences),
+                occurrences=rng.choice((1, 1, 1, 2, 758)),
+            )
+
+    def test_json_and_sarif_stay_loadable(self):
+        for finding in self.findings(seed=4242):
+            with self.subTest(finding=finding.rule_id):
+                json.loads(report.format_json([finding], version="0"))
+                json.loads(report.format_sarif([finding], version="0"))
+
+    def test_junit_stays_parseable(self):
+        for finding in self.findings(seed=4243):
+            with self.subTest(finding=finding.rule_id):
+                ElementTree.fromstring(report.format_junit([finding]))
+
+    def test_a_markdown_table_keeps_one_row_per_finding(self):
+        batch = list(self.findings(seed=4244, count=40))
+        rows = [
+            line
+            for line in report.format_markdown(batch).splitlines()
+            if line.startswith("| ")
+        ]
+        # The header, its separator, and one row each.
+        self.assertEqual(len(rows), len(batch) + 2)
+
+    def test_an_annotation_stays_one_line_per_finding(self):
+        batch = list(self.findings(seed=4245, count=40))
+        self.assertEqual(len(report.format_github(batch).splitlines()), len(batch))
+
+    def test_the_text_report_never_prints_the_summary_twice(self):
+        batch = list(self.findings(seed=4246, count=20))
+        text = report.format_text(batch, colour=False)
+        self.assertEqual(text.count("finding(s):"), 1)
 
 
 class TestRedactionProperties(unittest.TestCase):

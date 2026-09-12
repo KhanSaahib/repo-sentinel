@@ -277,6 +277,10 @@ last of them is the first that reads code rather than configuration.
   one, and AZ002 said otherwise -- so the rule was loudest in exactly the place
   it was most wrong, since "Azure Pipelines" is what every tutorial writes. The
   legacy `Hosted *` names and a `vmImage:` beside the pool name are hosted too.
+- **A workflow annotation could be split in two by a vertical tab** or any of
+  the other characters something treats as a line break, leaving a corrupt
+  command behind it. Found by a property test that now runs every format over
+  findings built from the characters a real file can contain.
 - **A control character in a file could make the JUnit report unparseable**,
   and a lone carriage return could end a Markdown table row early. Both came
   from the same place -- evidence is a piece of a file, and a file with a stray

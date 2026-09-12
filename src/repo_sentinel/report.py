@@ -251,8 +251,17 @@ _ANNOTATION_LEVELS = {
 _ANNOTATION_ESCAPES = (("%", "%25"), ("\r", "%0D"), ("\n", "%0A"), (":", "%3A"), (",", "%2C"))
 
 
+#: The other characters that end a line. GitHub's parser reads \r and \n, which
+#: is why those two have escapes of their own; everything here is something a
+#: different reader treats as a break -- a vertical tab, a form feed, the
+#: Unicode line separator -- and a finding that silently becomes two lines of
+#: workflow commands is a finding with a corrupt one after it.
+_OTHER_BREAKS = re.compile(r"[\v\f\x1c-\x1e\x85\u2028\u2029]")
+
+
 def _annotation_escape(text: str, *, in_property: bool) -> str:
     """Escape a value for a workflow command, which is a line-oriented format."""
+    text = _OTHER_BREAKS.sub(" ", text)
     for character, replacement in _ANNOTATION_ESCAPES:
         if character in (":", ",") and not in_property:
             continue
