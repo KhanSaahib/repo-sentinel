@@ -133,6 +133,11 @@ class Finding:
     #: :func:`bluerayscan.engine.collapse` sets this; the finding itself
     #: points at the first occurrence.
     occurrences: int = 1
+    #: Where this came from, when it came from somewhere other than the file
+    #: as it stands: the commit that introduced it, for a scan of history.
+    #: Empty for a scan of a working tree, which is what "the file says so"
+    #: means and needs no attribution.
+    origin: str = ""
 
     def to_dict(self) -> dict:
         data = dataclasses.asdict(self)

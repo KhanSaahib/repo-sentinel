@@ -8,6 +8,16 @@ changes.
 
 ### Added
 
+- **`bluerayscan history`**, which reads a `git log -p` stream and reports the
+  credentials its commits introduced, each named with the commit that
+  introduced it and the day it became public. A value added, reverted and
+  added again is reported once, against the earliest commit that carried it.
+  This tool still does not run git: the caller does, the same bargain
+  `--paths-from` already makes. Only the credential rules run -- a container
+  that ran as root in 2021 and does not today is fixed, while a credential
+  that was ever committed is committed until somebody rotates it. Findings
+  carry an `origin` in the JSON output and an "added in" line everywhere else.
+
 - **A chart's values are read against its own templates.** The Kubernetes
   family has always read `values.yaml` beside a `Chart.yaml` for the six
   settings that mean the same thing wherever they are written, and always at

@@ -18,7 +18,9 @@ Please do not test against systems you do not own.
 ## Threat model
 
 bluerayscan reads files and writes a report. It makes no network calls, runs
-no code it finds, and has no runtime dependencies. The realistic risks are:
+no code it finds, starts no subprocesses, and has no runtime dependencies.
+`bluerayscan history` reads a diff on standard input rather than running git,
+for that reason. The realistic risks are:
 
 - **Leaking through the report.** Findings are pasted into CI logs and issues.
   Every matched value is redacted to its first and last four characters before

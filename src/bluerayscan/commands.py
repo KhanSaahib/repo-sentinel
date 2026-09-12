@@ -13,12 +13,13 @@ import argparse
 import json
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 
 from . import (
     __version__,
     baseline as baseline_module,
     config as config_module,
+    history,
     report,
     rules as rules_module,
 )
@@ -174,6 +175,77 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
     if fail_on is not None and any(finding.severity >= fail_on for finding in findings):
         return EXIT_FINDINGS
     return EXIT_OK
+
+
+def history_command(args: argparse.Namespace) -> int:
+    """Report the credentials a diff stream's commits introduced.
+
+    The stream is read line by line rather than swallowed whole: a repository's
+    history is a great deal larger than its working tree, and ``git log -p``
+    over a decade of it is not something to hold in memory to answer a question
+    about a few lines of it.
+    """
+    try:
+        min_severity = Severity.parse(args.min_severity)
+        min_confidence = Confidence.parse(args.min_confidence)
+        fail_on = _fail_threshold(args.fail_on)
+    except ValueError as error:
+        print(f"bluerayscan: {error}", file=sys.stderr)
+        return EXIT_ERROR
+
+    try:
+        handle, opened = _history_stream(args.file)
+    except OSError as error:
+        print(f"bluerayscan: could not read {args.file!r}: {error}", file=sys.stderr)
+        return EXIT_ERROR
+
+    try:
+        result = history.scan_stream(
+            handle, allow_examples=not args.no_example_allowlist
+        )
+    finally:
+        if opened:
+            handle.close()
+
+    findings = [
+        finding
+        for finding in result.findings
+        if finding.severity >= min_severity and finding.confidence >= min_confidence
+    ]
+
+    notes = []
+    if args.format in ("text", "markdown", "github", "junit"):
+        notes.append(result.summary)
+        if result.commit_count == 0:
+            # Nothing read looks exactly like nothing found, and this is the
+            # command most likely to be handed an empty pipe by accident.
+            notes.append(
+                "No commits in the input. `git log -p` is what this reads; "
+                "`git log` alone has no diffs in it."
+            )
+        elif findings:
+            notes.append(
+                "A credential in history is on every clone, fork and CI cache "
+                "made since. Deleting the file does not take it back: rotate it."
+            )
+
+    facts = {
+        "commits": result.commit_count,
+        "file_revisions": result.file_count,
+    }
+    exit_code = _emit(_render(args, findings, notes, 0.0, facts), args.output)
+    if exit_code != EXIT_OK:
+        return exit_code
+    if fail_on is not None and any(finding.severity >= fail_on for finding in findings):
+        return EXIT_FINDINGS
+    return EXIT_OK
+
+
+def _history_stream(name: str) -> "tuple[Iterable[str], bool]":
+    """The lines to read, and whether this opened a file that must be closed."""
+    if name == "-":
+        return sys.stdin, False
+    return open(name, encoding="utf-8", errors="replace"), True
 
 
 def _scan_facts(result) -> "dict":
