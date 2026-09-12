@@ -209,6 +209,11 @@ last of them is the first that reads code rather than configuration.
   once per job. The fix is a single top-level block however many jobs there
   are; a file where some jobs are explicit and others are not is still reported
   per job, because there the fix genuinely is per job.
+- **A third gate in front of the entropy rules**: both need a name carrying
+  one of a dozen credential words, and looking for the word first is far
+  cheaper than running a pattern with a greedy class in front of its
+  alternation. authentik 17.6s → 15.2s, with the corpus reporting identical
+  findings.
 - **The same credential repeated in one file is one finding**, counted rather
   than listed: the report says "and on 757 more lines", the JSON carries an
   `occurrences` field, and the finding points at the first one. One key is one

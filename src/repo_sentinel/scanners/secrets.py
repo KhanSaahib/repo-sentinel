@@ -98,6 +98,16 @@ def _without_continuation(value: str) -> str:
     return trimmed[:-1].rstrip() if trimmed.endswith("\\") else trimmed
 
 
+#: The words both entropy rules ultimately require, as a pattern with nothing
+#: in it to backtrack over. Kept beside the assignment patterns so that a name
+#: added to one is added here: a word missing from this list disables the rule
+#: for every line carrying it, silently.
+_CREDENTIAL_WORD = re.compile(
+    r"passwd|password|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key"
+    r"|credential|auth|bearer",
+    re.IGNORECASE,
+)
+
 #: File formats that write credentials bare, without quotes.
 _VALUE_POSITION_NAMES = frozenset(
     {".env", ".npmrc", ".pypirc", ".netrc", "_netrc", ".dockercfg", ".pgpass", ".my.cnf"}
@@ -195,6 +205,14 @@ def _scan_assignments(
     # Both rules need an assignment, and the quoted one needs a quote. Checking
     # for the characters first skips the pattern entirely on most lines.
     if "=" not in line and ":" not in line:
+        return
+    # Both also need a name that promises a credential. That word is cheap to
+    # look for -- a flat alternation of literals, no backtracking -- and the
+    # assignment patterns are not: each carries a greedy character class in
+    # front of its alternation, so the engine retries at every position on a
+    # line that was never going to match. This gate is the difference on a
+    # source tree, where nine lines in ten mention none of these words.
+    if _CREDENTIAL_WORD.search(line) is None:
         return
     candidates: list[tuple[str, str, tuple[int, int], str, Severity]] = []
 

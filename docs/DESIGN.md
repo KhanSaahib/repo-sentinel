@@ -144,6 +144,14 @@ of lines do not. The second is per rule: does the line contain any of the
 literals that rule's shape must include -- `AKIA`, `ghp_`, `xoxb-`? Nine of the
 remaining lines in ten do not.
 
+The entropy rules have a gate of their own, and it is the same idea a third
+time: both ultimately need a name carrying one of a dozen words, so a flat
+alternation of those words runs first. It is cheap because there is nothing in
+it to backtrack over, and the patterns it stands in front of are the opposite
+-- each has a greedy character class before its alternation, so the engine
+retries at every position on a line that was never going to match. Nine lines
+in ten of a source tree mention none of the words.
+
 Both are correctness risks as much as speed wins, because a line a gate rejects
 is never looked at again, and a hint absent from what a pattern matches
 disables that rule silently. The corpus test is what makes them safe: every

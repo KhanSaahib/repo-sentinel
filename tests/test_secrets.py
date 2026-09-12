@@ -294,6 +294,22 @@ class TestValuePositions(unittest.TestCase):
     def test_ignores_an_interpolated_reference(self):
         self.assertEqual(secrets.scan_text(".env", "API_TOKEN=${API_TOKEN}"), [])
 
+    def test_a_line_with_no_credential_word_is_not_examined(self):
+        # The gate in front of the assignment patterns. A line that mentions
+        # none of the words the rules require cannot produce a finding, and
+        # this is what makes a source tree finish.
+        text = 'greeting = "Xk92mQp7Lz4TvB8nRw1Y"\n'
+        self.assertEqual(secrets.scan_text("app.py", text), [])
+
+    def test_the_gate_lets_through_every_word_the_rules_need(self):
+        for name in (
+            "passwd", "password", "secret", "token", "api_key", "apikey",
+            "access_key", "private_key", "credential", "auth_token", "bearer",
+        ):
+            with self.subTest(name=name):
+                text = f'{name} = "Xk92mQp7Lz4TvB8nRw1Y"\n'
+                self.assertIn("SEC100", rule_ids(secrets.scan_text("app.py", text)))
+
     def test_an_escaped_quote_does_not_end_the_string(self):
         # Without this the sentence is cut at the backslash and the half that
         # survives is measured as a credential.
