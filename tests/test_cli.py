@@ -2,6 +2,7 @@ import contextlib
 import io
 import json
 import os
+import sys
 import tempfile
 import unittest
 
@@ -132,6 +133,24 @@ class TestSeverityParsing(unittest.TestCase):
     def test_rejects_nonsense(self):
         with self.assertRaises(ValueError):
             Severity.parse("catastrophic")
+
+
+class TestModuleEntryPoint(unittest.TestCase):
+    """``python -m repo_sentinel`` is how the README says to run it."""
+
+    def test_the_module_runs_the_cli_and_exits_with_its_code(self):
+        import runpy
+
+        argv = sys.argv
+        sys.argv = ["repo-sentinel", "rules", "SEC001"]
+        stdout = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(stdout), self.assertRaises(SystemExit) as caught:
+                runpy.run_module("repo_sentinel", run_name="__main__")
+        finally:
+            sys.argv = argv
+        self.assertEqual(caught.exception.code, 0)
+        self.assertIn("SEC001", stdout.getvalue())
 
 
 class TestFailThreshold(unittest.TestCase):
