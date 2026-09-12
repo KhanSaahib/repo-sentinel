@@ -370,6 +370,9 @@ last of them is the first that reads code rather than configuration.
   key, and `\n${'FAKEKEYMATERIAL'}\n` is not one -- which is what a test of a
   redactor and a document about the format both look like. n8n writes that
   forty-three times. A header with the body on the lines below is untouched.
+- **A square bracket is a code fragment too.** Laravel builds a command line
+  out of a configuration array -- `'--password='.$connection['password']` --
+  and the value the entropy rule saw was the middle of that expression.
 - **Four more false-positive classes from n8n**: a template binding
   (`!areAllCredentialsSet`), a nullish-coalescing expression, a string being
   concatenated, and a sentinel constant beginning with a double underscore.

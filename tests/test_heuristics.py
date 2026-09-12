@@ -131,6 +131,9 @@ class TestLooksGenerated(unittest.TestCase):
             "!areAllCredentialsSet",
             "item.credentials ?? []",
             "__n8n_BLANK_VALUE_e5362baf-c777-4d57",
+            # From the Laravel framework: PHP building a command line out of
+            # a configuration array.
+            "--password='.$connection[",
             "shared_credentials_2",
             # From Discourse: a translated interface string, a Ruby constant
             # path, a Redis key prefix, a hyphenated label, a modular crypt
