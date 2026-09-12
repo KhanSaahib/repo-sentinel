@@ -248,6 +248,14 @@ import package remains `bluerayscan`.
   in one line: the credential is in the file, and it is in the process table of
   whichever machine runs the script, where every other user can read it. A value
   that arrives at run time is not a leak, so anything interpolated is skipped.
+- **A value written on the lines beneath its name is read** (SEC101). YAML
+  carries anything long that way, and neither line said anything alone: the
+  name was on one and the value on the next. The pieces are rejoined with
+  nothing between them, and the shape is narrow -- every line has to be a piece
+  of one value, no spaces, no colon, no `=` except base64's padding -- because
+  the loose version reported every CRD property, every translated sentence
+  under `api_key`, and the `NAME=vault/path` pairs a release workflow hands to
+  an action.
 - **A systemd unit and a crontab are value-position formats.** A unit is an
   INI file that runs as root, and the place a credential lands in one is
   `Environment=DB_PASSWORD=…` -- an assignment wrapped in an assignment, where
