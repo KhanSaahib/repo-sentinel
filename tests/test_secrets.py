@@ -53,6 +53,32 @@ class TestProviderPatterns(unittest.TestCase):
         self.assertEqual(secrets.scan_text("a.py", text)[0].line, 3)
 
 
+class TestPrivateKeyBlocks(unittest.TestCase):
+    """SEC004: a header is only a key when there is a key under it."""
+
+    BODY = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj" * 2
+
+    def scan(self, line):
+        return rule_ids(secrets.scan_text("a.ts", line + "\n"))
+
+    def test_a_header_with_the_body_below_it_is_a_key(self):
+        self.assertIn("SEC004", self.scan("-----BEGIN PRIVATE KEY-----"))
+
+    def test_a_one_line_block_with_real_material_is_a_key(self):
+        line = f'key = "-----BEGIN PRIVATE KEY-----{self.BODY}-----END PRIVATE KEY-----"'
+        self.assertIn("SEC004", self.scan(line))
+
+    def test_a_one_line_block_with_a_placeholder_in_it_is_not(self):
+        # What a test of a redactor looks like, and what a document explaining
+        # the format looks like. n8n writes this forty-three times.
+        line = "const pem = `-----BEGIN PRIVATE KEY-----\\n${FAKE}\\n-----END PRIVATE KEY-----`"
+        self.assertNotIn("SEC004", self.scan(line))
+
+    def test_a_block_built_by_concatenation_is_not_a_key_either(self):
+        line = 'header + "-----BEGIN PRIVATE KEY-----" + key + "-----END PRIVATE KEY-----"'
+        self.assertNotIn("SEC004", self.scan(line))
+
+
 class TestEntropyAssignments(unittest.TestCase):
     def test_flags_high_entropy_password(self):
         findings = secrets.scan_text("settings.py", 'DB_PASSWORD = "Xk92mQp7Lz4TvB8nRw1Y"')

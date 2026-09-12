@@ -272,6 +272,11 @@ last of them is the first that reads code rather than configuration.
   `tokenPattern` is a regular expression -- none of them holds the thing
   itself, and n8n writes the first of those seven hundred times. The quoted
   rule now asks the same question the unquoted one always did.
+- **A PEM header with no key under it is no longer a private key.** When the
+  `-----END-----` marker sits on the same line, what is between them is the
+  key, and `\n${'FAKEKEYMATERIAL'}\n` is not one -- which is what a test of a
+  redactor and a document about the format both look like. n8n writes that
+  forty-three times. A header with the body on the lines below is untouched.
 - **Four more false-positive classes from n8n**: a template binding
   (`!areAllCredentialsSet`), a nullish-coalescing expression, a string being
   concatenated, and a sentinel constant beginning with a double underscore.

@@ -83,6 +83,13 @@ a payment token (SEC034) as what it can move, and a Terraform Cloud token
 the rest and say so through their confidence: SEC014 is a two-letter prefix in
 front of 32 hex characters, and SEC020 is any `scheme://user:password@host`.
 
+SEC004 asks one further question, because a PEM header is quoted far more
+often than it is committed: when the `-----END-----` marker is on the *same*
+line, the thing between the two is the key, and a dozen characters of
+placeholder is not one. A header with the body on the lines below it is the
+ordinary case and is always reported -- the rule reads one line at a time, so
+"cannot see the body" has to mean "assume it is real".
+
 SEC021 and SEC022 are the two rules a line-at-a-time scanner cannot express.
 SEC021 reports a Google service account key file -- `"type": "service_account"`
 plus a private key field, neither of which means anything alone and no single

@@ -71,6 +71,31 @@ def _url_credential_is_noise(match: "re.Match[str]") -> bool:
     return looks_like_placeholder(match.group(0))
 
 
+#: The other end of a PEM block, when the whole thing is written on one line.
+_PEM_END = re.compile(r"-----END (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----")
+#: How much base64 a key of any kind carries. The shortest real private key --
+#: an Ed25519 one in OpenSSH format -- is several hundred characters; 64 is far
+#: below anything genuine and far above "\n${'FAKEKEYMATERIAL'}\n".
+_PEM_MINIMUM = 64
+
+
+def _pem_block_is_empty(match: "re.Match[str]") -> bool:
+    """Filter for SEC004: a header and a footer with no key between them.
+
+    A test that checks its redactor, or a document explaining what a key looks
+    like, writes both markers on one line with a placeholder in the middle.
+    n8n does it forty-three times. A header with the body on the lines below is
+    the ordinary case and is never rejected here: this rule reads one line at a
+    time, so "cannot see the body" has to mean "assume it is real".
+    """
+    rest = match.string[match.end():]
+    end = _PEM_END.search(rest)
+    if end is None:
+        return False
+    material = re.sub(r"[^A-Za-z0-9+/=]", "", rest[: end.start()])
+    return len(material) < _PEM_MINIMUM
+
+
 RULES: tuple[ProviderRule, ...] = (
     ProviderRule(
         "SEC001",
@@ -103,6 +128,7 @@ RULES: tuple[ProviderRule, ...] = (
         re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----"),
         "Treat the key as compromised: generate a new pair and rotate every authorized_keys entry.",
         hints=("PRIVATE KEY",),
+        reject=_pem_block_is_empty,
     ),
     ProviderRule(
         "SEC005",
