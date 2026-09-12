@@ -522,6 +522,14 @@ class TestKustomizations(unittest.TestCase):
         )
         self.assertEqual(self.scan_overlay(text), [])
 
+    def test_a_patch_block_with_nothing_in_it(self):
+        # "patch: |" at the end of a file, or with nothing indented under it.
+        text = (
+            "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\n"
+            "patches:\n  - patch: |\n"
+        )
+        self.assertEqual(self.scan_overlay(text), [])
+
     def test_a_file_that_is_not_a_kustomization_is_not_read_as_one(self):
         self.assertFalse(kubernetes.is_kustomization_path("deploy/app.yaml"))
         self.assertTrue(kubernetes.is_kustomization_path("overlays/prod/kustomization.yml"))

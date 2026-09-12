@@ -252,7 +252,10 @@ it is offline once committed, which is why it is not low: unlimited guesses at
 one master password, with every credential its owner has behind it.
 
 Files under `fixtures/` or `testdata/` are reported at low confidence rather
-than not at all. And `.example`, `.sample`, `.template` and `.dist` suffixes are
+than not at all. The same is true of every other family: a manifest under
+`testdata/` exists to be diffed or parsed rather than applied, and Argo CD has
+four hundred of them. Weakened, not dropped -- an end-to-end suite does deploy
+what is in its fixtures. And `.example`, `.sample`, `.template` and `.dist` suffixes are
 skipped everywhere: a repository documenting the shape of its `.env` is doing
 the right thing.
 

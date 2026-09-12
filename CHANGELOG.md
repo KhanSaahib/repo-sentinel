@@ -152,6 +152,12 @@ last of them is the first that reads code rather than configuration.
 - A **YAML subset reader** and an **HCL block reader**, both standard library
   only, both explicit about what they do not parse.
 
+- **A config file in a fixture tree drops a step too.** A manifest under
+  `testdata/` exists to be diffed or parsed rather than applied, and Argo CD
+  has four hundred of them: 497 findings at `--min-confidence medium` became
+  210, and the ones that remain are its own certificates and its Go code. The
+  application-code family's own copy of this arithmetic is gone, since the
+  engine now does it for every format scanner.
 - **A config file in a documentation tree drops a step of confidence.** The
   secrets scanner already weighed prose this way; the config families now do
   too, for the reason that a pipeline under `docs/` is a snippet in a tutorial
@@ -280,6 +286,10 @@ last of them is the first that reads code rather than configuration.
   every CI has its own word for that -- continue-on-error, allow_failure,
   continueOnError, catchError. Saying it in the command means the gate and the
   report differ by one readable flag. A usage error still exits 2.
+- **`--quiet` says what the findings are, not only how many.** The three
+  loudest rules come with the summary line, because a CI log is read by
+  somebody deciding whether to look further, and a hundred findings that are
+  all one rule is a decision to make once. It is the same block `init` prints.
 - **`init` says what the findings *are***, not only how many: the three rules
   doing most of the talking, with their summaries and a pointer at
   `repo-sentinel rules <id>`. A hundred findings that are all one rule is a
@@ -370,6 +380,9 @@ last of them is the first that reads code rather than configuration.
   key, and `\n${'FAKEKEYMATERIAL'}\n` is not one -- which is what a test of a
   redactor and a document about the format both look like. n8n writes that
   forty-three times. A header with the body on the lines below is untouched.
+- **A square bracket is a code fragment too.** Laravel builds a command line
+  out of a configuration array -- `'--password='.$connection['password']` --
+  and the value the entropy rule saw was the middle of that expression.
 - **Four more false-positive classes from n8n**: a template binding
   (`!areAllCredentialsSet`), a nullish-coalescing expression, a string being
   concatenated, and a sentinel constant beginning with a double underscore.
@@ -417,6 +430,10 @@ last of them is the first that reads code rather than configuration.
 - **A path that does not exist scanned clean.** `repo-sentinel scan tests/fixtues`
   walked nothing, found nothing and said "no findings" -- the one answer this
   tool must never give for a tree it did not read. It is an error now.
+- **The baseline is named the way findings are.** A config resolves it against
+  the config's own directory, so the path arrived absolute and sat in a
+  sentence otherwise full of repository-relative ones. A baseline kept outside
+  the tree still shows its full path, because there is nothing else to call it.
 - **An unreadable file is named the way the report names everything else.** A
   dangling symlink -- the common case, and kubernetes-goat has one -- was
   reported by absolute path, in a sentence otherwise full of relative ones.

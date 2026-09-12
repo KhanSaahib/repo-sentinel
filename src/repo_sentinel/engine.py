@@ -144,24 +144,26 @@ def scan(
 
 
 def _weigh_by_context(findings: "list[Finding]") -> "list[Finding]":
-    """Drop a step of confidence for a config file that documents rather than runs.
+    """Drop a step of confidence for a file that illustrates rather than runs.
 
-    A pipeline under ``docs/`` is a snippet in a tutorial: nothing schedules it,
-    nothing holds its secrets, and the thing it illustrates is usually the
-    simplest form rather than the safest one. Measured on Dagger, whose
-    documentation ships one Azure and one GitLab example per released version:
-    the same two files were reported thirty times, none of them deployed
-    anywhere.
+    Two kinds of file qualify, for the same reason. A pipeline under ``docs/``
+    is a snippet in a tutorial: nothing schedules it, nothing holds its
+    secrets, and what it illustrates is usually the simplest form rather than
+    the safest one -- measured on Dagger, whose documentation ships one Azure
+    and one GitLab example per released version, the same two files were
+    reported thirty times. A manifest under ``testdata/`` is a fixture: it
+    exists to be diffed or parsed, and Argo CD has four hundred of them.
 
-    Weakened, not dropped. Plenty of repositories ship the manifest they
-    actually apply inside their documentation tree, so the finding stays and
-    ``--min-confidence`` decides. The secrets scanner does the same arithmetic
-    for the same reason; it does it itself because it also weighs fixture
-    trees, where a config rule has nothing to say.
+    Weakened, not dropped, in both cases. Plenty of repositories ship the
+    manifest they actually apply inside their documentation tree, and an
+    end-to-end suite deploys what is in its fixtures. The secrets scanner
+    does the same arithmetic; it does its own because it weighs the two cases
+    differently -- a documented token shape is not worth less in a fixture.
     """
     return [
         dataclasses.replace(finding, confidence=finding.confidence.weaker)
-        if finding.confidence > Confidence.LOW and wellknown.is_prose_path(finding.path)
+        if finding.confidence > Confidence.LOW
+        and (wellknown.is_prose_path(finding.path) or wellknown.is_test_path(finding.path))
         else finding
         for finding in findings
     ]

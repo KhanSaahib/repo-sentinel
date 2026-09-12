@@ -146,7 +146,10 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
             return EXIT_ERROR
         findings, accepted, stale = recorded.partition(findings)
         if accepted:
-            notes.append(f"{len(accepted)} finding(s) accepted by {args.baseline}.")
+            notes.append(
+                f"{len(accepted)} finding(s) accepted by "
+                f"{_as_written(args.baseline, args.path)}."
+            )
         if stale:
             notes.append(
                 f"{len(stale)} baseline entr{'y' if len(stale) == 1 else 'ies'} "
@@ -171,37 +174,6 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
     if fail_on is not None and any(finding.severity >= fail_on for finding in findings):
         return EXIT_FINDINGS
     return EXIT_OK
-
-
-#: How many rules to name when introducing a repository to itself. Three is
-#: enough to say what shape the noise is -- "it is all unpinned actions" is a
-#: different morning from "it is four different things" -- and short enough
-#: that the setup output stays readable.
-_LOUDEST = 3
-
-
-def _loudest_rules(findings: "Sequence[Finding]") -> "list[str]":
-    """The rules doing most of the talking, for someone meeting this repository.
-
-    A count and a severity say how much there is; this says what it *is*. A
-    hundred findings that are all one rule is a decision to make once, and the
-    baseline just recorded is mostly that rule.
-    """
-    if not findings:
-        return []
-    counts: "dict[str, int]" = {}
-    for finding in findings:
-        counts[finding.rule_id] = counts.get(finding.rule_id, 0) + 1
-    ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:_LOUDEST]
-    if len(ranked) < 2:
-        return []
-    lines = ["", "Most of it is:"]
-    for rule_id, count in ranked:
-        rule = rules_module.RULES.get(rule_id)
-        summary = rule.summary if rule else rule_id
-        lines.append(f"  {rule_id:<7} {count:>4}  {summary}")
-    lines.extend(["  'repo-sentinel rules <id>' explains any of them.", ""])
-    return lines
 
 
 def _scan_facts(result) -> "dict":
@@ -256,6 +228,21 @@ def _file_size_limit(value: "str | None") -> int:
     if not digits.isdigit() or int(digits) <= 0:
         raise ValueError(f"unreadable size {value!r} (try 2M, 500k, or a number of bytes)")
     return int(digits) * scale
+
+
+def _as_written(path: str, root: str) -> str:
+    """A path the way the rest of the report writes them: relative to the scan.
+
+    The baseline's location arrives absolute when it came from a config file,
+    which resolves it against the config's own directory. Printing that in a
+    sentence otherwise full of repository-relative paths reads as a different
+    kind of thing, which it is not.
+    """
+    try:
+        relative = os.path.relpath(path, root if os.path.isdir(root) else os.path.dirname(root))
+    except ValueError:  # pragma: no cover - different drives on Windows
+        return path
+    return path if relative.startswith("..") else relative.replace(os.sep, "/")
 
 
 def _fail_threshold(value: str) -> "Severity | None":
@@ -488,7 +475,7 @@ def init_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
         f"Scanned {result.file_count} file(s) in {result.duration:.2f}s: "
         f"{report.summarise(findings) if findings else 'no findings'}."
     )
-    for line in _loudest_rules(findings):
+    for line in report.loudest_rules(findings):
         print(line)
 
     config_path = os.path.join(root, config_module.DEFAULT_PATH)

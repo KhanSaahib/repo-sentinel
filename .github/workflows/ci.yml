@@ -6,6 +6,10 @@ on:
   # Every pull request, not only those aimed at main: a branch stacked on
   # another branch is exactly where a regression is easiest to miss.
   pull_request:
+  # And on request, for the times GitHub does not notice a push -- which it
+  # does not, occasionally, and a suite that cannot be started is a suite
+  # nobody can trust the silence of.
+  workflow_dispatch:
 
 # Least privilege by default; no job here needs to write anything.
 permissions:

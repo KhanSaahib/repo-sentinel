@@ -173,12 +173,13 @@ _STRUCTURED = (
     # A fragment of code: `+fmt.Sprintf(` picked up where a name inside one
     # string literal meets a value inside the next, `!areAllCredentialsSet` or
     # `item.credentials ?? []` in a template binding, `access_token=' +` where
-    # a string is being concatenated. Brackets and operators do not appear in
-    # credentials; they appear in expressions.
+    # a string is being concatenated, `--password='.$connection[` where PHP is
+    # building one. Brackets and operators do not appear in credentials; they
+    # appear in expressions.
     # (The filters are applied with match(), so anything that asks "does this
     # contain" says so with a leading .* -- as the comparison pattern below
     # already does.)
-    re.compile(r"^[+*/&|!?~]|.*[()]|.*\s(?:\?\??|&&|\|\||\+)\s"),
+    re.compile(r"^[+*/&|!?~]|.*[()\[\]]|.*\s(?:\?\??|&&|\|\||\+)\s"),
     # A sentinel constant, which by convention starts where an identifier
     # cannot: "__n8n_BLANK_VALUE_e5362baf-...". Credentials do not.
     re.compile(r"^__"),

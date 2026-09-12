@@ -101,6 +101,13 @@ class TestDocumentationWeighting(unittest.TestCase):
         self.assertIn("K8S008", documented)
         self.assertLess(documented["K8S008"], deployed["K8S008"])
 
+    def test_a_manifest_in_a_fixture_tree_is_weaker_too(self):
+        # A manifest under testdata/ exists to be diffed or parsed rather than
+        # applied. Argo CD has four hundred of them.
+        deployed = self.confidences("deploy/web.yaml")
+        fixture = self.confidences("pkg/health/testdata/web.yaml")
+        self.assertLess(fixture["K8S008"], deployed["K8S008"])
+
     def test_it_is_weakened_rather_than_silenced(self):
         # Repositories do ship the manifest they actually apply inside their
         # documentation. The finding stays; --min-confidence decides.

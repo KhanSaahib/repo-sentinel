@@ -116,7 +116,7 @@ python3 tools/measure.py --corpus ~/corpora --save before.json
 python3 tools/measure.py --corpus ~/corpora --compare before.json
 ```
 
-`tools/corpus.json` is the corpus, nineteen repositories pinned to the commit
+`tools/corpus.json` is the corpus, twenty-one repositories pinned to the commit
 each was measured at, with a line saying what each is there for: a clean Go
 repository as the false-positive floor, a Ruby monolith with a translated
 interface, an OAuth implementation whose constants are named after passwords,
