@@ -138,6 +138,11 @@ its entropy per character is high because its alphabet is large, which has
 nothing to do with randomness. Discourse's translated interface produced 1,600
 findings before this rule existed: "password", forty times per locale.
 
+A name that *labels* a credential is not a name that holds one, and both rules
+check: `credentialType` names a kind of credential, `secretName` names a
+Kubernetes Secret, `tokenPattern` is a regular expression. n8n assigns a
+credential type to a key called `credentialType` seven hundred times.
+
 Placeholders are filtered before entropy is measured at all — `your-password-here`,
 `${DB_PASSWORD}`, `xxxxxxxx`, `changeme` — and so is structure that is not a
 credential: paths, URLs without a password in them, version constraints, dotted

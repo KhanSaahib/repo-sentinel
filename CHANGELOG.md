@@ -267,6 +267,16 @@ last of them is the first that reads code rather than configuration.
   with a leading underscore, a full sentence, and -- a parsing bug rather than
   a heuristic -- an escaped quote inside a quoted value, which cut a translated
   string in half and measured the half.
+- **A name that labels a credential no longer counts as one.**
+  `credentialType` names a kind, `secretName` names a Kubernetes Secret,
+  `tokenPattern` is a regular expression -- none of them holds the thing
+  itself, and n8n writes the first of those seven hundred times. The quoted
+  rule now asks the same question the unquoted one always did.
+- **Four more false-positive classes from n8n**: a template binding
+  (`!areAllCredentialsSet`), a nullish-coalescing expression, a string being
+  concatenated, and a sentinel constant beginning with a double underscore.
+  n8n: 990 findings → 537, with the two deliberately vulnerable repositories
+  unchanged.
 - **Six more, measured against authentik**, whose OAuth and SAML code is made
   of identifiers that end in the word "password": URNs
   (`urn:oasis:names:tc:SAML:1.0:am:password`), space-separated response types
