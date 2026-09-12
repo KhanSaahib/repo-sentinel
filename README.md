@@ -1,5 +1,10 @@
 # repo-sentinel
 
+[![CI](https://github.com/KhanSaahib/repo-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/KhanSaahib/repo-sentinel/actions/workflows/ci.yml)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/downloads/)
+[![No dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 A small command line auditor that reads a repository the way a security
 reviewer skims it: looking for credentials that should never have been
 committed, and for the configuration that quietly hands out more access than
