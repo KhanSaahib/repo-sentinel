@@ -103,8 +103,10 @@ def _pem_block_is_empty(match: "re.Match[str]") -> bool:
 #: host inside the match, and example.invalid is what a documentation host is
 #: called. The allowlist handles the vendor conventions built on that word.
 _INVENTED_WORDS = (
-    "changeme", "change_me", "placeholder", "yourkey", "your_key",
-    "youraccount", "fakekey", "dummykey", "redacted", "notarealkey", "xxxxxxxx",
+    "changeme", "change_me", "change-me", "replaceme", "replace_me",
+    "replace-me", "setme", "set_me", "putyour", "insertyour", "placeholder",
+    "yourkey", "your_key", "your-key", "youraccount", "fakekey", "dummykey",
+    "redacted", "notarealkey", "xxxxxxxx",
 )
 #: How long a run of consecutive characters has to be before it can only be
 #: somebody counting. Eight is already one chance in billions for a generated

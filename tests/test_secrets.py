@@ -68,7 +68,14 @@ class TestInventedCredentials(unittest.TestCase):
         self.assertEqual(self.scan("xox" + "b-8403192576-abcdefghijklmnop"), set())
 
     def test_a_word_somebody_typed_is_nobody_key(self):
-        self.assertEqual(self.scan("sk-ant-api03-CHANGE_ME-0a1b0a1b0a1b"), set())
+        for value in (
+            "sk-ant-api03-CHANGE_ME-0a1b0a1b0a1b",
+            "sk-ant-api03-REPLACE_ME",
+            "sk-proj-SET_ME-0a1b0a1b0a1b",
+            "gh" + "p_PutYourTokenHere0a1b0a1b0a1b0a1b0a1b",
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(self.scan(value), set())
 
     def test_the_same_shape_with_generated_bytes_is_reported(self):
         self.assertIn("SEC001", self.scan("AKIA" + "ZZ7Q4TWFN2XKLM3D"))
