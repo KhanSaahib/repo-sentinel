@@ -1,9 +1,9 @@
 """What every scanner has to look like, checked rather than assumed.
 
-Thirteen scanners now, written over a long stretch, each one copied from
+Fifteen scanners now, written over a long stretch, each one copied from
 whichever came before. The things they share -- a suppression parameter, a
 marker-honouring flag, a docstring saying what the module is for -- are
-conventions, and a convention nobody checks is one the fourteenth scanner
+conventions, and a convention nobody checks is one the sixteenth scanner
 quietly breaks.
 """
 
@@ -24,7 +24,7 @@ def content_scanners():
 class TestContract(unittest.TestCase):
     def test_there_are_scanners_to_check(self):
         # A discovery-based test that discovers nothing passes silently.
-        self.assertGreaterEqual(len(content_scanners()), 13)
+        self.assertGreaterEqual(len(content_scanners()), 15)
 
     def test_every_scanner_takes_pairs_and_returns_a_list(self):
         for name, module in content_scanners():
