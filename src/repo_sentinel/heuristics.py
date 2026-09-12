@@ -118,9 +118,17 @@ _STRUCTURED = (
     # trailing colon a prefix carries: "user_api_key:device:lock:". Cache and
     # queue keys live in constants whose names end in KEY or TOKEN.
     re.compile(r"^[a-z][\w.-]*(?::[\w.-]+)+:?$"),
-    # A modular crypt identifier: "$pbkdf2-sha256$i=64000,l=32$". It names the
-    # algorithm and its parameters; the hash, when there is one, comes after.
-    re.compile(r"^\$[a-z0-9-]+\$[^$]*\$?$", re.I),
+    # A modular crypt string: "$2a$10$N9qo8uLOickgx2ZMRZo...", "$argon2id$v=19$...",
+    # "$pbkdf2-sha256$i=64000,l=32$". This is the *output* of hashing a
+    # password, which is the one thing that cannot be used as one -- and it is
+    # what a fixture assigns to a key called password. The prefixes are
+    # enumerated rather than matched loosely, because "$something$" is also
+    # what a shell writes.
+    re.compile(
+        r"^\$(?:2[abxy]?|1|5|6|y|7|sha1|md5|argon2[a-z]*|scrypt|bcrypt|"
+        r"pbkdf2[\w-]*|s?sha\d*)\$\S*$",
+        re.I,
+    ),
     # A sentence in any Latin-script language: letters, digits, punctuation,
     # and -- the part that matters -- a space in it. Translated interface
     # strings are assigned to names like password_too_long in every locale a

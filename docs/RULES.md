@@ -158,6 +158,11 @@ check: `credentialType` names a kind of credential, `secretName` names a
 Kubernetes Secret, `tokenPattern` is a regular expression. n8n assigns a
 credential type to a key called `credentialType` seven hundred times.
 
+A password *hash* is filtered too. `$2a$10$...`, `$argon2id$...` and their
+relatives are the output of hashing a password, which is the one thing that
+cannot be used as one -- and they are what a test fixture assigns to a key
+called `password`.
+
 Placeholders are filtered before entropy is measured at all — `your-password-here`,
 `${DB_PASSWORD}`, `xxxxxxxx`, `changeme` — and so is structure that is not a
 credential: paths, URLs without a password in them, version constraints, dotted

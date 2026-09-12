@@ -138,6 +138,11 @@ class TestLooksGenerated(unittest.TestCase):
             "user_api_key:device:lock:",
             "OAuth-clientgeheim",
             "$pbkdf2-sha256$i=64000,l=32$",
+            # A password hash is the output of hashing a password, which is
+            # the one thing that cannot be used as one. n8n's fixtures assign
+            # these to keys called password.
+            "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy",
+            "$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$RdescudvJCsgt3ub",
             "_DISCOURSE_USER_TOKEN",
         ):
             with self.subTest(value=value):

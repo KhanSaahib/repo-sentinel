@@ -272,6 +272,9 @@ last of them is the first that reads code rather than configuration.
   `tokenPattern` is a regular expression -- none of them holds the thing
   itself, and n8n writes the first of those seven hundred times. The quoted
   rule now asks the same question the unquoted one always did.
+- **A password hash is not a password.** `$2a$10$...`, `$argon2id$...`,
+  `$pbkdf2-sha256$...`: the output of hashing one, which is the one thing that
+  cannot be used as one, and what a fixture assigns to a key called `password`.
 - **A documented shape with invented bytes is no longer a credential.**
   `sk-aaaaaaaaaaaa`, `xoxb-...-xxxxxxxxxxxx`, anything containing `CHANGE_ME`:
   a repeated character, a counted-out run of eight, or a word a human typed.
