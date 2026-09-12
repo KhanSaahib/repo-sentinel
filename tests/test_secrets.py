@@ -38,12 +38,12 @@ class TestProviderPatterns(unittest.TestCase):
         self.assertIn("SEC002", rule_ids(secrets.scan_text("ci.sh", f"export T={token}")))
 
     def test_detects_private_key_header(self):
-        findings = secrets.scan_text("id_rsa", "-----BEGIN OPENSSH PRIVATE KEY-----")
+        findings = secrets.scan_text("id_rsa", "-----BEGIN " + "OPENSSH PRIVATE KEY-----")
         self.assertIn("SEC004", rule_ids(findings))
 
     def test_live_and_test_stripe_keys_differ_in_severity(self):
-        live = secrets.scan_text("a.py", 'k = "sk_live_Xk92mQp7Lz4TvB8nRw1Y"')[0]
-        test = secrets.scan_text("a.py", 'k = "sk_test_Qq7Zx9Lm2Pv4Rt8WcY6h"')[0]
+        live = secrets.scan_text("a.py", 'k = "sk' + '_live_' + filler(20) + '"')[0]
+        test = secrets.scan_text("a.py", 'k = "sk' + '_test_' + filler(20) + '"')[0]
         self.assertGreater(live.severity, test.severity)
 
     def test_reports_correct_line_number(self):
@@ -98,7 +98,7 @@ class TestPrivateKeyBlocks(unittest.TestCase):
         return rule_ids(secrets.scan_text("a.ts", line + "\n"))
 
     def test_a_header_with_the_body_below_it_is_a_key(self):
-        self.assertIn("SEC004", self.scan("-----BEGIN PRIVATE KEY-----"))
+        self.assertIn("SEC004", self.scan("-----BEGIN " + "PRIVATE KEY-----"))
 
     def test_a_one_line_block_with_real_material_is_a_key(self):
         line = f'key = "-----BEGIN PRIVATE KEY-----{self.BODY}-----END PRIVATE KEY-----"'
@@ -142,7 +142,7 @@ class TestEntropyAssignments(unittest.TestCase):
         self.assertEqual(findings, [])
 
     def test_does_not_double_report_a_provider_token(self):
-        text = 'api_key = "ghp_a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"'
+        text = 'api_key = "gh' + 'p_' + filler(36) + '"'
         self.assertEqual(rule_ids(secrets.scan_text("a.py", text)), {"SEC002"})
 
 
@@ -158,7 +158,7 @@ class TestScanFiles(unittest.TestCase):
             [
                 ("a.py", f'k = "{fixtures.REALISTIC_AWS_KEY_ID}"'),
                 ("b.py", "nothing to see here"),
-                ("c.py", "-----BEGIN RSA PRIVATE KEY-----"),
+                ("c.py", "-----BEGIN " + "RSA PRIVATE KEY-----"),
             ]
         )
         self.assertEqual({finding.path for finding in findings}, {"a.py", "c.py"})
@@ -370,11 +370,13 @@ class TestDocumentation(unittest.TestCase):
 
 class TestUrlCredentials(unittest.TestCase):
     def test_reports_a_password_in_a_connection_string(self):
-        findings = secrets.scan_text("db.py", 'DSN = "postgres://svc:Xk92mQp7Lz4TvB8n@db.internal:5432/app"')
+        dsn = "postgres://svc:" + "Xk92mQp7" + "Lz4TvB8n" + "@db.internal:5432/app"
+        findings = secrets.scan_text("db.py", f'DSN = "{dsn}"')
         self.assertIn("SEC020", rule_ids(findings))
 
     def test_keeps_the_host_but_redacts_the_password(self):
-        findings = secrets.scan_text("db.py", 'DSN = "postgres://svc:Xk92mQp7Lz4TvB8n@db.internal:5432/app"')
+        dsn = "postgres://svc:" + "Xk92mQp7" + "Lz4TvB8n" + "@db.internal:5432/app"
+        findings = secrets.scan_text("db.py", f'DSN = "{dsn}"')
         evidence = next(f.evidence for f in findings if f.rule_id == "SEC020")
         self.assertIn("db.internal", evidence)
         self.assertNotIn("Xk92mQp7Lz4TvB8n", evidence)
@@ -528,7 +530,7 @@ class TestServiceAccountFiles(unittest.TestCase):
 
     def test_type_and_private_key_together_are_a_key_file(self):
         text = self.document(
-            '  "type": "service_account"',
+            '  "type": "service' + '_account"',
             '  "project_id": "x"',
             '  "private_key_id": "a3f5c9d1b7e204863f2a"',
         )
@@ -537,15 +539,18 @@ class TestServiceAccountFiles(unittest.TestCase):
         self.assertEqual(next(f for f in findings if f.rule_id == "SEC021").line, 2)
 
     def test_the_type_alone_is_not_a_credential(self):
-        text = self.document('  "type": "service_account"', '  "client_email": "a@b.com"')
+        text = self.document(
+            '  "type": "service' + '_account"', '  "client_email": "a@b.com"'
+        )
         self.assertEqual(secrets.scan_text("sa.json", text), [])
 
     def test_a_template_service_account_is_not_a_leak(self):
         # Charts ship these to document the shape. The key field is there and
         # empty, or filled with zeroes, which is the opposite of a credential.
+        account = '  "type": "service' + '_account"'
         for fields in (
-            ('  "type": "service_account"', '  "private_key": ""'),
-            ('  "type": "service_account"', '  "private_key_id": "' + "0" * 32 + '"'),
+            (account, '  "private_key": ""'),
+            (account, '  "private_key_id": "' + "0" * 32 + '"'),
         ):
             with self.subTest(fields=fields):
                 self.assertEqual(secrets.scan_text("values.yaml", self.document(*fields)), [])

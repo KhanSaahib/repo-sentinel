@@ -176,6 +176,10 @@ last of them is the first that reads code rather than configuration.
   per input, because the fix is one `env:` entry however many times the script
   mentions it.
 
+- **No fixture is written as a credential any more**, and a test asserts it:
+  the scanner runs over its own test sources and fails if a documented token
+  shape appears as a single literal. Assembling the shape puts the identical
+  string in front of the rule and nothing in front of anybody else's scanner.
 - **WF013**: `contents: write` granted to a job that never writes. The token is
   minted per run with whatever the workflow asked for, so the grant is only as
   dangerous as the code it is handed to -- and a job that builds and tests,

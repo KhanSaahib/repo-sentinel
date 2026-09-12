@@ -86,7 +86,7 @@ class TestCli(unittest.TestCase):
     def test_fail_on_threshold_controls_exit_code(self):
         with tempfile.TemporaryDirectory() as root:
             with open(os.path.join(root, "a.py"), "w", encoding="utf-8") as handle:
-                handle.write('k = "sk_test_Xk92mQp7Lz4TvB8nRw1Y"\n')
+                handle.write('k = "sk' + '_test_' + 'Xk92mQp7Lz4TvB8nRw1Y"\n')
             low, _ = run(["scan", root, "--fail-on", "low"])
             high, _ = run(["scan", root, "--fail-on", "high"])
         self.assertEqual(low, cli.EXIT_FINDINGS)
