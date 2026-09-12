@@ -149,14 +149,51 @@ def format_text(
     return "\n".join(lines)
 
 
+#: How many rules to name when introducing a repository to itself. Three is
+#: enough to say what shape the noise is -- "it is all unpinned actions" is a
+#: different morning from "it is four different things" -- and short enough
+#: that the setup output stays readable.
+_LOUDEST = 3
+
+
+def loudest_rules(findings: "Sequence[Finding]") -> "list[str]":
+    """The rules doing most of the talking, for someone meeting this repository.
+
+    A count and a severity say how much there is; this says what it *is*. A
+    hundred findings that are all one rule is a decision to make once, and the
+    baseline just recorded is mostly that rule.
+    """
+    if not findings:
+        return []
+    counts: "dict[str, int]" = {}
+    for finding in findings:
+        counts[finding.rule_id] = counts.get(finding.rule_id, 0) + 1
+    ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:_LOUDEST]
+    if len(ranked) < 2:
+        return []
+    lines = ["", "Most of it is:"]
+    for rule_id, count in ranked:
+        rule = rules.RULES.get(rule_id)
+        summary = rule.summary if rule else rule_id
+        lines.append(f"  {rule_id:<7} {count:>4}  {summary}")
+    lines.extend(["  'repo-sentinel rules <id>' explains any of them.", ""])
+    return lines
+
+
 def format_summary(findings: Sequence[Finding], *, notes: Sequence[str] = ()) -> str:
     """The summary line and nothing else, for a pipeline log that is read once.
 
     The counts still distinguish severities, because "12 findings" and "12
     findings, one critical" call for different reactions and a quiet mode that
     loses that distinction is just a broken one.
+
+    The loudest rules come with it, for the same reason: a hundred findings
+    that are all one rule is a decision to make once, and a CI log is read by
+    somebody deciding whether to look further.
     """
-    return "\n".join([summarise(findings) if findings else _CLEAN, *notes])
+    if not findings:
+        return "\n".join([_CLEAN, *notes])
+    return "\n".join([summarise(findings), *loudest_rules(findings), *notes])
 
 
 def format_json(

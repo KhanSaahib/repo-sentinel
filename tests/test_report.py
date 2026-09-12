@@ -120,6 +120,32 @@ class TestTextGroupedByFile(unittest.TestCase):
         self.assertEqual(self.grouped([]), report.format_text([], colour=False))
 
 
+class TestSummary(unittest.TestCase):
+    """--quiet is what a CI log gets, and it is read by somebody deciding."""
+
+    def test_the_counts_survive(self):
+        self.assertIn("1 critical", report.format_summary([CRITICAL]))
+
+    def test_the_loudest_rules_come_with_it(self):
+        batch = [CRITICAL, CRITICAL, GUESS]
+        summary = report.format_summary(batch)
+        self.assertIn("Most of it is:", summary)
+        self.assertIn("SEC001", summary)
+        self.assertIn("SEC100", summary)
+
+    def test_one_rule_alone_needs_no_breakdown(self):
+        self.assertNotIn("Most of it is", report.format_summary([CRITICAL]))
+
+    def test_a_clean_run_says_only_that(self):
+        summary = report.format_summary([], notes=["Scanned 4 file(s)."])
+        self.assertIn("not proof of safety", summary)
+        self.assertNotIn("Most of it is", summary)
+
+    def test_the_notes_still_come_last(self):
+        summary = report.format_summary([CRITICAL, GUESS], notes=["Scanned 4 file(s)."])
+        self.assertTrue(summary.rstrip().endswith("Scanned 4 file(s)."))
+
+
 class TestJson(unittest.TestCase):
     def test_every_finding_carries_a_fingerprint_and_confidence(self):
         payload = json.loads(report.format_json([CRITICAL, GUESS], version="0.2.0"))

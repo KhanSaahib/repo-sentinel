@@ -280,6 +280,10 @@ last of them is the first that reads code rather than configuration.
   every CI has its own word for that -- continue-on-error, allow_failure,
   continueOnError, catchError. Saying it in the command means the gate and the
   report differ by one readable flag. A usage error still exits 2.
+- **`--quiet` says what the findings are, not only how many.** The three
+  loudest rules come with the summary line, because a CI log is read by
+  somebody deciding whether to look further, and a hundred findings that are
+  all one rule is a decision to make once. It is the same block `init` prints.
 - **`init` says what the findings *are***, not only how many: the three rules
   doing most of the talking, with their summaries and a pointer at
   `repo-sentinel rules <id>`. A hundred findings that are all one rule is a
