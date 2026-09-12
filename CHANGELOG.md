@@ -196,6 +196,14 @@ repository the tool can read at all: it grew from two file formats to six.
 
 ### Fixed
 
+- **Six more, measured against authentik**, whose OAuth and SAML code is made
+  of identifiers that end in the word "password": URNs
+  (`urn:oasis:names:tc:SAML:1.0:am:password`), space-separated response types
+  (`code id_token token`), media types (`dpop+id_token`), snake_case dotted
+  identifiers, and the `#/components/schemas/...` references an OpenAPI schema
+  contains tens of thousands of. Google's published reCAPTCHA test pair joins
+  the example allowlist: it is documented so that automated login tests pass,
+  so every project with one has a copy.
 - **Five more false-positive classes, measured against Dagger.** A value that
   says where the credential lives rather than what it is (`env:NPM_TOKEN`,
   `vault:secret/data/ci`); a string type annotation in a generated client

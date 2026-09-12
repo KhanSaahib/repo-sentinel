@@ -85,6 +85,19 @@ _STRUCTURED = (
     # Identifiers assigned to identifier-shaped names, which is what a
     # constants file is. A generated credential carries digits or punctuation.
     re.compile(r"^[A-Za-z][a-z]*(?:[A-Z][a-z]+)+$"),
+    # A URN, or anything else colon-separated and spelled out:
+    # "urn:ietf:params:oauth:token-type:jwt", "urn:oasis:names:tc:SAML:1.0:am:password".
+    # Identifiers in a specification, which is what an OAuth or SAML constants
+    # file is made of, and every one of them ends in a word like "password".
+    re.compile(r"^urn:[\w.:+-]+$", re.I),
+    re.compile(r"^[A-Za-z][\w.+-]*(?::[A-Za-z0-9][\w.+-]*){2,}$"),
+    # Space-separated identifiers: "code id_token token", the OAuth response
+    # types. Words with underscores in them, which the prose pattern below
+    # does not allow because prose has none.
+    re.compile(r"^[a-z][a-z0-9_+-]*(?: +[a-z][a-z0-9_+-]*)+$"),
+    # Two identifiers joined by a plus: "dpop+id_token". A media type or a
+    # scheme, and never a generated value.
+    re.compile(r"^[a-z][a-z0-9_-]*(?:\+[a-z][a-z0-9_-]*)+$"),
     # Words with spaces between them: "shhhh, very secret", "manny is cool".
     # Prose, in other words, which is what a placeholder in an example app
     # looks like. A generated credential has no spaces in it.
@@ -116,10 +129,14 @@ _STRUCTURED = (
     # string literal meets a value inside the next. Brackets and operators do
     # not appear in credentials; they appear in expressions.
     re.compile(r"[()]|^[+*/&|]"),
+    # A reference into a document: "#/components/schemas/PasswordChallenge".
+    # An OpenAPI schema is tens of thousands of these, and the ones that end in
+    # a word like "Challenge" or "Token" are the ones a secret rule reads.
+    re.compile(r"^#/[\w./~%{}-]+$"),
     # A lowercase dotted identifier with no digits: "git.authheadersecret".
     # Constants files are full of these, and a constant whose *name* ends in
     # "secret" is still a name.
-    re.compile(r"^[a-z]+(?:\.[a-z]+)+$"),
+    re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$"),
     # Words joined by hyphens or underscores: "unstructured", "content-type",
     # "Proxy-Authorization". Generated credentials carry digits
     # or mixed case; a pure word-list slug is vocabulary. The cost is that a

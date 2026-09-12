@@ -112,6 +112,15 @@ class TestLooksGenerated(unittest.TestCase):
             "list[Secret] | None",
             "+fmt.Sprintf(",
             "git.authheadersecret",
+            # From authentik: identifiers out of a specification, which is
+            # what an OAuth or SAML constants file is made of -- and every one
+            # of them ends in a word like "password" or "token".
+            "urn:ietf:params:oauth:token-type:jwt",
+            "urn:oasis:names:tc:SAML:1.0:am:password",
+            "code id_token token",
+            "dpop+id_token",
+            "authentik_policies_password.passwordpolicy",
+            "#/components/schemas/PasswordChallenge",
         ):
             with self.subTest(value=value):
                 self.assertFalse(heuristics.looks_generated(value))

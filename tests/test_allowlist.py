@@ -32,6 +32,12 @@ class TestExactValues(unittest.TestCase):
     def test_surrounding_whitespace_does_not_defeat_the_match(self):
         self.assertTrue(allowlist.is_known_example("  AKIAIOSFODNN7EXAMPLE\t"))
 
+    def test_the_published_recaptcha_test_pair_is_an_example(self):
+        # Documented by Google so that an automated login test always passes
+        # verification, which means every project with one has a copy.
+        self.assertTrue(allowlist.is_known_example("6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"))
+        self.assertTrue(allowlist.is_known_example("6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe"))
+
     def test_empty_value_is_not_an_example(self):
         self.assertFalse(allowlist.is_known_example(""))
         self.assertFalse(allowlist.is_known_example("   "))
