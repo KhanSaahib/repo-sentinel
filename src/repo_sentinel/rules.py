@@ -120,6 +120,7 @@ RULES: "dict[str, Rule]" = _rules(
     ("WF009", "persisted-credentials", "Checkout leaves a usable token in .git/config", Severity.HIGH),
     ("WF010", "secret-exported", "Secret written to a job output or environment", Severity.HIGH),
     ("WF011", "secrets-inherited-offsite", "Every secret passed to a workflow in another repository", Severity.HIGH),
+    ("WF012", "action-input-interpolated", "Composite action interpolates an input into a shell command", Severity.MEDIUM),
     ("GL001", "floating-job-image", "Pipeline image tag can point elsewhere tomorrow", Severity.MEDIUM),
     ("GL002", "gitlab-script-injection", "Outsider-supplied variable interpolated into a script", Severity.CRITICAL),
     ("GL003", "gitlab-pipe-to-shell", "Job pipes a download into a shell", Severity.HIGH),
@@ -218,7 +219,7 @@ _claim(
 # Sensitive information in a file that should not hold it.
 _claim("CWE-538", "FN004")
 # OS command injection: the same weakness in five CI systems.
-_claim("CWE-78", "WF003", "GL002", "AZ001", "CC001", "JK001")
+_claim("CWE-78", "WF003", "WF012", "GL002", "AZ001", "CC001", "JK001")
 # Download of code without an integrity check.
 _claim("CWE-494", "DK003", "DK005", "GL003", "CC004", "JK003", "SC002", "AN003", "SH001")
 # Reliance on a component that can be replaced under you.

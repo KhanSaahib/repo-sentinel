@@ -241,6 +241,7 @@ in the text.
 | WF009 | Checkout leaves a usable token in `.git/config` | high |
 | WF010 | Secret written to a job output or environment | high |
 | WF011 | Every secret passed to a workflow in another repository | high |
+| WF012 | Composite action interpolates an input into a shell command | medium |
 
 WF003 is the script-injection class: `${{ github.event.issue.title }}` inside a
 `run:` step is substituted into the shell command *before* the shell runs, so an
@@ -282,6 +283,17 @@ repository holds, redeemable whenever that repository changes -- so the rule is
 scoped to the cross-repository case, and drops to medium confidence when the
 call is pinned to a commit SHA, which at least fixes the code that will read
 them.
+
+WF012 is the injection rule again, from the other side. The family also reads
+`action.yml` -- a composite action is a workflow fragment by another name, and
+its steps run inside whichever repository calls it, so an unpinned `uses:` or an
+interpolated `github.event` field there is the same mistake with a wider reach.
+What an action cannot do is tell a safe input from a dangerous one: `inputs.tag`
+is whatever the caller passed, and one caller will eventually pass an issue
+title. Hence medium and medium -- most inputs are a version number, the mistake
+is the caller's to make, and the prevention is still the action's to write. Only
+composite actions are read; a JavaScript or container action keeps its risk in
+code this scanner is not looking at.
 
 Workflow checks are pattern-based rather than YAML-aware, a deliberate
 consequence of the zero-dependency rule. What the scanner does parse is

@@ -149,6 +149,15 @@ repository the tool can read at all: it grew from two file formats to six.
 - A **YAML subset reader** and an **HCL block reader**, both standard library
   only, both explicit about what they do not parse.
 
+- **Composite actions are scanned too.** `action.yml` is a workflow fragment by
+  another name, and its steps run inside whichever repository calls it, so the
+  pinning and injection rules apply there with a wider reach. **WF012** is the
+  new one: an input interpolated into a `run:` block. An action cannot tell a
+  safe input from a dangerous one -- `inputs.tag` is whatever the caller
+  passed -- and one caller will eventually pass an issue title. Reported once
+  per input, because the fix is one `env:` entry however many times the script
+  mentions it.
+
 - **WF011**: a reusable workflow in another repository called with
   `secrets: inherit`. There is no way to inherit *some* secrets -- the callee
   receives the whole store -- so the cross-repository form is a standing grant

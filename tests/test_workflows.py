@@ -450,5 +450,75 @@ class TestInheritedSecrets(unittest.TestCase):
         self.assertNotIn("WF011", rule_ids(self.scan(body)))
 
 
+class TestCompositeActions(unittest.TestCase):
+    """The family also reads action.yml, which is a workflow fragment."""
+
+    ACTION = (
+        "name: deploy\n"
+        "runs:\n"
+        "  using: composite\n"
+        "  steps:\n"
+    )
+
+    def scan(self, steps):
+        return workflows.scan_action("action.yml", workflow(self.ACTION + steps))
+
+    def test_an_action_file_is_recognised_wherever_it_lives(self):
+        self.assertTrue(workflows.is_action_path(".github/actions/deploy/action.yml"))
+        self.assertTrue(workflows.is_action_path("action.yaml"))
+        self.assertFalse(workflows.is_action_path("actions.yml"))
+
+    def test_an_input_reaching_a_shell_is_reported(self):
+        findings = self.scan('    - run: echo "${{ inputs.tag }}"\n      shell: bash\n')
+        finding = next(f for f in findings if f.rule_id == "WF012")
+        self.assertEqual(finding.severity, Severity.MEDIUM)
+        self.assertIn("tag", finding.title)
+
+    def test_one_input_mentioned_five_times_is_one_finding(self):
+        findings = self.scan(
+            "    - run: |\n"
+            '        if [ -n "${{ inputs.tag }}" ]; then\n'
+            '          echo "${{ inputs.tag }}"\n'
+            "        fi\n"
+            "      shell: bash\n"
+        )
+        self.assertEqual([f.rule_id for f in findings].count("WF012"), 1)
+
+    def test_two_inputs_on_one_line_are_two_findings(self):
+        findings = self.scan(
+            '    - run: echo "${{ inputs.tag }} ${{ inputs.env }}"\n      shell: bash\n'
+        )
+        self.assertEqual([f.rule_id for f in findings].count("WF012"), 2)
+
+    def test_an_input_passed_through_the_environment_is_the_fix(self):
+        findings = self.scan(
+            "    - env:\n        TAG: ${{ inputs.tag }}\n"
+            '      run: echo "$TAG"\n      shell: bash\n'
+        )
+        self.assertNotIn("WF012", rule_ids(findings))
+
+    def test_an_action_called_by_a_mutable_tag_is_still_reported(self):
+        findings = self.scan("    - uses: vendor/setup@v1\n")
+        self.assertIn("WF001", rule_ids(findings))
+
+    def test_an_untrusted_context_inside_an_action_is_the_injection_rule(self):
+        findings = self.scan(
+            '    - run: echo "${{ github.event.issue.title }}"\n      shell: bash\n'
+        )
+        self.assertIn("WF003", rule_ids(findings))
+
+    def test_a_javascript_action_has_no_steps_to_read(self):
+        text = workflow(
+            "name: deploy\nruns:\n  using: node20\n  main: dist/index.js\n"
+        )
+        self.assertEqual(workflows.scan_action("action.yml", text), [])
+
+    def test_scan_files_picks_up_actions_as_well_as_workflows(self):
+        findings = workflows.scan_files(
+            [("action.yml", workflow(self.ACTION + "    - uses: vendor/setup@v1\n"))]
+        )
+        self.assertIn("WF001", rule_ids(findings))
+
+
 if __name__ == "__main__":
     unittest.main()

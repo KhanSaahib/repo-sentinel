@@ -25,6 +25,11 @@ from ..findings import Confidence, Finding, Severity
 
 _WORKFLOW_DIR = ".github/workflows"
 _WORKFLOW_SUFFIXES = (".yml", ".yaml")
+#: A composite action is a workflow fragment by another name: the same steps,
+#: the same interpolation, run inside whichever repository calls it.
+_ACTION_FILES = ("action.yml", "action.yaml")
+_COMPOSITE = re.compile(r"^\s*using:\s*['\"]?composite")
+_INPUT_EXPR = re.compile(r"\$\{\{\s*inputs\.(?P<name>[\w-]+)[^}]*\}\}")
 
 _USES = re.compile(r"^\s*(?:-\s*)?uses:\s*['\"]?(?P<ref>[^\s'\"#]+)")
 _SHA_PIN = re.compile(r"^[0-9a-f]{40}$")
@@ -86,6 +91,11 @@ def is_workflow_path(path: str) -> bool:
         posixpath.dirname(normalised).endswith(_WORKFLOW_DIR)
         and normalised.endswith(_WORKFLOW_SUFFIXES)
     )
+
+
+def is_action_path(path: str) -> bool:
+    """True for an action definition, wherever in the tree it lives."""
+    return posixpath.basename(path.replace("\\", "/")).lower() in _ACTION_FILES
 
 
 Block = list  # of (line_number, text)
@@ -581,6 +591,75 @@ def _check_inherited_secrets(path: str, jobs: list[Job]) -> Iterator[Finding]:
         )
 
 
+def _check_action_inputs(path: str, lines: list[str]) -> Iterator[Finding]:
+    """WF012: a composite action substituting one of its inputs into a shell.
+
+    Inside a workflow, a rule can tell an attacker-controlled context from a
+    safe one. Inside an action it cannot: an input is whatever the caller
+    passed, and the caller is every repository that uses the action. One of
+    them will eventually wire ``github.event.issue.title`` into it, and the
+    injection will happen here, in code they did not write and do not read.
+
+    Medium severity and medium confidence, because most inputs are a version
+    number and the mistake is the caller's to make. It is still the action's
+    to prevent, and the prevention is one ``env:`` block.
+    """
+    # One finding per input, not per line. A shell script that tests an input,
+    # then quotes it, then passes it on mentions it five times, and the fix is
+    # still one env: entry -- five copies of that advice is how a rule gets
+    # switched off.
+    seen: "set[str]" = set()
+    for number, line in _iter_run_lines(lines):
+        for match in _INPUT_EXPR.finditer(line):
+            if match.group("name") in seen:
+                continue
+            seen.add(match.group("name"))
+            yield _input_finding(path, number, line, match.group("name"))
+
+
+def _input_finding(path: str, number: int, line: str, name: str) -> Finding:
+    return Finding(
+        rule_id="WF012",
+        severity=Severity.MEDIUM,
+        title=f"Input {name!r} is interpolated into a run: block",
+        path=path,
+        line=number,
+        evidence=line.strip(),
+        remediation=(
+            "An action cannot see where its input came from, and one caller "
+            "will eventually pass an issue title. Put the value in an env: "
+            "block and reference it as \"$VAR\", where the shell reads it as "
+            "data rather than as part of the command."
+        ),
+        confidence=Confidence.MEDIUM,
+    )
+
+
+def scan_action(
+    path: str, text: str, marks: "suppression.Suppressions | None" = None
+) -> "list[Finding]":
+    """Run the rules that survive outside a workflow against an action.yml.
+
+    Only the composite kind: a JavaScript or container action has no steps to
+    read, and its risk lives in code this scanner is not looking at. Rules
+    about jobs -- permissions, runners, triggers -- have nothing to bind to
+    here, because an action has none of those. What is left is what actually
+    travels: the actions it calls, and the shell it writes.
+    """
+    marks = suppression.parse(text) if marks is None else marks
+    if marks.whole_file:
+        return []
+    lines = text.splitlines()
+    if not any(_COMPOSITE.match(line) for line in lines):
+        return []
+    findings = [
+        *_check_action_pinning(path, lines),
+        *_check_script_injection(path, lines),
+        *_check_action_inputs(path, lines),
+    ]
+    return marks.filter_findings(findings)
+
+
 def scan_workflow(
     path: str, text: str, marks: "suppression.Suppressions | None" = None
 ) -> list[Finding]:
@@ -615,11 +694,12 @@ def scan_workflow(
 def scan_files(
     files: "Iterable[tuple[str, str]]", *, honour_markers: bool = True
 ) -> "list[Finding]":
-    """Scan ``(path, text)`` pairs, ignoring anything that is not a workflow."""
+    """Scan ``(path, text)`` pairs: workflows, and the actions beside them."""
     markers = None if honour_markers else suppression.NONE
-    return [
-        finding
-        for path, text in files
-        if is_workflow_path(path)
-        for finding in scan_workflow(path, text, markers)
-    ]
+    findings: "list[Finding]" = []
+    for path, text in files:
+        if is_workflow_path(path):
+            findings.extend(scan_workflow(path, text, markers))
+        elif is_action_path(path):
+            findings.extend(scan_action(path, text, markers))
+    return findings

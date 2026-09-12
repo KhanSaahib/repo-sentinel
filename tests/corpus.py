@@ -372,6 +372,18 @@ wget --no-check-certificate https://example.invalid/pkg.tar.gz
 chmod -R 777 /opt/app
 """
 
+COMPOSITE_ACTION = """name: deploy
+description: Ship it.
+inputs:
+  tag:
+    required: true
+runs:
+  using: composite
+  steps:
+    - run: echo "deploying ${{ inputs.tag }}"
+      shell: bash
+"""
+
 #: ``(path, text)`` pairs, in the shape :func:`iter_files` yields.
 FILES = (
     ("src/config.py", SECRETS_FILE),
@@ -379,6 +391,7 @@ FILES = (
     ("deploy/service-account.json", SERVICE_ACCOUNT_FILE),
     ("src/generated.py", RUNAWAY_SUPPRESSION_FILE),
     (".github/workflows/risky.yml", WORKFLOW_FILE),
+    (".github/actions/deploy/action.yml", COMPOSITE_ACTION),
     ("Dockerfile", DOCKERFILE),
     ("infra/main.tf", TERRAFORM_FILE),
     ("deploy/web.yaml", MANIFEST_FILE),
