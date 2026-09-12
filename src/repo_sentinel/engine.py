@@ -8,7 +8,8 @@ from collections.abc import Iterable
 
 from .discovery import DEFAULT_EXCLUDES, Entry, read_listed, walk
 from . import suppression
-from .findings import Finding
+from . import wellknown
+from .findings import Confidence, Finding
 from .scanners import (
     ansible,
     azure,
@@ -113,7 +114,7 @@ def scan(
         files, allow_examples=allow_examples, honour_markers=honour_markers
     )
     for scanner in FORMAT_SCANNERS:
-        found += scanner.scan_files(files, honour_markers=honour_markers)
+        found += _weigh_by_context(scanner.scan_files(files, honour_markers=honour_markers))
 
     marked = [_count_markers(text) for _, text in files]
 
@@ -125,6 +126,30 @@ def scan(
         suppressed_files=sum(1 for count in marked if count),
         unreadable=tuple(unreadable),
     )
+
+
+def _weigh_by_context(findings: "list[Finding]") -> "list[Finding]":
+    """Drop a step of confidence for a config file that documents rather than runs.
+
+    A pipeline under ``docs/`` is a snippet in a tutorial: nothing schedules it,
+    nothing holds its secrets, and the thing it illustrates is usually the
+    simplest form rather than the safest one. Measured on Dagger, whose
+    documentation ships one Azure and one GitLab example per released version:
+    the same two files were reported thirty times, none of them deployed
+    anywhere.
+
+    Weakened, not dropped. Plenty of repositories ship the manifest they
+    actually apply inside their documentation tree, so the finding stays and
+    ``--min-confidence`` decides. The secrets scanner does the same arithmetic
+    for the same reason; it does it itself because it also weighs fixture
+    trees, where a config rule has nothing to say.
+    """
+    return [
+        dataclasses.replace(finding, confidence=finding.confidence.weaker)
+        if finding.confidence > Confidence.LOW and wellknown.is_prose_path(finding.path)
+        else finding
+        for finding in findings
+    ]
 
 
 def _count_markers(text: str) -> int:

@@ -85,6 +85,25 @@ class TestPools(unittest.TestCase):
         text = pipeline("  - script: make\n", extra="\npool:\n  name: ubuntu-latest\n")
         self.assertEqual(scan(text), [])
 
+    def test_the_pool_microsoft_runs_is_called_azure_pipelines(self):
+        # The name every tutorial writes, and the one the rule used to report
+        # as self-hosted -- loudest exactly where it was most wrong.
+        for name in ("Azure Pipelines", "azure pipelines", "Hosted Ubuntu 1604"):
+            with self.subTest(name=name):
+                text = pipeline("  - script: make\n", extra=f"\npool:\n  name: {name}\n")
+                self.assertEqual(scan(text), [])
+
+    def test_a_named_pool_with_a_vm_image_is_still_microsoft_hosted(self):
+        text = pipeline(
+            "  - script: make\n",
+            extra="\npool:\n  name: Azure Pipelines\n  vmImage: ubuntu-latest\n",
+        )
+        self.assertEqual(scan(text), [])
+
+    def test_the_bare_form_still_finds_a_private_pool(self):
+        text = pipeline("  - script: make\n", extra="\npool: our-build-servers\n")
+        self.assertIn("AZ002", rule_ids(scan(text)))
+
 
 class TestContainersAndDebug(unittest.TestCase):
     def test_a_floating_container(self):

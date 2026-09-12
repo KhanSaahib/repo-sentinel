@@ -149,6 +149,13 @@ repository the tool can read at all: it grew from two file formats to six.
 - A **YAML subset reader** and an **HCL block reader**, both standard library
   only, both explicit about what they do not parse.
 
+- **A config file in a documentation tree drops a step of confidence.** The
+  secrets scanner already weighed prose this way; the config families now do
+  too, for the reason that a pipeline under `docs/` is a snippet in a tutorial
+  and nothing schedules it. Measured on Dagger, which ships one Azure and one
+  GitLab example per released version: the same two files were reported thirty
+  times over.
+
 - **Composite actions are scanned too.** `action.yml` is a workflow fragment by
   another name, and its steps run inside whichever repository calls it, so the
   pinning and injection rules apply there with a wider reach. **WF012** is the
@@ -184,6 +191,10 @@ repository the tool can read at all: it grew from two file formats to six.
 
 ### Fixed
 
+- **`pool: Azure Pipelines` is the pool Microsoft runs**, not a self-hosted
+  one, and AZ002 said otherwise -- so the rule was loudest in exactly the place
+  it was most wrong, since "Azure Pipelines" is what every tutorial writes. The
+  legacy `Hosted *` names and a `vmImage:` beside the pool name are hosted too.
 - **A path that does not exist scanned clean.** `repo-sentinel scan tests/fixtues`
   walked nothing, found nothing and said "no findings" -- the one answer this
   tool must never give for a tree it did not read. It is an error now.

@@ -78,6 +78,17 @@ class Confidence(_Ranked):
     MEDIUM = "medium"
     HIGH = "high"
 
+    @property
+    def weaker(self) -> "Confidence":
+        """One step down, for a finding whose surroundings argue against it.
+
+        Documentation and fixture trees both weaken a rule without refuting
+        it, and both want the same arithmetic. Low is the floor: a rule that
+        is already guessing cannot guess less, and silencing it there would
+        be a filter pretending to be a judgement.
+        """
+        return Confidence.MEDIUM if self == Confidence.HIGH else Confidence.LOW
+
 
 def redact(secret: str, keep: int = 4) -> str:
     """Return a version of ``secret`` safe to print in a report or CI log.

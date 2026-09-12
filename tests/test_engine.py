@@ -76,6 +76,36 @@ class TestScan(unittest.TestCase):
         self.assertEqual(engine.scan_path(root), engine.scan(root).findings)
 
 
+class TestDocumentationWeighting(unittest.TestCase):
+    """A config file under docs/ illustrates something; it does not run."""
+
+    MANIFEST = (
+        "apiVersion: v1\n"
+        "kind: Pod\n"
+        "metadata:\n  name: web\n"
+        "spec:\n"
+        "  containers:\n"
+        "    - name: web\n"
+        "      image: nginx:latest\n"
+    )
+
+    def confidences(self, relative):
+        report = engine.scan(repository({relative: self.MANIFEST}))
+        return {finding.rule_id: finding.confidence for finding in report.findings}
+
+    def test_the_same_file_is_weaker_in_a_documentation_tree(self):
+        deployed = self.confidences("deploy/web.yaml")
+        documented = self.confidences("docs/examples/web.yaml")
+        self.assertIn("K8S008", deployed)
+        self.assertIn("K8S008", documented)
+        self.assertLess(documented["K8S008"], deployed["K8S008"])
+
+    def test_it_is_weakened_rather_than_silenced(self):
+        # Repositories do ship the manifest they actually apply inside their
+        # documentation. The finding stays; --min-confidence decides.
+        self.assertIn("K8S008", self.confidences("docs/examples/web.yaml"))
+
+
 class TestScale(unittest.TestCase):
     """A guard against accidental quadratic behaviour in the walk."""
 
@@ -113,14 +143,14 @@ class TestCollapse(unittest.TestCase):
         )
 
     def test_the_same_value_at_the_same_line_is_reported_once(self):
-        kept = engine.collapse([self.finding("SEC022", "high"), self.finding("K8S007", "critical")])
-        self.assertEqual([finding.rule_id for finding in kept], ["K8S007"])
+        kept = engine.collapse([self.finding("SEC022", "high"), self.finding("K8S008", "critical")])
+        self.assertEqual([finding.rule_id for finding in kept], ["K8S008"])
 
     def test_a_tie_keeps_the_format_specific_rule(self):
         kept = engine.collapse(
-            [self.finding("SEC022", "critical"), self.finding("K8S007", "critical")]
+            [self.finding("SEC022", "critical"), self.finding("K8S008", "critical")]
         )
-        self.assertEqual([finding.rule_id for finding in kept], ["K8S007"])
+        self.assertEqual([finding.rule_id for finding in kept], ["K8S008"])
 
     def test_different_values_on_one_line_both_survive(self):
         kept = engine.collapse(

@@ -79,9 +79,11 @@ Two consequences worth knowing before touching a rule:
   443 -- but never up past what the catalogue promises.
 - Confidence is weighed by **where a file sits**. A rule already at medium
   drops to low in fixture trees and documentation, because a credential in
-  `testdata/` or a README is usually invented. Nothing is silenced: a real key
-  does get committed to a fixture directory, and that one is exactly what
-  nobody is looking for.
+  `testdata/` or a README is usually invented. The config families are weighed
+  the same way for a different reason: a pipeline under `docs/` is a snippet in
+  a tutorial, and nothing schedules it. Nothing is silenced either way: a real
+  key does get committed to a fixture directory, and repositories do ship the
+  manifest they actually apply inside their documentation tree.
 
 If you find yourself lowering a severity because a rule is unreliable, lower
 the confidence instead. That is what it is for.

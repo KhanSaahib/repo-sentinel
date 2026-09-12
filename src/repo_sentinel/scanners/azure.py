@@ -116,16 +116,31 @@ def _check_injection(path: str, document: "yamlish.Node") -> "Iterator[Finding]"
             )
 
 
+#: The pool Microsoft runs. "Azure Pipelines" is its current name and the
+#: "Hosted *" family is what those agents were called before; an image name
+#: appears where a project writes the shorthand. All of them are ephemeral
+#: agents somebody else operates, which is the opposite of what AZ002 is about
+#: -- and "Azure Pipelines" is exactly what a documentation snippet says, so
+#: the rule was at its loudest where it was most wrong.
+_HOSTED_PREFIXES = ("azure pipelines", "ubuntu-", "windows-", "macos-", "vs20", "hosted")
+
+
+def _is_hosted(pool: str) -> bool:
+    return pool.lower().startswith(_HOSTED_PREFIXES)
+
+
 def _check_pool(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
     """AZ002: a self-hosted pool, which keeps whatever a job leaves behind."""
     for key, node in document.walk():
         if key != "pool":
             continue
+        if node.is_map and node.get("vmImage") is not None:
+            continue  # a vmImage is a Microsoft-hosted agent, whatever the pool is called
         name = node.get("name") if node.is_map else node
         if name is None or not name.text:
             continue
         value = name.text.strip().strip("\"'")
-        if value.lower().startswith(("ubuntu-", "windows-", "macos-", "vs20")):
+        if _is_hosted(value):
             continue
         yield Finding(
             rule_id="AZ002",

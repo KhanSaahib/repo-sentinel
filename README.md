@@ -124,6 +124,12 @@ the rule is that it found a real instance. A documented token shape — a GitHub
 PAT, a Stripe live key — is high confidence; a high-entropy string next to a
 variable named `api_key` is a heuristic, and says so.
 
+Confidence also moves with where a file sits. A credential in `testdata/` or a
+README is usually invented, and a pipeline under `docs/` is a tutorial snippet
+rather than something that runs, so both drop a step. Neither is silenced --
+that is what `--min-confidence` is for, and a real key does get committed to a
+fixture directory.
+
 The split is what makes the tool tunable without making it useless. A pipeline
 that wants a hard gate can run `--fail-on high --min-confidence high` and be
 woken only for things the scanner can defend, while a human audit runs with

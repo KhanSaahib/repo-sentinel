@@ -399,16 +399,12 @@ def _weigh_for_context(path: str, findings: "list[Finding]") -> "list[Finding]":
     weighed = []
     for finding in findings:
         if prose and finding.confidence > Confidence.LOW:
-            weighed.append(dataclasses.replace(finding, confidence=_one_step_down(finding.confidence)))
+            weighed.append(dataclasses.replace(finding, confidence=finding.confidence.weaker))
         elif fixtures and finding.confidence == Confidence.MEDIUM:
             weighed.append(dataclasses.replace(finding, confidence=Confidence.LOW))
         else:
             weighed.append(finding)
     return weighed
-
-
-def _one_step_down(confidence: Confidence) -> Confidence:
-    return Confidence.MEDIUM if confidence == Confidence.HIGH else Confidence.LOW
 
 
 def scan_files(
