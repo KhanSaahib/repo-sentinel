@@ -12,17 +12,19 @@ last of them is the first that reads code rather than configuration.
 
 ### Added
 
-- **Terraform** (TF001–TF006): security groups open to the internet, public
+- **Terraform** (TF001–TF008): security groups open to the internet, public
   storage, encryption switched off, wildcard IAM policies, public database
   endpoints, and unencrypted remote state. Built on a small HCL reader that
   knows blocks, so `cidr_blocks` in an `egress` block is correctly not a
   finding and `encrypted = false` in a `root_block_device` is reported where it
   actually sits.
-- **Kubernetes** (K8S001–K8S008): privileged containers, host namespaces,
+- **Kubernetes** (K8S001–K8S012): privileged containers, host namespaces,
   hostPath mounts, capabilities added after the drop, declared root, absent
-  resource limits, floating image tags, and credentials inside `Secret`
-  manifests -- decoded from base64 and identified by the secret rules.
-  Manifests are recognised by content (`apiVersion` plus `kind`), not by path.
+  resource limits, floating image tags, credentials inside `Secret` manifests
+  -- decoded from base64 and identified by the secret rules -- RBAC wildcards,
+  bindings to everybody, host ports, and confinement switched off by name.
+  Manifests are recognised by content (`apiVersion` plus `kind`), not by path,
+  and a chart's values are read where a `Chart.yaml` sits beside them.
 - **Docker Compose** (DC001–DC006): privileged services, bind mounts that grant
   the host, shared host namespaces, confinement removed, sensitive ports
   published on every interface, and floating image tags.
@@ -104,7 +106,7 @@ last of them is the first that reads code rather than configuration.
   Ansible's idioms make most "insecure" patterns ambiguous and these three are
   wrong wherever they appear. Playbooks are recognised by vocabulary, and
   findings name the task they belong to, including inside a `block`.
-- **CloudFormation** (CF001–CF005): open security groups, public buckets,
+- **CloudFormation** (CF001–CF006): open security groups, public buckets,
   encryption switched off, wildcard policies, public databases. The Terraform
   rules in AWS's other vocabulary, since the mistakes do not care which tool
   describes them. Both YAML and JSON templates, through readers that produce
