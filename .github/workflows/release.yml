@@ -5,7 +5,7 @@ name: release
 # publishing, which exchanges the job's OIDC identity for a short-lived upload
 # token -- so there is no long-lived secret to leak, rotate, or find in a scan.
 #
-# Before the first release, add repo-sentinel as a trusted publisher on PyPI
+# Before the first release, add bluerayscan as a trusted publisher on PyPI
 # (project settings -> publishing) naming this repository, this workflow file,
 # and the "pypi" environment. Until that exists the publish step fails, which
 # is the right way round: an unconfigured release does nothing rather than

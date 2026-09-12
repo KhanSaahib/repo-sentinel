@@ -1,4 +1,4 @@
-# repo-sentinel
+# BlueRayScan
 
 [![CI](https://github.com/KhanSaahib/repo-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/KhanSaahib/repo-sentinel/actions/workflows/ci.yml)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/downloads/)
@@ -16,6 +16,23 @@ that publishes your database on every interface.
 you run against your supply chain should not enlarge it.
 
 ## Install
+
+From PyPI with `pipx`:
+
+```bash
+pipx install bluerayscan
+```
+
+Or with `pip`:
+
+```bash
+pip install bluerayscan
+```
+
+The primary command is `bluerayscan`. The existing `repo-sentinel` command is
+kept as a compatibility alias.
+
+From a checkout:
 
 ```bash
 git clone https://github.com/KhanSaahib/repo-sentinel.git
@@ -40,7 +57,7 @@ PYTHONPATH=src python -m repo_sentinel scan .
 Start here:
 
 ```bash
-repo-sentinel init .
+bluerayscan init .
 ```
 
 That scans the repository, tells you what is in it -- including which three
@@ -55,36 +72,36 @@ is overwritten without `--force`.
 Then, day to day:
 
 ```bash
-repo-sentinel scan .                          # scan the working directory
-repo-sentinel scan ../other-project           # scan somewhere else
-repo-sentinel rules                           # what does this thing check for?
-repo-sentinel rules kubernetes                # ...or just that family
-repo-sentinel rules WF011                     # one rule, explained in full
-repo-sentinel init .                          # set a repository up
+bluerayscan scan .                          # scan the working directory
+bluerayscan scan ../other-project           # scan somewhere else
+bluerayscan rules                           # what does this thing check for?
+bluerayscan rules kubernetes                # ...or just that family
+bluerayscan rules WF011                     # one rule, explained in full
+bluerayscan init .                          # set a repository up
 
-repo-sentinel scan . --format json            # machine-readable output
-repo-sentinel scan . --format sarif --output results.sarif
-repo-sentinel scan . --format markdown         # a pull request comment
-repo-sentinel scan . --format github          # annotations on the diff
-repo-sentinel scan . --format junit           # a test report, for other CIs
-repo-sentinel scan . --min-severity high      # only show what matters most
-repo-sentinel scan . --min-confidence high    # only show what it is sure of
-repo-sentinel scan . --fail-on critical       # relax the CI gate
-repo-sentinel scan . --fail-on none           # report, never fail
-repo-sentinel scan . --exclude 'fixtures'     # skip a directory (repeatable)
-repo-sentinel scan . --max-file-size 8M       # read the big ones too
-repo-sentinel scan . --no-gitignore           # also scan git-ignored files
-repo-sentinel scan . --no-example-allowlist   # include documented and invented keys
-repo-sentinel scan . --no-suppression         # read past the ignore markers
+bluerayscan scan . --format json            # machine-readable output
+bluerayscan scan . --format sarif --output results.sarif
+bluerayscan scan . --format markdown         # a pull request comment
+bluerayscan scan . --format github          # annotations on the diff
+bluerayscan scan . --format junit           # a test report, for other CIs
+bluerayscan scan . --min-severity high      # only show what matters most
+bluerayscan scan . --min-confidence high    # only show what it is sure of
+bluerayscan scan . --fail-on critical       # relax the CI gate
+bluerayscan scan . --fail-on none           # report, never fail
+bluerayscan scan . --exclude 'fixtures'     # skip a directory (repeatable)
+bluerayscan scan . --max-file-size 8M       # read the big ones too
+bluerayscan scan . --no-gitignore           # also scan git-ignored files
+bluerayscan scan . --no-example-allowlist   # include documented and invented keys
+bluerayscan scan . --no-suppression         # read past the ignore markers
 
-repo-sentinel scan . --write-baseline         # accept what is already there
-repo-sentinel scan . --baseline               # fail only on what is new
-repo-sentinel scan . --prune-baseline         # drop entries that match nothing
+bluerayscan scan . --write-baseline         # accept what is already there
+bluerayscan scan . --baseline               # fail only on what is new
+bluerayscan scan . --prune-baseline         # drop entries that match nothing
 
-repo-sentinel scan . --disable K8S004         # switch off a rule or family
-repo-sentinel scan . --quiet                  # the summary, and what it is mostly
-repo-sentinel scan . --sort path              # group by file, to read rather than triage
-git diff --name-only origin/main | repo-sentinel scan . --paths-from -
+bluerayscan scan . --disable K8S004         # switch off a rule or family
+bluerayscan scan . --quiet                  # the summary, and what it is mostly
+bluerayscan scan . --sort path              # group by file, to read rather than triage
+git diff --name-only origin/main | bluerayscan scan . --paths-from -
 ```
 
 That last line is the fast per-pull-request run: the scan is restricted to the
@@ -99,7 +116,7 @@ posts the comment wants -- a `2` still means the run itself went wrong. That mak
 one-line CI gate:
 
 ```yaml
-- run: pipx run repo-sentinel scan . --fail-on high
+- run: pipx run bluerayscan scan . --fail-on high
 ```
 
 Sample output:
