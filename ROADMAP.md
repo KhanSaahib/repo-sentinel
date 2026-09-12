@@ -30,14 +30,25 @@ better outcome than a feature nobody wanted.
       findings: a value written on the lines beneath its name, which is how
       YAML carries anything long. A PEM body is still read from its header
       line, which is the line that identifies it
-- [ ] Report the *shape* of a near miss: a value that failed the entropy floor
-      by a hair next to a credential-shaped name is worth a low-confidence
-      finding, and today it is silent
-- [ ] Verify a candidate is not already public (git history vs. working tree),
-      and report the first-seen commit
-- [ ] ~~Optional live validation (`--verify`)~~ — off by default and probably
-      always: it turns a static scan into an outbound request carrying the
-      credential it is unsure about
+- [x] ~~Report the *shape* of a near miss: a value that failed the entropy
+      floor by a hair next to a credential-shaped name~~ -- measured and
+      refused. At a margin of a tenth of a bit it is 172 findings across the
+      twenty-one pinned repositories and one of them is worth reading; the
+      rest are one variable assigned to another, a class name, a Vault
+      reference. The floor's margin is what holds those back. Numbers in
+      `docs/RULES.md`
+- [x] The question that idea was asking -- *did you miss my secret?* -- gets
+      an answer that costs nothing instead: `bluerayscan explain VALUE
+      --name NAME` prints the measurements and says what would happen to it
+- [x] Report the first-seen commit: `bluerayscan history` reads a `git log -p`
+      stream and names the commit that introduced each credential, earliest
+      first. This tool still does not run git; the caller does
+- [ ] ~~Say whether a found credential is *live*, rather than merely public
+      (`--verify`)~~ — off by default and probably always. Nothing local can
+      answer it, and the only thing that can is an outbound request carrying
+      the credential this tool is unsure about, to somebody else's service.
+      "Public since March" is the part that is knowable here, and it is the
+      part that decides the rotation
 
 ## Workflow and CI analysis
 
@@ -124,4 +135,6 @@ better outcome than a feature nobody wanted.
 - [x] A fixed corpus of real repositories pinned by commit, so a heuristic
       change can be measured rather than argued about (`tools/corpus.json`,
       `measure.py --fetch/--save/--compare`)
-- [ ] Enable CodeQL default setup and branch protection on `main`
+- [x] CodeQL default setup, over Python and Actions both, and branch
+      protection on `main`: ten required checks, linear history, no force
+      pushes
