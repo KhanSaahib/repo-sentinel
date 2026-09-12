@@ -4,73 +4,109 @@ The backlog for repo-sentinel, roughly in priority order. Work moves top-down.
 Tick an item when it lands on `main` with tests and a green CI run.
 
 Anything here can be reordered, rewritten, or dropped if it turns out to be a
-bad idea. A crossed-out item with a note explaining why it was wrong is a better
-outcome than a feature nobody wanted.
+bad idea. A crossed-out item with a note explaining why it was wrong is a
+better outcome than a feature nobody wanted.
 
 ## Detection quality
 
-- [x] Allowlist documented public example credentials (`AKIAIOSFODNN7EXAMPLE`,
-      RFC test JWTs) so the scanner stops flagging documentation
+- [x] Allowlist documented public example credentials so the scanner stops
+      flagging documentation
 - [x] Respect `.gitignore` when walking a repository, nested files included,
       with `--no-gitignore` to audit what was hidden
-- [x] File-level and block-level suppression, not just per-line
-      (`ignore-file`, `ignore-start` / `ignore-end`). The file-level marker is
-      only honoured in the first 20 lines, so a document that merely mentions
-      it does not go unscanned; an unterminated block is reported as SEC900
-- [x] Baseline file: record accepted findings so CI only fails on new ones
-      (`--write-baseline` / `--baseline`). Entries are keyed by rule, path and
-      redacted evidence rather than line number, so unrelated edits do not
-      invalidate the file; entries that match nothing are reported, not dropped
-- [x] Track the entropy floor separately per rule; 3.2 is too low for base64
-      blobs and too high for short hex tokens. Landed as a floor per *character
-      class* rather than per rule id: SEC100 is the only entropy-gated rule, and
-      the variance that mattered was in the candidate's own alphabet. The floor
-      is now a fraction of `log2(min(alphabet size, length))`, fitted per class
-      against simulated random draws
-- [ ] Detect secrets in `.env`, `.npmrc`, `.pypirc` and `docker-compose.yml`
-      value positions, where there is no quoted assignment to match
-- [ ] More provider rules: Azure storage keys, GCP service account JSON,
-      SendGrid, Twilio, npm tokens, PyPI tokens, Docker Hub tokens
-- [ ] Confidence score per finding, separate from severity
+- [x] File-level, block-level and rule-scoped suppression, each counted in the
+      summary so silence is never free
+- [x] Baseline file with fingerprints that omit line numbers, plus
+      `--prune-baseline` for entries that match nothing
+- [x] ~~Track the entropy floor separately per rule~~ — per *rule* was the wrong
+      axis. The threshold depends on the value's own alphabet and length, which
+      is what `heuristics.entropy_floor` measures
+- [x] Secrets in value positions (`.env`, `.npmrc`, `.pypirc`, Compose), where
+      there is no quoted assignment to match
+- [x] Confidence as an axis of its own, weighed by where the file sits, with
+      `--min-confidence` to gate on it
+- [x] GCP service account JSON as a whole document (SEC021), and credentials
+      hidden inside base64 (SEC022)
+- [ ] Multi-line detection generally: the scanner is line-by-line, so a PEM body
+      or a wrapped JSON credential is only caught by its first line
+- [ ] Report the *shape* of a near miss: a value that failed the entropy floor
+      by a hair next to a credential-shaped name is worth a low-confidence
+      finding, and today it is silent
 - [ ] Verify a candidate is not already public (git history vs. working tree),
-      and report first-seen commit
+      and report the first-seen commit
+- [ ] ~~Optional live validation (`--verify`)~~ — off by default and probably
+      always: it turns a static scan into an outbound request carrying the
+      credential it is unsure about
 
 ## Workflow and CI analysis
 
-- [ ] Detect `actions/checkout` with `persist-credentials: true` (the default)
-      followed by a step that runs untrusted code
-- [ ] Flag `secrets.GITHUB_TOKEN` passed to a third-party action
-- [ ] Flag workflows triggered by `workflow_run` that check out the triggering
-      run's head
-- [ ] Detect self-hosted runners on public repositories
-- [ ] Per-job `permissions:` analysis rather than the current file-level check
-- [ ] Warn when a job has `permissions: write-all` or `contents: write` without
-      an obvious need
+- [x] Per-job `permissions:` analysis, `write-all`, secrets passed to a
+      third-party action, `workflow_run` checking out the triggering head,
+      self-hosted runners, and a token that outlives its step
+- [x] GitLab, Azure Pipelines, CircleCI and Jenkins, each with its own
+      injection vocabulary and its own quoting rules
+- [x] ~~Reusable workflow calls (`uses:` at job level) pinned to a mutable
+      ref~~ -- already covered: WF001 reads any `uses:`, with or without the
+      list dash. WF011 is the part that was actually missing, and it is about
+      the secrets, not the ref
+- [ ] Warn on `contents: write` without an obvious need — needs a notion of
+      "obvious need" that does not just move the noise somewhere else
+- [x] Composite actions in the repository itself (`action.yml`), which are
+      workflows in all but trigger. WF012 is the rule that only makes sense
+      there: an action cannot tell a safe input from a dangerous one
 
 ## Beyond GitHub Actions
 
-- [ ] Dockerfile checks: running as root, `curl | sh`, unpinned base images,
-      secrets in `ARG`/`ENV`
-- [ ] Terraform checks: public S3 buckets, `0.0.0.0/0` security group ingress,
-      unencrypted storage
-- [ ] Kubernetes manifests: privileged containers, hostPath mounts, missing
-      resource limits
+- [x] Dockerfiles, Compose, Terraform, CloudFormation, Kubernetes, Ansible,
+      dependency manifests, shell scripts and Makefiles
+- [x] Helm `values.yaml` -- read where a `Chart.yaml` sits beside it, for the
+      settings that carry their meaning wherever they are written. Reading it
+      *against the templates* is still open, and would answer the question
+      this cannot: whether the chart passes the value through at all
+- [x] Kustomize overlays: the manifests a kustomization patches in are read,
+      with the line numbers shifted so a finding points at the patched line
+- [x] ~~systemd units and cron files as a family~~ -- they did not need one.
+      A unit is an INI file and a crontab is assignments, so both became
+      value-position formats for the rules that already read those
+- [x] More application-code idioms, measured against nineteen repositories:
+      AP004 (unsafe deserialisation), AP005 (a password through a fast digest)
+      and AP006 (a shell command built by interpolation). The family is six
+      rules and reads five languages
+- [ ] A seventh, if one earns it. The bar is an idiom with one meaning, read
+      only in the language where it has that meaning -- which is what keeps
+      this family three rules rather than thirty
 
 ## Output and integration
 
-- [ ] SARIF output so findings appear in the GitHub Security tab
-- [ ] `--diff` mode: scan only files changed against a base ref, for fast PR runs
-- [ ] Pre-commit hook definition
-- [ ] Publish to PyPI so `pipx run repo-sentinel` works
-- [ ] GitHub Action wrapper in this repository
-- [ ] `--quiet` and `--verbose` levels; make text output narrower than 80 columns
+- [x] SARIF with stable partial fingerprints, CWE tags and help URLs
+- [x] JUnit XML, which GitLab, Azure and Jenkins render without a plugin
+- [x] Pre-commit hook, GitHub Action wrapper, `rules` command, `init` command
+- [x] `--paths-from FILE` for per-PR runs, `--format markdown` for a PR comment,
+      `--format github` for annotations
+- [x] `--quiet`, `--sort`, `--disable`, per-path configuration
+- [x] `--fail-on none`, so a reporting job need not borrow its CI's word for
+      "do not stop here"
+- [x] Every skip counted and named: unreadable paths, files over the size
+      limit, suppression markers -- in the sentence, in the JSON, and in the
+      SARIF invocation
+- [x] ~~`--explain RULE`~~ -- a flag was the wrong shape. `rules WF011` already
+      names one rule; it now prints the card instead of the row, which is what
+      the flag would have done and one fewer thing to know
+- [x] Group findings by file in text output, under `--sort path`
+- [ ] Publish to PyPI so `pipx run repo-sentinel` works — the release workflow
+      is written and uses trusted publishing; it needs the project registered
 
 ## Engineering health
 
-- [ ] Coverage measurement in CI with a floor
-- [ ] Property-based tests for the entropy and redaction functions
-- [ ] Benchmark against a large repository; the walk should stay under a second
-      for 10k files
-- [ ] Type annotations checked with mypy in CI
-- [ ] CONTRIBUTING.md and issue templates
+- [x] A corpus that trips every rule, asserted four ways against the catalogue,
+      the scanners, the docs and the severity ceiling
+- [x] Coverage measurement in CI with a floor, using the standard library
+- [x] Property-based and seeded-fuzz tests over all three readers, with time
+      bounds and scaling guards for the shapes that were quadratic
+- [x] Type annotations checked with mypy in CI
+- [x] Issue templates, CONTRIBUTING.md, SECURITY.md
+- [x] Benchmark against large repositories: the Python standard library went
+      5.1s → 1.3s, Prometheus a five-minute timeout → 3.7s
+- [x] A fixed corpus of real repositories pinned by commit, so a heuristic
+      change can be measured rather than argued about (`tools/corpus.json`,
+      `measure.py --fetch/--save/--compare`)
 - [ ] Enable CodeQL default setup and branch protection on `main`

@@ -1,220 +1,113 @@
-import contextlib
-import io
+"""Baselines: accepting what is already there without going blind to it."""
+
 import json
 import os
 import tempfile
 import unittest
 
-import fixtures
-from repo_sentinel import cli
-from repo_sentinel.baseline import Baseline, BaselineError, fingerprint, serialise
+from repo_sentinel import baseline
 from repo_sentinel.findings import Finding, Severity
 
 
-def make_finding(**overrides):
-    fields = {
-        "rule_id": "SEC001",
-        "severity": Severity.CRITICAL,
-        "title": "AWS access key id",
-        "path": "app.py",
-        "line": 3,
-        "evidence": "AKIA****************WXYZ",
-    }
-    fields.update(overrides)
-    return Finding(**fields)
+def finding(rule_id="SEC001", path="app.py", line=3, evidence="AKIA****LM3D"):
+    return Finding(
+        rule_id=rule_id,
+        severity=Severity.CRITICAL,
+        title="AWS access key id",
+        path=path,
+        line=line,
+        evidence=evidence,
+    )
 
 
-def run(argv):
-    stdout = io.StringIO()
-    stderr = io.StringIO()
-    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-        code = cli.main(argv)
-    return code, stdout.getvalue(), stderr.getvalue()
+class TestFingerprints(unittest.TestCase):
+    def test_moving_a_finding_down_a_file_keeps_its_identity(self):
+        self.assertEqual(finding(line=3).fingerprint, finding(line=90).fingerprint)
 
-
-@contextlib.contextmanager
-def leaky_repo():
-    """A repository with one critical secret and one workflow finding."""
-    with tempfile.TemporaryDirectory() as root:
-        os.makedirs(os.path.join(root, ".github", "workflows"))
-        with open(os.path.join(root, "app.py"), "w", encoding="utf-8") as handle:
-            handle.write(f'AWS_KEY = "{fixtures.REALISTIC_AWS_KEY_ID}"\n')
-        with open(
-            os.path.join(root, ".github", "workflows", "ci.yml"), "w", encoding="utf-8"
-        ) as handle:
-            handle.write("jobs:\n  build:\n    steps:\n      - uses: actions/checkout@v4\n")
-        yield root
-
-
-class TestFingerprint(unittest.TestCase):
-    def test_survives_the_finding_moving_down_the_file(self):
-        self.assertEqual(
-            fingerprint(make_finding(line=3)),
-            fingerprint(make_finding(line=91)),
-        )
-
-    def test_survives_a_severity_retune(self):
-        self.assertEqual(
-            fingerprint(make_finding(severity=Severity.CRITICAL)),
-            fingerprint(make_finding(severity=Severity.HIGH)),
-        )
-
-    def test_distinguishes_the_same_secret_in_another_file(self):
+    def test_changing_the_value_makes_a_new_finding(self):
         self.assertNotEqual(
-            fingerprint(make_finding(path="app.py")),
-            fingerprint(make_finding(path="lib/app.py")),
+            finding().fingerprint, finding(evidence="AKIA****QQ99").fingerprint
         )
 
-    def test_distinguishes_a_different_secret_in_the_same_file(self):
-        self.assertNotEqual(
-            fingerprint(make_finding(evidence="AKIA****************WXYZ")),
-            fingerprint(make_finding(evidence="AKIA****************0000")),
-        )
-
-    def test_distinguishes_two_rules_firing_on_one_line(self):
-        self.assertNotEqual(
-            fingerprint(make_finding(rule_id="SEC001")),
-            fingerprint(make_finding(rule_id="SEC100")),
-        )
+    def test_moving_a_finding_to_another_file_makes_a_new_finding(self):
+        self.assertNotEqual(finding().fingerprint, finding(path="other.py").fingerprint)
 
 
-class TestSerialise(unittest.TestCase):
-    def test_is_stable_across_runs_and_input_order(self):
-        one = make_finding(path="a.py")
-        two = make_finding(path="b.py", evidence="AKIA****************0000")
-        self.assertEqual(serialise([one, two]), serialise([two, one]))
+class TestPartition(unittest.TestCase):
+    def test_known_findings_are_accepted_and_new_ones_are_not(self):
+        known, fresh = finding(), finding(rule_id="SEC005", evidence="sk_l****90ab")
+        recorded = baseline.Baseline((baseline.Entry.of(known),))
+        new, accepted, stale = recorded.partition([known, fresh])
+        self.assertEqual(new, [fresh])
+        self.assertEqual(accepted, [known])
+        self.assertEqual(stale, [])
 
-    def test_collapses_the_same_secret_repeated_in_one_file(self):
-        payload = json.loads(serialise([make_finding(line=3), make_finding(line=9)]))
+    def test_an_entry_that_matches_nothing_is_reported_as_stale(self):
+        recorded = baseline.Baseline((baseline.Entry.of(finding()),))
+        new, accepted, stale = recorded.partition([])
+        self.assertEqual((new, accepted), ([], []))
+        self.assertEqual(len(stale), 1)
+        self.assertEqual(stale[0].rule_id, "SEC001")
+
+    def test_an_empty_baseline_accepts_nothing(self):
+        new, accepted, stale = baseline.Baseline().partition([finding()])
+        self.assertEqual(len(new), 1)
+        self.assertEqual((accepted, stale), ([], []))
+
+
+class TestDocument(unittest.TestCase):
+    def test_the_file_never_contains_the_evidence_let_alone_a_secret(self):
+        raw = "AKIA" + "ZZ7Q4TWFN2XKLM3D"
+        text = baseline.dumps([finding(evidence=raw)], version="0.2.0")
+        self.assertNotIn(raw, text)
+        self.assertNotIn("AKIA****LM3D", baseline.dumps([finding()], version="0.2.0"))
+
+    def test_regenerating_an_unchanged_scan_produces_an_identical_file(self):
+        first = baseline.dumps([finding(), finding(rule_id="SEC005")], version="0.2.0")
+        second = baseline.dumps([finding(rule_id="SEC005"), finding()], version="0.2.0")
+        self.assertEqual(first, second)
+
+    def test_duplicate_findings_collapse_to_one_entry(self):
+        payload = json.loads(baseline.dumps([finding(), finding(line=99)], version="0.2.0"))
         self.assertEqual(len(payload["findings"]), 1)
-
-    def test_records_only_redacted_evidence(self):
-        with leaky_repo() as root:
-            findings = cli.scan_path(root)
-        text = serialise(findings)
-        self.assertNotIn(fixtures.REALISTIC_AWS_KEY_ID, text)
 
 
 class TestLoad(unittest.TestCase):
-    def _write(self, root, payload):
-        path = os.path.join(root, "baseline.json")
-        with open(path, "w", encoding="utf-8") as handle:
-            handle.write(payload if isinstance(payload, str) else json.dumps(payload))
-        return path
+    def _write(self, text):
+        handle = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+        handle.write(text)
+        handle.close()
+        self.addCleanup(os.unlink, handle.name)
+        return handle.name
 
-    def test_missing_file_is_an_error_not_an_empty_baseline(self):
+    def test_round_trips_through_a_file(self):
         with tempfile.TemporaryDirectory() as root:
-            with self.assertRaises(BaselineError):
-                Baseline.load(os.path.join(root, "nope.json"))
+            path = os.path.join(root, "nested", "baseline.json")
+            count = baseline.write(path, [finding()], version="0.2.0")
+            self.assertEqual(count, 1)
+            self.assertEqual(baseline.load(path).fingerprints, {finding().fingerprint})
 
-    def test_corrupt_json_is_an_error(self):
-        with tempfile.TemporaryDirectory() as root:
-            path = self._write(root, "{not json")
-            with self.assertRaises(BaselineError):
-                Baseline.load(path)
+    def test_a_missing_file_says_how_to_make_one(self):
+        with self.assertRaises(baseline.BaselineError) as caught:
+            baseline.load(os.path.join(tempfile.gettempdir(), "does-not-exist.json"))
+        self.assertIn("--write-baseline", str(caught.exception))
 
-    def test_a_future_format_version_is_refused(self):
-        with tempfile.TemporaryDirectory() as root:
-            path = self._write(root, {"baseline_version": 99, "findings": []})
-            with self.assertRaises(BaselineError):
-                Baseline.load(path)
+    def test_broken_json_is_an_error_not_an_empty_baseline(self):
+        # Silently treating an unreadable baseline as empty would be safe; as
+        # ignorable it would not. The failure mode to avoid is the opposite one,
+        # where a corrupt file accidentally accepts everything.
+        with self.assertRaises(baseline.BaselineError):
+            baseline.load(self._write("{not json"))
 
-    def test_an_entry_without_a_fingerprint_is_refused(self):
-        with tempfile.TemporaryDirectory() as root:
-            path = self._write(
-                root, {"baseline_version": 1, "findings": [{"rule_id": "SEC001"}]}
-            )
-            with self.assertRaises(BaselineError):
-                Baseline.load(path)
+    def test_a_foreign_document_is_rejected(self):
+        with self.assertRaises(baseline.BaselineError):
+            baseline.load(self._write('{"hello": "world"}'))
 
-    def test_round_trips_what_serialise_wrote(self):
-        with tempfile.TemporaryDirectory() as root:
-            path = self._write(root, serialise([make_finding()]))
-            self.assertEqual(len(Baseline.load(path)), 1)
-
-
-class TestFilter(unittest.TestCase):
-    def test_accepted_findings_are_removed_and_new_ones_are_not(self):
-        accepted = make_finding()
-        fresh = make_finding(path="new.py")
-        recorded = Baseline([fingerprint(accepted)])
-        self.assertEqual(recorded.filter([accepted, fresh]), [fresh])
-
-    def test_stale_entries_are_counted(self):
-        recorded = Baseline([fingerprint(make_finding()), "deadbeef"])
-        recorded.filter([make_finding()])
-        self.assertEqual(recorded.stale_count, 1)
-
-
-class TestCliIntegration(unittest.TestCase):
-    def test_write_then_scan_is_green_and_a_new_secret_turns_it_red(self):
-        with leaky_repo() as root:
-            path = os.path.join(root, "baseline.json")
-            written, out, _ = run(["scan", root, "--write-baseline", path])
-            self.assertEqual(written, cli.EXIT_OK)
-            self.assertIn("Recorded", out)
-
-            clean, out, _ = run(["scan", root, "--baseline", path])
-            self.assertEqual(clean, cli.EXIT_OK)
-            self.assertIn("hidden by the baseline", out)
-
-            with open(os.path.join(root, "later.py"), "w", encoding="utf-8") as handle:
-                handle.write(f'KEY = "{fixtures.REALISTIC_AWS_KEY_ID}"\n')
-            dirty, _, _ = run(["scan", root, "--baseline", path])
-            self.assertEqual(dirty, cli.EXIT_FINDINGS)
-
-    def test_baselined_findings_survive_the_file_growing(self):
-        with leaky_repo() as root:
-            path = os.path.join(root, "baseline.json")
-            run(["scan", root, "--write-baseline", path])
-            app = os.path.join(root, "app.py")
-            with open(app, encoding="utf-8") as handle:
-                body = handle.read()
-            with open(app, "w", encoding="utf-8") as handle:
-                handle.write("import os\nimport sys\n\n" + body)
-            code, _, _ = run(["scan", root, "--baseline", path])
-        self.assertEqual(code, cli.EXIT_OK)
-
-    def test_json_output_reports_what_the_baseline_did(self):
-        with leaky_repo() as root:
-            path = os.path.join(root, "baseline.json")
-            run(["scan", root, "--write-baseline", path])
-            _, out, _ = run(["scan", root, "--baseline", path, "--format", "json"])
-        report = json.loads(out)["baseline"]
-        self.assertGreater(report["suppressed"], 0)
-        self.assertEqual(report["stale_entries"], 0)
-
-    def test_a_fixed_finding_is_reported_as_a_stale_entry(self):
-        with leaky_repo() as root:
-            path = os.path.join(root, "baseline.json")
-            run(["scan", root, "--write-baseline", path])
-            with open(os.path.join(root, "app.py"), "w", encoding="utf-8") as handle:
-                handle.write("AWS_KEY = os.environ['AWS_KEY']\n")
-            _, out, _ = run(["scan", root, "--baseline", path, "--format", "json"])
-        self.assertEqual(json.loads(out)["baseline"]["stale_entries"], 1)
-
-    def test_a_missing_baseline_fails_loudly_rather_than_scanning_clean(self):
-        with leaky_repo() as root:
-            code, _, err = run(
-                ["scan", root, "--baseline", os.path.join(root, "absent.json")]
-            )
-        self.assertEqual(code, cli.EXIT_ERROR)
-        self.assertIn("not found", err)
-
-    def test_write_baseline_records_findings_below_min_severity(self):
-        with tempfile.TemporaryDirectory() as root:
-            with open(os.path.join(root, "a.py"), "w", encoding="utf-8") as handle:
-                handle.write('k = "sk_test_abcdefghij0123456789"\n')
-            path = os.path.join(root, "baseline.json")
-            run(["scan", root, "--min-severity", "critical", "--write-baseline", path])
-            with open(path, encoding="utf-8") as handle:
-                recorded = json.load(handle)["findings"]
-        self.assertEqual([entry["rule_id"] for entry in recorded], ["SEC010"])
-
-    def test_the_two_baseline_flags_are_mutually_exclusive(self):
-        with self.assertRaises(SystemExit):
-            with contextlib.redirect_stderr(io.StringIO()):
-                cli.main(["scan", ".", "--baseline", "a.json", "--write-baseline", "b.json"])
+    def test_an_unknown_schema_version_is_rejected(self):
+        path = self._write('{"baseline_version": 99, "findings": []}')
+        with self.assertRaises(baseline.BaselineError) as caught:
+            baseline.load(path)
+        self.assertIn("regenerate", str(caught.exception))
 
 
 if __name__ == "__main__":

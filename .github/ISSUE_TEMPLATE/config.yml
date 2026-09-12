@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability in repo-sentinel itself
+    url: https://github.com/KhanSaahib/repo-sentinel/security/advisories/new
+    about: Report privately through a security advisory, not as a public issue.

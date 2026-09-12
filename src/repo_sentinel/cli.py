@@ -1,98 +1,25 @@
-"""Command line entry point."""
+"""The command line: what was asked for, and which command answers it.
+
+Scanning lives in :mod:`.engine`, formatting in :mod:`.report`, and what each
+command actually does in :mod:`.commands`. What is left here is the parser, the
+config file that supplies its defaults, and the dispatch -- which is worth
+keeping unmixed with the rest, because for a tool whose job is to fail a build
+at the right moment, "did the user ask for this" and "is this a finding" are
+questions that should not be able to confuse each other.
+"""
 
 from __future__ import annotations
 
 import argparse
-import json
+import os
 import sys
 from collections.abc import Sequence
 
-from . import __version__
-from .baseline import Baseline, BaselineError, serialise
-from .discovery import DEFAULT_EXCLUDES, iter_files
-from .findings import Finding, Severity
-from .scanners import secrets, workflows
+from . import __version__, baseline as baseline_module, config as config_module
+from .commands import EXIT_ERROR, EXIT_FINDINGS, EXIT_OK, init_command, rules_command, scan_command
+from .engine import scan_path  # noqa: F401  (re-exported: this is the public API)
 
-EXIT_OK = 0
-EXIT_FINDINGS = 1
-EXIT_ERROR = 2
-
-_COLOURS = {
-    Severity.CRITICAL: "\033[1;31m",
-    Severity.HIGH: "\033[31m",
-    Severity.MEDIUM: "\033[33m",
-    Severity.LOW: "\033[36m",
-}
-_RESET = "\033[0m"
-
-
-def scan_path(
-    path: str,
-    excludes: tuple[str, ...] = DEFAULT_EXCLUDES,
-    *,
-    allow_examples: bool = True,
-    use_gitignore: bool = True,
-) -> list[Finding]:
-    """Run every scanner over ``path`` and return findings worst-first."""
-    files = list(iter_files(path, excludes=excludes, use_gitignore=use_gitignore))
-    found = secrets.scan_files(files, allow_examples=allow_examples)
-    found += workflows.scan_files(files)
-    return sorted(found, key=lambda finding: finding.sort_key)
-
-
-def _baseline_note(suppressed: int, stale: int) -> str:
-    """One line describing what a baseline hid, and what it no longer covers."""
-    note = f"{suppressed} finding(s) hidden by the baseline"
-    if stale:
-        note += (
-            f"; {stale} baseline entry(s) matched nothing and can be pruned "
-            "with --write-baseline"
-        )
-    return note + "."
-
-
-def format_text(
-    findings: Sequence[Finding], *, colour: bool, baseline_note: str = ""
-) -> str:
-    if not findings:
-        clean = "No findings. That is not proof of safety, but it is a good sign."
-        return f"{clean}\n{baseline_note}" if baseline_note else clean
-
-    lines: list[str] = []
-    for finding in findings:
-        label = finding.severity.value.upper()
-        if colour:
-            label = f"{_COLOURS[finding.severity]}{label}{_RESET}"
-        lines.append(f"{label} {finding.rule_id}  {finding.path}:{finding.line}")
-        lines.append(f"    {finding.title}")
-        if finding.evidence:
-            lines.append(f"    evidence: {finding.evidence}")
-        if finding.remediation:
-            lines.append(f"    fix: {finding.remediation}")
-        lines.append("")
-
-    counts: dict[Severity, int] = {}
-    for finding in findings:
-        counts[finding.severity] = counts.get(finding.severity, 0) + 1
-    summary = ", ".join(
-        f"{counts[severity]} {severity.value}"
-        for severity in sorted(counts, key=lambda s: -s.rank)
-    )
-    lines.append(f"{len(findings)} finding(s): {summary}")
-    if baseline_note:
-        lines.append(baseline_note)
-    return "\n".join(lines)
-
-
-def format_json(findings: Sequence[Finding], *, baseline: dict | None = None) -> str:
-    payload = {
-        "version": __version__,
-        "finding_count": len(findings),
-        "findings": [finding.to_dict() for finding in findings],
-    }
-    if baseline is not None:
-        payload["baseline"] = baseline
-    return json.dumps(payload, indent=2)
+__all__ = ["EXIT_ERROR", "EXIT_FINDINGS", "EXIT_OK", "build_parser", "main", "scan_path"]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -103,114 +30,232 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"repo-sentinel {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    scan = subparsers.add_parser("scan", help="scan a directory or file")
-    scan.add_argument("path", nargs="?", default=".", help="path to scan (default: .)")
-    scan.add_argument(
-        "--format", choices=("text", "json"), default="text", help="output format"
+    scan_parser = subparsers.add_parser("scan", help="scan a directory or file")
+    scan_parser.add_argument("path", nargs="?", default=".", help="path to scan (default: .)")
+    scan_parser.add_argument(
+        "--format",
+        choices=("text", "json", "sarif", "markdown", "github", "junit"),
+        default="text",
+        help="output format",
     )
-    scan.add_argument(
+    scan_parser.add_argument(
+        "--output",
+        metavar="FILE",
+        help="write the report to FILE instead of stdout (SARIF uploads want a file)",
+    )
+    scan_parser.add_argument(
         "--min-severity",
         default="low",
         help="hide findings below this severity (low, medium, high, critical)",
     )
-    scan.add_argument(
+    scan_parser.add_argument(
+        "--min-confidence",
+        default="low",
+        help="hide findings below this confidence (low, medium, high)",
+    )
+    scan_parser.add_argument(
         "--fail-on",
         default="medium",
-        help="exit non-zero when a finding reaches this severity (default: medium)",
+        help=(
+            "exit non-zero when a finding reaches this severity (default: "
+            "medium), or 'none' to report without ever failing"
+        ),
     )
-    scan.add_argument(
+    scan_parser.add_argument(
+        "--max-file-size",
+        metavar="SIZE",
+        default=None,
+        help=(
+            "read files up to SIZE (default 2M). Accepts a plain number of "
+            "bytes or a K/M/G suffix; every run says how many files the limit "
+            "skipped"
+        ),
+    )
+    scan_parser.add_argument(
         "--exclude",
         action="append",
         default=[],
         metavar="GLOB",
         help="extra file or directory glob to skip (repeatable)",
     )
-    recording = scan.add_mutually_exclusive_group()
-    recording.add_argument(
+    scan_parser.add_argument(
         "--baseline",
+        nargs="?",
+        const=baseline_module.DEFAULT_PATH,
         metavar="FILE",
-        help="hide findings recorded in FILE, so CI only fails on new ones",
+        help=(
+            "treat findings recorded in FILE as accepted and fail only on new ones "
+            f"(default file: {baseline_module.DEFAULT_PATH})"
+        ),
     )
-    recording.add_argument(
+    scan_parser.add_argument(
         "--write-baseline",
+        nargs="?",
+        const=baseline_module.DEFAULT_PATH,
         metavar="FILE",
-        help="record the current findings in FILE and exit without reporting them",
+        help="record the current findings as accepted, then exit without failing",
     )
-    scan.add_argument(
+    scan_parser.add_argument(
+        "--prune-baseline",
+        nargs="?",
+        const=baseline_module.DEFAULT_PATH,
+        metavar="FILE",
+        help=(
+            "drop the entries that no longer match anything, and nothing else: "
+            "shrinks a baseline without accepting what has arrived since"
+        ),
+    )
+    scan_parser.add_argument(
+        "--config",
+        metavar="FILE",
+        help=(
+            "project defaults, as JSON "
+            f"(default: {config_module.DEFAULT_PATH} beside the scanned tree, if present)"
+        ),
+    )
+    scan_parser.add_argument(
+        "--disable",
+        action="append",
+        default=[],
+        metavar="RULE",
+        help="switch off a rule or a family ('K8S004', 'DC*'); repeatable",
+    )
+    scan_parser.add_argument(
+        "--paths-from",
+        metavar="FILE",
+        help=(
+            "scan only the files listed in FILE, one per line ('-' for stdin). "
+            "Pipe in `git diff --name-only origin/main` for a fast pull request run"
+        ),
+    )
+    scan_parser.add_argument(
+        "--sort",
+        choices=("severity", "path"),
+        default="severity",
+        help="order findings worst-first (default) or by file",
+    )
+    scan_parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="print only the summary, not each finding",
+    )
+    scan_parser.add_argument(
         "--no-gitignore",
         action="store_true",
         help="also scan files git was told to ignore",
     )
-    scan.add_argument(
+    scan_parser.add_argument(
+        "--no-suppression",
+        action="store_true",
+        help="read the 'repo-sentinel: ignore' markers but do not obey them",
+    )
+    scan_parser.add_argument(
         "--no-example-allowlist",
         action="store_true",
         help="also report credentials published as vendor or RFC examples",
     )
-    scan.add_argument("--no-color", action="store_true", help="disable coloured output")
+    scan_parser.add_argument("--no-color", action="store_true", help="disable coloured output")
+
+    init_parser = subparsers.add_parser(
+        "init", help="set this repository up: a config, a baseline, and a CI snippet"
+    )
+    init_parser.add_argument("path", nargs="?", default=".", help="repository to set up")
+    init_parser.add_argument(
+        "--fail-on",
+        default="high",
+        help="severity the generated config should fail on (default: high)",
+    )
+    init_parser.add_argument(
+        "--force", action="store_true", help="overwrite an existing config or baseline"
+    )
+    init_parser.add_argument(
+        "--no-baseline",
+        action="store_true",
+        help="do not record existing findings as accepted",
+    )
+
+    rules_parser = subparsers.add_parser("rules", help="list every rule the scanner knows")
+    rules_parser.add_argument(
+        "pattern",
+        nargs="?",
+        help="show only rules matching an id, a family, or a word in the summary",
+    )
+    rules_parser.add_argument("--format", choices=("text", "json"), default="text")
+    # Kept for the second parse in main(), where a config file supplies
+    # defaults that explicit flags then override.
+    parser.scan_parser = scan_parser  # type: ignore[attr-defined]
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = build_parser()
+#: Config key -> the argparse destination it supplies a default for. The two
+#: booleans are inverted because the flags are phrased as opt-outs.
+_CONFIG_TO_DEST = {
+    "exclude": ("exclude", False),
+    "fail_on": ("fail_on", False),
+    "min_severity": ("min_severity", False),
+    "min_confidence": ("min_confidence", False),
+    "baseline": ("baseline", False),
+    "max_file_size": ("max_file_size", False),
+    "sort": ("sort", False),
+    "disable": ("disable", False),
+    "gitignore": ("no_gitignore", True),
+    "example_allowlist": ("no_example_allowlist", True),
+}
+
+
+def _apply_config(parser: argparse.ArgumentParser, argv: "Sequence[str] | None") -> argparse.Namespace:
+    """Parse twice: once to find the config file, once with it as defaults.
+
+    Parsing again is cheaper than working out whether each flag was passed
+    explicitly, and it gets the precedence right by construction -- argparse
+    already prefers what is on the command line to whatever the defaults say.
+    """
     args = parser.parse_args(argv)
+    if args.command != "scan":
+        return args
+    args.path_scopes = []
 
+    path = config_module.find(args.path, args.config)
+    if path is None:
+        return args
+
+    settings = config_module.load(path)
+    # A path in the config file is relative to the config file, not to
+    # whatever directory the command happened to be run from. Without this,
+    # `repo-sentinel scan some/repo` cannot find the baseline that repo's own
+    # config points at, which is exactly what `init` sets up.
+    if "baseline" in settings and not os.path.isabs(settings["baseline"]):
+        settings["baseline"] = os.path.join(os.path.dirname(path) or ".", settings["baseline"])
+    defaults = {}
+    for key, value in settings.items():
+        mapping = _CONFIG_TO_DEST.get(key)
+        if mapping is None:
+            continue  # a setting with no flag, like the paths table
+        dest, inverted = mapping
+        defaults[dest] = (not value) if inverted else value
+    parser.scan_parser.set_defaults(**defaults)  # type: ignore[attr-defined]
+    reparsed = parser.parse_args(argv)
+    reparsed.config = path
+    # Per-path rules have no command line form -- a glob table does not belong
+    # on one -- so unlike every other setting they travel on the namespace
+    # rather than through argparse's defaults.
+    reparsed.path_scopes = config_module.path_scopes(settings)
+    return reparsed
+
+
+def main(argv: "Sequence[str] | None" = None) -> int:
+    parser = build_parser()
     try:
-        min_severity = Severity.parse(args.min_severity)
-        fail_on = Severity.parse(args.fail_on)
-    except ValueError as error:
-        parser.error(str(error))
-        return EXIT_ERROR  # pragma: no cover - argparse exits first
+        args = _apply_config(parser, argv)
+    except config_module.ConfigError as error:
+        print(f"repo-sentinel: {error}", file=sys.stderr)
+        return EXIT_ERROR
 
-    scanned = scan_path(
-        args.path,
-        DEFAULT_EXCLUDES + tuple(args.exclude),
-        allow_examples=not args.no_example_allowlist,
-        use_gitignore=not args.no_gitignore,
-    )
-
-    # Written before --min-severity is applied: a baseline records what the scan
-    # saw, not what this invocation chose to show. Otherwise a file recorded
-    # under --min-severity high would quietly stop covering its own low findings
-    # the next time someone ran the scan without that flag.
-    if args.write_baseline:
-        try:
-            with open(args.write_baseline, "w", encoding="utf-8", newline="\n") as handle:
-                handle.write(serialise(scanned))
-        except OSError as error:
-            print(f"cannot write baseline file: {error}", file=sys.stderr)
-            return EXIT_ERROR
-        print(f"Recorded {len(scanned)} finding(s) in {args.write_baseline}.")
-        return EXIT_OK
-
-    note = ""
-    baseline_report = None
-    if args.baseline:
-        try:
-            recorded = Baseline.load(args.baseline)
-        except BaselineError as error:
-            print(str(error), file=sys.stderr)
-            return EXIT_ERROR
-        remaining = recorded.filter(scanned)
-        suppressed = len(scanned) - len(remaining)
-        note = _baseline_note(suppressed, recorded.stale_count)
-        baseline_report = {
-            "path": args.baseline,
-            "suppressed": suppressed,
-            "stale_entries": recorded.stale_count,
-        }
-        scanned = remaining
-
-    findings = [finding for finding in scanned if finding.severity >= min_severity]
-
-    if args.format == "json":
-        print(format_json(findings, baseline=baseline_report))
-    else:
-        colour = not args.no_color and sys.stdout.isatty()
-        print(format_text(findings, colour=colour, baseline_note=note))
-
-    if any(finding.severity >= fail_on for finding in findings):
-        return EXIT_FINDINGS
-    return EXIT_OK
+    if args.command == "init":
+        return init_command(args, parser)
+    if args.command == "rules":
+        return rules_command(args)
+    return scan_command(args, parser)
 
 
 if __name__ == "__main__":  # pragma: no cover

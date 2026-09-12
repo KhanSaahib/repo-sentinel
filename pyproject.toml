@@ -4,13 +4,22 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "repo-sentinel"
-version = "0.1.0"
-description = "Audit a repository for leaked secrets, risky GitHub Actions workflows, and insecure configuration."
+version = "0.3.0"
+description = "Audit a repository for leaked secrets, risky CI workflows, and insecure container and infrastructure configuration."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "KhanSaahib" }]
-keywords = ["security", "secrets", "sast", "github-actions", "static-analysis"]
+keywords = [
+    "security",
+    "secrets",
+    "sast",
+    "github-actions",
+    "terraform",
+    "kubernetes",
+    "docker",
+    "static-analysis",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",

@@ -1,0 +1,86 @@
+name: repo-sentinel
+description: Audit a repository for leaked secrets, risky workflows and insecure Dockerfiles.
+author: KhanSaahib
+
+branding:
+  icon: shield
+  color: red
+
+inputs:
+  path:
+    description: Directory or file to scan.
+    required: false
+    default: "."
+  fail-on:
+    description: Exit non-zero when a finding reaches this severity (low, medium, high, critical).
+    required: false
+    default: medium
+  min-severity:
+    description: Hide findings below this severity.
+    required: false
+    default: low
+  min-confidence:
+    description: Hide findings below this confidence (low, medium, high).
+    required: false
+    default: low
+  baseline:
+    description: Path to a baseline file. Leave empty to scan without one.
+    required: false
+    default: ""
+  sarif-file:
+    description: Write SARIF here as well as printing the text report. Leave empty to skip.
+    required: false
+    default: ""
+  annotations:
+    description: >-
+      Emit workflow commands so findings appear on the pull request diff. Needs
+      no permission, unlike a SARIF upload.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Install repo-sentinel
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: python3 -m pip install --quiet --no-deps "$ACTION_PATH"
+
+    # Inputs travel through the environment and are quoted at the point of use.
+    # Interpolating them straight into the command would be the WF003 mistake
+    # this action exists to find, and an action that cannot follow its own
+    # advice has no business giving it.
+    - name: Run repo-sentinel
+      shell: bash
+      env:
+        RS_PATH: ${{ inputs.path }}
+        RS_FAIL_ON: ${{ inputs.fail-on }}
+        RS_MIN_SEVERITY: ${{ inputs.min-severity }}
+        RS_MIN_CONFIDENCE: ${{ inputs.min-confidence }}
+        RS_BASELINE: ${{ inputs.baseline }}
+        RS_SARIF: ${{ inputs.sarif-file }}
+        RS_ANNOTATIONS: ${{ inputs.annotations }}
+      run: |
+        set -euo pipefail
+        args=(
+          scan "$RS_PATH"
+          --fail-on "$RS_FAIL_ON"
+          --min-severity "$RS_MIN_SEVERITY"
+          --min-confidence "$RS_MIN_CONFIDENCE"
+          --no-color
+        )
+        if [ -n "$RS_BASELINE" ]; then
+          args+=(--baseline "$RS_BASELINE")
+        fi
+        if [ -n "$RS_SARIF" ]; then
+          # The reporting passes run first and must not be stopped by a
+          # finding -- that is the gate's job, below. "|| true" would hide a
+          # real failure too, so they say --fail-on none and keep their
+          # exit codes.
+          repo-sentinel "${args[@]}" --fail-on none --format sarif --output "$RS_SARIF"
+        fi
+        if [ "$RS_ANNOTATIONS" = "true" ]; then
+          repo-sentinel "${args[@]}" --fail-on none --format github
+        fi
+        repo-sentinel "${args[@]}"

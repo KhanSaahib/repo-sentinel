@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import dataclasses
 import fnmatch
 import os
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 
 from .gitignore import GitIgnoreFile, GitIgnoreStack
 
@@ -52,6 +53,25 @@ def is_probably_binary(chunk: bytes) -> bool:
     return b"\x00" in chunk
 
 
+@dataclasses.dataclass(frozen=True)
+class Entry:
+    """One file the walk reached, whether or not its contents were read.
+
+    ``text`` is None for a file that was skipped -- a binary, something over
+    the size limit, something unreadable. The path is still reported, because
+    a name can be a finding on its own: nothing inside ``id_rsa`` or a
+    ``.p12`` keystore is text, and a scanner that only ever sees text would
+    never mention either of them.
+    """
+
+    path: str
+    text: "str | None" = None
+
+    @property
+    def readable(self) -> bool:
+        return self.text is not None
+
+
 def iter_files(
     root: str,
     excludes: tuple[str, ...] = DEFAULT_EXCLUDES,
@@ -59,11 +79,37 @@ def iter_files(
     *,
     use_gitignore: bool = True,
 ) -> Iterator[tuple[str, str]]:
-    """Yield ``(relative_path, text)`` for every scannable file under ``root``.
+    """Yield ``(relative_path, text)`` for every scannable file under ``root``."""
+    for entry in walk(root, excludes, max_bytes, use_gitignore=use_gitignore):
+        if entry.text is not None:
+            yield entry.path, entry.text
+
+
+def walk(
+    root: str,
+    excludes: tuple[str, ...] = DEFAULT_EXCLUDES,
+    max_bytes: int = MAX_FILE_BYTES,
+    *,
+    use_gitignore: bool = True,
+    unreadable: "list[str] | None" = None,
+    oversized: "list[str] | None" = None,
+) -> "Iterator[Entry]":
+    """Yield an :class:`Entry` for every file under ``root`` worth considering.
 
     Paths are yielded with forward slashes so reports read the same on every
-    platform. Unreadable files are skipped rather than raising: a scanner that
-    dies on one permission error is useless in CI.
+    platform. A file that cannot be read as text -- a binary, something over
+    the size limit, something the process has no permission for -- is yielded
+    with no text rather than raising or vanishing: a scanner that dies on one
+    permission error is useless in CI, and a file that silently disappears from
+    the walk is one the name rules never get to see.
+
+    Pass ``unreadable`` to learn what the walk could not open -- a directory
+    without permission, a file that vanished mid-scan. Those are skipped
+    either way, because a scanner that dies on one permission error is useless
+    in CI, but skipping them silently means a tree can be reported clean when
+    most of it was never read. ``oversized`` collects what was skipped for
+    being larger than ``max_bytes``, for the same reason: that is a decision
+    made on the reader's behalf.
 
     With ``use_gitignore`` the walk honours every ``.gitignore`` in the tree,
     each governing its own subtree. Set it to ``False`` to audit what git was
@@ -73,16 +119,27 @@ def iter_files(
     root = os.path.abspath(root)
 
     if os.path.isfile(root):
-        text = _read_text(root, max_bytes)
-        if text is not None:
-            yield os.path.basename(root), text
+        yield Entry(
+            os.path.basename(root),
+            _read_text(root, max_bytes, unreadable, root, oversized),
+        )
         return
 
     # Each directory inherits the stack of its parent, so rules are consulted
     # outermost first and an entry is dropped as soon as its parent is visited.
     stacks: dict[str, GitIgnoreStack] = {root: GitIgnoreStack()}
 
-    for dirpath, dirnames, filenames in os.walk(root):
+    def note(error: OSError) -> None:
+        # The failure can be the root itself, whose path relative to the root
+        # is the empty string. Reporting a run as "1 path could not be opened,
+        # starting with ''" is worse than saying nothing, so the root is named
+        # as it was given.
+        if unreadable is None:
+            return
+        failed = str(error.filename or root)
+        unreadable.append(_relative_dir(failed, root).rstrip("/") or failed)
+
+    for dirpath, dirnames, filenames in os.walk(root, onerror=note):
         stack = stacks.pop(dirpath, GitIgnoreStack())
         prefix = _relative_dir(dirpath, root)
 
@@ -105,16 +162,64 @@ def iter_files(
 
         for filename in sorted(filenames):
             absolute = os.path.join(dirpath, filename)
-            if os.path.splitext(filename)[1].lower() in BINARY_SUFFIXES:
-                continue
             if any(fnmatch.fnmatch(filename, pattern) for pattern in excludes):
                 continue
             relative = f"{prefix}{filename}"
             if stack and stack.is_ignored(relative, False):
                 continue
-            text = _read_text(absolute, max_bytes)
-            if text is None:
+            if os.path.splitext(filename)[1].lower() in BINARY_SUFFIXES:
+                yield Entry(relative)
                 continue
+            yield Entry(
+                relative,
+                _read_text(absolute, max_bytes, unreadable, relative, oversized),
+            )
+
+
+def read_listed(
+    root: str,
+    paths: "Iterable[str]",
+    excludes: "tuple[str, ...]" = (),
+    max_bytes: int = MAX_FILE_BYTES,
+    *,
+    unreadable: "list[str] | None" = None,
+    oversized: "list[str] | None" = None,
+) -> Iterator[tuple[str, str]]:
+    """Yield ``(relative_path, text)`` for an explicit list of files.
+
+    This is the walk's opposite number, for the case where something else has
+    already decided what to look at -- typically the files a pull request
+    touched, fed in from ``git diff --name-only``. A path that no longer exists
+    is skipped rather than reported: a diff lists deletions too, and a scanner
+    that fails on one is a scanner nobody puts in a pipeline.
+
+    ``.gitignore`` is deliberately not consulted here. The caller named these
+    files, and second-guessing an explicit list is how a tool acquires a
+    reputation for missing things. For the same reason ``unreadable`` and
+    ``oversized`` are collected here as well: a named file that went unread is
+    worth more of an explanation than one the walk happened upon.
+    """
+    root = os.path.abspath(root)
+    seen: set = set()
+    for raw in paths:
+        candidate = raw.strip().strip('"')
+        if not candidate or candidate.startswith("#"):
+            continue
+        absolute = candidate if os.path.isabs(candidate) else os.path.join(root, candidate)
+        # Normalised before the duplicate check: "a.py" and "./a.py" are the
+        # same file, and a diff list produced by two tools can contain both.
+        absolute = os.path.normpath(absolute)
+        if absolute in seen or not os.path.isfile(absolute):
+            continue
+        seen.add(absolute)
+        relative = os.path.relpath(absolute, root).replace(os.sep, "/")
+        name = os.path.basename(absolute)
+        if os.path.splitext(name)[1].lower() in BINARY_SUFFIXES:
+            continue
+        if any(fnmatch.fnmatch(part, pattern) for part in relative.split("/") for pattern in excludes):
+            continue
+        text = _read_text(absolute, max_bytes, unreadable, relative, oversized)
+        if text is not None:
             yield relative, text
 
 
@@ -128,14 +233,42 @@ def _relative_dir(dirpath: str, root: str) -> str:
     return os.path.relpath(dirpath, root).replace(os.sep, "/") + "/"
 
 
-def _read_text(path: str, max_bytes: int) -> str | None:
+def _read_text(
+    path: str,
+    max_bytes: int,
+    unreadable: "list[str] | None" = None,
+    name: "str | None" = None,
+    oversized: "list[str] | None" = None,
+) -> "str | None":
+    """The file's text, or None when it is too large, binary, or unopenable.
+
+    Two of those are worth telling somebody about. ``unreadable`` collects what
+    the process could not open -- a permission, a dangling symlink -- which is
+    a gap in the scan. ``oversized`` collects what was skipped for its size,
+    which is a decision this tool made on the reader's behalf and should
+    therefore be able to defend: a 3 MB ``.env`` is exactly the file nobody
+    wants skipped quietly. A binary is the one silent skip, because its bytes
+    are not text in any sense a rule could read.
+
+    ``name`` is what to record if either happens, which is the path as the
+    report will show it. Without it the walk mixes absolute paths in among
+    relative ones, in the same sentence.
+    """
     try:
         if os.path.getsize(path) > max_bytes:
+            if oversized is not None:
+                oversized.append(name if name is not None else path)
             return None
         with open(path, "rb") as handle:
             raw = handle.read()
     except OSError:
+        if unreadable is not None:
+            unreadable.append(name if name is not None else path)
         return None
     if is_probably_binary(raw[:8192]):
         return None
-    return raw.decode("utf-8", errors="replace")
+    # utf-8-sig rather than utf-8: an editor on Windows writes a byte-order
+    # mark, and a leading \ufeff makes the first key of a YAML document
+    # something no rule is looking for -- which is a file silently unscanned
+    # rather than a file reported clean.
+    return raw.decode("utf-8-sig", errors="replace")
