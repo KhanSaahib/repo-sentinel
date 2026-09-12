@@ -318,6 +318,22 @@ class TestRuleDetail(unittest.TestCase):
         self.assertIn("K8S001", listing)
         self.assertNotIn("--disable", listing)
 
+    def test_the_json_carries_the_families_of_the_rules_it_lists(self):
+        # A consumer grouping by category otherwise invents its own labels,
+        # and invents different ones from the documentation's.
+        payload = json.loads(report.format_rule_catalogue("kubernetes", as_json=True))
+        family = payload["families"]["kubernetes"]
+        self.assertIn("apiVersion", family["reads"])
+        self.assertEqual(family["documentation"], "docs/RULES.md#kubernetes")
+
+    def test_only_the_families_in_play_are_described(self):
+        # "terraform" also matches a secret rule whose summary mentions it,
+        # which is the pattern doing its job; what matters is that families
+        # nothing matched are absent.
+        payload = json.loads(report.format_rule_catalogue("terraform", as_json=True))
+        self.assertIn("terraform", payload["families"])
+        self.assertNotIn("kubernetes", payload["families"])
+
     def test_json_output_is_the_same_shape_for_one_rule_as_for_many(self):
         payload = json.loads(report.format_rule_catalogue("WF011", as_json=True))
         self.assertEqual(len(payload["rules"]), 1)

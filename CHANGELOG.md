@@ -233,6 +233,8 @@ last of them is the first that reads code rather than configuration.
   it needs no plugin and no permission. A clean run is one passing case rather
   than an empty suite, because an empty report renders as a broken job.
 
+- **`rules --format json` describes the families too**: what each one reads
+  and where its section is, for the rules in the listing.
 - **`rules <one rule>` prints a card rather than a row**: what the rule reads,
   which weakness it claims, how to silence it here and how to switch it off
   everywhere, and where the long version lives. A pattern that matches several

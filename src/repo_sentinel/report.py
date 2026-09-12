@@ -610,6 +610,14 @@ def format_rule_catalogue(pattern: "str | None" = None, *, as_json: bool = False
     """Print what the scanner checks for, without needing something to find."""
     matched = _matching_rules(pattern)
     if as_json:
+        # The families travel with the rules because a consumer grouping by
+        # category otherwise has to invent a label for each one, and would
+        # invent a different label from the documentation's.
+        families = {
+            name: {"reads": family.reads, "documentation": f"docs/RULES.md#{family.anchor}"}
+            for name, family in rules.FAMILIES.items()
+            if any(rule.category == name for rule in matched)
+        }
         return json.dumps(
             {
                 "rules": [
@@ -622,7 +630,8 @@ def format_rule_catalogue(pattern: "str | None" = None, *, as_json: bool = False
                         "cwe": rule.cwe,
                     }
                     for rule in matched
-                ]
+                ],
+                "families": families,
             },
             indent=2,
         )

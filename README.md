@@ -333,7 +333,9 @@ path and the already-redacted evidence, with no line number in it, so it
 survives reformatting and changes when the value does. Paths always use forward
 slashes, on every platform, so a report reads the same wherever it was
 produced. `repo-sentinel rules --format json` describes the rules themselves,
-including the CWE each one reports.
+including the CWE each one reports and, for each family in the listing, what
+it reads and where it is written up -- so a consumer grouping by category need
+not invent a label the documentation does not use.
 
 ## Posting the result onto a pull request
 
