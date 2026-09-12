@@ -26,8 +26,10 @@ better outcome than a feature nobody wanted.
       `--min-confidence` to gate on it
 - [x] GCP service account JSON as a whole document (SEC021), and credentials
       hidden inside base64 (SEC022)
-- [ ] Multi-line detection generally: the scanner is line-by-line, so a PEM body
-      or a wrapped JSON credential is only caught by its first line
+- [x] Multi-line detection, in the one shape that was actually costing
+      findings: a value written on the lines beneath its name, which is how
+      YAML carries anything long. A PEM body is still read from its header
+      line, which is the line that identifies it
 - [ ] Report the *shape* of a near miss: a value that failed the entropy floor
       by a hair next to a credential-shaped name is worth a low-confidence
       finding, and today it is silent
