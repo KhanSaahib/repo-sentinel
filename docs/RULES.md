@@ -126,6 +126,26 @@ quoting to key on, and where the file's own syntax has to stand in for it. A
 unit wraps its assignment in one of its own (`Environment=DB_PASSWORD=…`), and
 the name that matters is the inner one.
 
+SEC101 also reads a value written on the lines *beneath* its name, which is
+how YAML carries anything long:
+
+```yaml
+api_key: |
+  Xk92mQp7Lz4TvB8n
+  Rw1YQq7Zx9Lm2Pv4
+```
+
+Neither line says anything alone -- the name is on one and the value is on the
+next -- and the pieces are rejoined with nothing between them, because that is
+how a wrapped value was meant to be read. The shape is narrow on purpose: every
+line of the block has to be a piece of one value, with no spaces, no colon and
+no `=` except base64's padding. Without that, the rule reports every CRD
+property under a name like `automountServiceAccountToken`, every translated
+sentence under `api_key`, and the `NAME=vault/path` pairs a release workflow
+hands to an action -- all three measured, all three from real repositories. The
+finding sits on the key's line, because inside a block scalar a `#` is part of
+the value and the key's line is the only place a suppression marker can live.
+
 One consequence worth knowing: a real `.env` is usually git-ignored, so SEC101
 will not see it unless you pass `--no-gitignore`. Where it earns its keep by
 default is the committed cousins — `.env.example` with a real value left in it,
@@ -549,13 +569,16 @@ somebody's note about the thing they decided not to do.
 | AP004 | Untrusted data deserialised into objects | high |
 | AP005 | Password hashed with a digest built for speed | medium |
 | AP006 | Shell command built from an interpolated value | critical for a request, otherwise high |
+| AP007 | JWT accepted with the "none" algorithm | critical |
 
 Every other family reads configuration. This one reads code, which is a
 different proposition: configuration says what a system *is*, and code says
 what it does. A line-at-a-time reader can honestly answer questions about
-idioms and not about behaviour, so there are three rules, each a well-known
+idioms and not about behaviour, so the rules are few, each a well-known
 idiom with a well-known meaning, and each written per language rather than
-guessed at across all of them. Python, JavaScript and TypeScript, Go, PHP and
+guessed at across all of them. The bar for adding one is that the idiom has a
+single meaning in the language it is read in: `verify=False` is a Python
+spelling, and the same characters in a Go file are a guess. Python, JavaScript and TypeScript, Go, PHP and
 Ruby; `.min.js` and its relatives are skipped, because a bundle is machine
 output and never chose any of its idioms.
 
@@ -613,6 +636,39 @@ a process id going into a build script. None of those is exploitable today and
 every one of them is one refactor away from taking a value from somewhere else,
 which is exactly what medium confidence is for: `--min-confidence high` does not
 show them, and a review reading everything does.
+
+AP007 is about the one thing that makes a JSON Web Token worth reading. A token
+is a claim plus a signature, and the signature is the only reason to believe
+the claim. `none` is an algorithm in the specification meaning there is no
+signature -- so a library told to accept it accepts a token anybody can type:
+change the subject to an administrator, re-encode, send. That is critical, and
+it is read three ways, each in its own language: `algorithms` naming `"none"`
+in Python or JavaScript, and golang-jwt's `UnsafeAllowNoneSignatureType`, which
+names the decision honestly. A list is read for the word rather than for its
+length, because `algorithms: ["none", "HS256"]` still accepts the forgery: the
+token says which one it used.
+
+The call has to name the library on the same line. `none` is what half the
+world calls the absence of a compression or a cipher, and a list of supported
+algorithms containing it is ordinary everywhere except here. The cost of that
+is the limit this family already has and states: an options object spread over
+several lines is invisible.
+
+What this rule does *not* read is PyJWT's `options={"verify_signature": False}`,
+and the reason is a measurement rather than a principle. It has one honest use
+-- read the header to find out which key signed the token, then decode again,
+verifying, with that key -- and across the twenty-one pinned repositories it
+fired twenty-one times, in authentik and saleor, every sampled one of them that
+honest shape. Telling the two apart means seeing whether a verifying decode
+follows, which needs a reader this family does not have. So it is not a rule
+here, and the absence is deliberate.
+
+Measured across the same twenty-one repositories, the `none` spellings fire
+**no times at all**. That is the expected result and not a disappointment: it
+is not an idiom anybody reaches for by accident, which is exactly the argument
+for reading for it. A rule that is silent on every well-run repository and
+loud on the one that got this wrong is the shape this whole family is aiming
+at.
 
 A finding in a fixture tree drops a step of confidence, for the same reason the
 secrets rules do it: a test that talks to a server with a self-signed
@@ -779,10 +835,30 @@ its templates, and a handful of those carry their meaning with them.
 it is written, because that is the only thing a chart can do with a key of that
 name. Six settings are read this way -- privileged, allowPrivilegeEscalation,
 added capabilities, an Unconfined seccomp profile, the three host namespaces,
-and a hostPath volume -- all at medium confidence, since the chart *should*
-pass them through and this reader has not read the template that does. A
-`hostPath` block with no `path` in it is a configuration section rather than a
-volume: Dagger's chart has one whose keys are `dataVolume` and `runVolume`.
+and a hostPath volume. A `hostPath` block with no `path` in it is a
+configuration section rather than a volume: Dagger's chart has one whose keys
+are `dataVolume` and `runVolume`.
+
+Whether a setting in the file reaches a container is a question the chart's own
+templates answer, so they are read too -- everything under `templates/`,
+`_helpers.tpl` included -- for the value paths they name. Three outcomes:
+
+| the templates | confidence | what it means |
+|---|---|---|
+| name this path, or one above or below it | **high** | the chart ships this setting |
+| were read and name nothing near it | **low** | most likely a value the chart stopped using |
+| could not be read, or dump `.Values` whole | **medium** | the answer this rule gave before it read any templates |
+
+`{{ toYaml .Values }}` reaches everything and names nothing, so a chart that
+does it gets the medium answer rather than a blanket high one. Two kinds of key
+are nobody's to answer for and keep medium as well: a top-level key naming a
+dependency in `Chart.yaml`, by name or by alias, which is how an umbrella chart
+configures a subchart whose templates it does not contain; and `global`, which
+Helm hands to every subchart by definition.
+
+Low is still reported rather than dropped. A value the templates do not mention
+is usually dead, but a parent chart's values file can supply the same key, and
+"usually" is not a reason to go quiet.
 
 A `kustomization.yaml` is read for the manifests it patches in. An overlay
 exists to change what the base said, and what it changes is often the security

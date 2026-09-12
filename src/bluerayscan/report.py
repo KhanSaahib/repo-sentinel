@@ -93,6 +93,11 @@ def _repeat_note(finding: Finding) -> str:
 
 def _body(finding: Finding, indent: str) -> "list[str]":
     lines = [f"{indent}{finding.title}{_repeat_note(finding)}"]
+    if finding.origin:
+        # Only a scan of history sets this, and when it is set it is the most
+        # actionable line in the block: it is the difference between "this is
+        # in the file" and "this has been public since March".
+        lines.append(f"{indent}added in: {finding.origin}")
     if finding.evidence:
         lines.append(f"{indent}evidence: {finding.evidence}")
     if finding.remediation:
@@ -269,6 +274,8 @@ def format_markdown(
         detail = _escape(finding.title) + _escape(_repeat_note(finding))
         if finding.confidence < Confidence.HIGH:
             detail += f" _({finding.confidence.value} confidence)_"
+        if finding.origin:
+            detail += f" _(added in {_escape(finding.origin)})_"
         lines.append(
             f"| {marker} | `{finding.rule_id}` | `{finding.path}:{finding.line}` | {detail} |"
         )
@@ -344,6 +351,8 @@ def format_github(findings: Sequence[Finding], *, notes: Sequence[str] = ()) -> 
         message = finding.title
         if finding.occurrences > 1:
             message = f"{message} (repeated on {finding.occurrences} lines in this file)"
+        if finding.origin:
+            message = f"{message} (added in {finding.origin})"
         if finding.remediation:
             message = f"{message} — {finding.remediation}"
         lines.append(f"::{level} {location}::{_annotation_escape(message, in_property=False)}")
@@ -471,14 +480,24 @@ def _sarif_rule(rule_id: str, findings: Sequence[Finding]) -> dict:
     }
 
 
+#: The key GitHub's code scanning tracks an alert by across runs. It carries
+#: the tool's name, so it changed with the rename -- once, deliberately, in the
+#: release that finished it. Changing it again would make every open alert
+#: appear as a new one, so it is not a name to tidy later.
+SARIF_FINGERPRINT_KEY = "bluerayscan/v1"
+
+
 def _sarif_result(finding: Finding, rule_index: int) -> dict:
+    properties = {"confidence": finding.confidence.value}
+    if finding.origin:
+        properties["origin"] = finding.origin
     return {
         "ruleId": finding.rule_id,
         "ruleIndex": rule_index,
         "level": _SARIF_LEVELS[finding.severity],
         "message": {"text": _sarif_message(finding)},
-        "partialFingerprints": {"repoSentinel/v1": finding.fingerprint},
-        "properties": {"confidence": finding.confidence.value},
+        "partialFingerprints": {SARIF_FINGERPRINT_KEY: finding.fingerprint},
+        "properties": properties,
         "locations": [
             {
                 "physicalLocation": {

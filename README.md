@@ -78,6 +78,7 @@ bluerayscan rules                           # what does this thing check for?
 bluerayscan rules kubernetes                # ...or just that family
 bluerayscan rules WF011                     # one rule, explained in full
 bluerayscan init .                          # set a repository up
+git log -p | bluerayscan history            # what did history commit? (below)
 
 bluerayscan scan . --format json            # machine-readable output
 bluerayscan scan . --format sarif --output results.sarif
@@ -145,6 +146,47 @@ That last line is not decoration. A run that scanned nothing looks exactly like
 a clean repository, and "no findings" from a mistyped path is the most
 dangerous answer this tool can give.
 
+## What history committed
+
+A credential in the working tree may never have been pushed. A credential in
+history has been on every clone, every fork, every CI cache and every mirror
+made since the day it landed, and deleting the file does not take it back.
+Those are different problems, and only the second one is certain.
+
+```bash
+git log -p --date=iso | bluerayscan history
+```
+
+This tool does not run git. It never has -- `.gitignore` is implemented by
+hand rather than by asking git, and `--paths-from` exists precisely so the
+caller runs `git diff` -- and reading history is the same bargain: you run
+git, this reads what comes out. It takes a file too, or `-` for standard
+input, and every flag `scan` has for thresholds and formats.
+
+Each finding names the commit that introduced it:
+
+```
+CRITICAL SEC001  config/settings.py:14
+    AWS access key id
+    added in: 4f2c8ab on 2026-03-04
+    evidence: AKIA****************7EXAMPLE
+    fix: Delete the key in IAM...
+```
+
+A value added, reverted and added again is reported once, against the earliest
+commit that carried it, because that is the date a rotation decision turns on.
+
+**Only the credential rules run here.** A container that ran as root in 2021
+and does not today is fixed; a workflow that was once hijackable and was then
+repaired is repaired. Configuration in history is history. A credential in
+history is a credential until somebody rotates it, and that is the question
+worth asking of a diff.
+
+What it reads is the lines each commit *added*, at the line numbers they
+landed on -- so a finding points at a real line of a real version of the file,
+and a multi-line value added in one commit still reads as one value. Lines a
+commit removed are not its news; lines it left alone are not either.
+
 ## Severity and confidence
 
 Every finding carries both, because they answer different questions and
@@ -196,7 +238,7 @@ bluerayscan scan . --no-gitignore
 
 ## What it checks
 
-One hundred and forty-four rules across sixteen families. [docs/RULES.md](docs/RULES.md) is the
+One hundred and forty-five rules across sixteen families. [docs/RULES.md](docs/RULES.md) is the
 full list, with a paragraph on each family explaining what it is looking for
 and why; `bluerayscan rules` prints the same catalogue from the tool.
 
@@ -205,7 +247,7 @@ and why; `bluerayscan rules` prints the same catalogue from the tool.
 | [Secrets](docs/RULES.md#secrets) | SEC001–SEC054, SEC100–SEC101 | Credentials in any text file, including inside base64 |
 | [File names](docs/RULES.md#file-names) | FN001–FN004 | Key material and credential files, which have no text to read |
 | [Shell scripts](docs/RULES.md#shell-scripts-and-makefiles) | SH001–SH004 | Where `curl \| sh` actually lives |
-| [Application code](docs/RULES.md#application-code) | AP001–AP006 | Verification off, debug on, predictable tokens, unsafe loads |
+| [Application code](docs/RULES.md#application-code) | AP001–AP007 | Verification off, debug on, predictable tokens, unsafe loads, forgeable tokens |
 | [Dependencies](docs/RULES.md#dependencies) | SC001–SC004 | Where the rest of the build comes from, in nine manifests |
 | [GitHub Actions](docs/RULES.md#github-actions-workflows) | WF001–WF013 | Script injection, token scope, privileged triggers |
 | [GitLab CI](docs/RULES.md#gitlab-ci) | GL001–GL004 | The same injection class, and debug tracing |

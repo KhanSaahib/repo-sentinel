@@ -26,8 +26,10 @@ better outcome than a feature nobody wanted.
       `--min-confidence` to gate on it
 - [x] GCP service account JSON as a whole document (SEC021), and credentials
       hidden inside base64 (SEC022)
-- [ ] Multi-line detection generally: the scanner is line-by-line, so a PEM body
-      or a wrapped JSON credential is only caught by its first line
+- [x] Multi-line detection, in the one shape that was actually costing
+      findings: a value written on the lines beneath its name, which is how
+      YAML carries anything long. A PEM body is still read from its header
+      line, which is the line that identifies it
 - [ ] Report the *shape* of a near miss: a value that failed the entropy floor
       by a hair next to a credential-shaped name is worth a low-confidence
       finding, and today it is silent
@@ -48,8 +50,11 @@ better outcome than a feature nobody wanted.
       ref~~ -- already covered: WF001 reads any `uses:`, with or without the
       list dash. WF011 is the part that was actually missing, and it is about
       the secrets, not the ref
-- [ ] Warn on `contents: write` without an obvious need — needs a notion of
-      "obvious need" that does not just move the noise somewhere else
+- [x] Warn on `contents: write` without an obvious need (WF013). The notion of
+      "obvious need" turned out to be: anything that could be writing counts,
+      including a local composite action and a reusable workflow, because the
+      reader cannot see inside either. One finding across twenty-one
+      repositories, and it is real
 - [x] Composite actions in the repository itself (`action.yml`), which are
       workflows in all but trigger. WF012 is the rule that only makes sense
       there: an action cannot tell a safe input from a dangerous one
@@ -69,11 +74,21 @@ better outcome than a feature nobody wanted.
       value-position formats for the rules that already read those
 - [x] More application-code idioms, measured against nineteen repositories:
       AP004 (unsafe deserialisation), AP005 (a password through a fast digest)
-      and AP006 (a shell command built by interpolation). The family is six
+      and AP006 (a shell command built by interpolation). The family is seven
       rules and reads five languages
-- [ ] A seventh, if one earns it. The bar is an idiom with one meaning, read
-      only in the language where it has that meaning -- which is what keeps
-      this family three rules rather than thirty
+- [x] A seventh: AP007, a JWT accepted with the "none" algorithm. It has
+      exactly one meaning in each of the three languages it is read in, which
+      is the bar -- an idiom with one meaning, read only where it has that
+      meaning, which is what keeps this family seven rules rather than thirty.
+      Fires no times across the twenty-one pinned repositories, which is the
+      expected result
+- [ ] An eighth, on the same terms. Candidates that have not cleared the bar:
+      hardcoded JWT signing secrets, DEBUG in frameworks other than Django and
+      Flask, weak TLS versions, permissive CORS (`*` is only a problem with
+      credentials, which the line does not say), and PyJWT's unverified decode
+      with no second decode after it -- measured at twenty-one findings across
+      the pinned repositories, every sampled one of them the honest two-step,
+      so telling them apart needs to see the decode that follows
 
 ## Output and integration
 

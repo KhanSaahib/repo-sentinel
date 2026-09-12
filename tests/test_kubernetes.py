@@ -600,5 +600,117 @@ class TestHelmTemplates(unittest.TestCase):
         self.assertNotIn("K8S008", rule_ids(scan(plain)))
 
 
+class TestChartTemplatesDecideConfidence(unittest.TestCase):
+    """Whether a value in the file reaches a container is a question the
+    chart's own templates answer, and reading them is the difference between
+    "this chart ships a privileged container" and "this key is still here"."""
+
+    CHART = ("charts/web/Chart.yaml", "apiVersion: v2\nname: web\nversion: 0.1.0\n")
+    VALUES = "securityContext:\n  privileged: true\n"
+
+    def scan(self, *extra):
+        return kubernetes.scan_files([self.CHART, ("charts/web/values.yaml", self.VALUES), *extra])
+
+    def template(self, body):
+        return ("charts/web/templates/deployment.yaml", body)
+
+    def confidence(self, *extra):
+        finding = next(f for f in self.scan(*extra) if f.rule_id == "K8S001")
+        return finding.confidence.value
+
+    def test_a_template_that_uses_the_value_makes_it_certain(self):
+        body = "spec:\n  securityContext:\n{{- toYaml .Values.securityContext | nindent 4 }}\n"
+        self.assertEqual(self.confidence(self.template(body)), "high")
+
+    def test_a_deeper_reference_counts_as_well(self):
+        # ".Values.securityContext.privileged" names the setting itself, which
+        # is a stronger answer than naming the block it sits in, not a weaker.
+        body = "privileged: {{ .Values.securityContext.privileged }}\n"
+        self.assertEqual(self.confidence(self.template(body)), "high")
+
+    def test_a_value_no_template_mentions_drops_to_low(self):
+        body = "image: {{ .Values.image.repository }}:{{ .Values.image.tag }}\n"
+        self.assertEqual(self.confidence(self.template(body)), "low")
+
+    def test_a_chart_with_no_templates_to_read_keeps_the_old_answer(self):
+        self.assertEqual(self.confidence(), "medium")
+
+    def test_a_template_that_dumps_the_lot_is_not_an_answer(self):
+        # "toYaml .Values" reaches everything and names nothing. Reading that
+        # as "every value is used" would be as wrong as reading it as "none".
+        body = "data:\n{{- toYaml .Values | nindent 2 }}\n"
+        self.assertEqual(self.confidence(self.template(body)), "medium")
+
+    def test_a_named_template_counts_as_a_template(self):
+        # Half of a large chart's value references live in _helpers.tpl.
+        helper = ("charts/web/templates/_helpers.tpl",
+                  '{{- define "web.security" -}}\n{{ .Values.securityContext }}\n{{- end -}}\n')
+        self.assertEqual(self.confidence(helper), "high")
+
+    def test_a_subchart_key_is_not_this_chart_to_answer_for(self):
+        # An umbrella chart configures its dependency by writing the
+        # dependency's name as a top-level key. The parent's templates never
+        # mention it, and reading that absence as "unused" would be wrong
+        # about every umbrella chart there is.
+        chart = ("charts/web/Chart.yaml",
+                 "apiVersion: v2\nname: web\nversion: 0.1.0\n"
+                 "dependencies:\n  - name: redis\n    version: 1.0.0\n")
+        values = ("charts/web/values.yaml", "redis:\n  securityContext:\n    privileged: true\n")
+        body = self.template("image: {{ .Values.image }}\n")
+        findings = kubernetes.scan_files([chart, values, body])
+        finding = next(f for f in findings if f.rule_id == "K8S001")
+        self.assertEqual(finding.confidence.value, "medium")
+
+    def test_globals_belong_to_every_subchart(self):
+        values = ("charts/web/values.yaml", "global:\n  securityContext:\n    privileged: true\n")
+        body = self.template("image: {{ .Values.image }}\n")
+        findings = kubernetes.scan_files([self.CHART, values, body])
+        self.assertEqual(
+            next(f for f in findings if f.rule_id == "K8S001").confidence.value, "medium"
+        )
+
+    def test_a_template_belonging_to_another_chart_is_not_this_chart_s(self):
+        other = ("charts/api/templates/deployment.yaml",
+                 "{{ toYaml .Values.securityContext }}\n")
+        self.assertEqual(self.confidence(other), "medium")
+
+    def test_every_flag_and_the_host_path_volume_move_together(self):
+        values = (
+            "charts/web/values.yaml",
+            "hostNetwork: true\nvolumes:\n  - hostPath:\n      path: /var/run/docker.sock\n",
+        )
+        body = self.template("{{ .Values.hostNetwork }}{{ toYaml .Values.volumes }}\n")
+        findings = kubernetes.scan_files([self.CHART, values, body])
+        self.assertEqual({f.confidence.value for f in findings}, {"high"})
+        self.assertEqual({f.rule_id for f in findings}, {"K8S002", "K8S003"})
+
+
+class TestTemplateReferences(unittest.TestCase):
+    def test_what_a_reference_looks_like(self):
+        references, opaque = kubernetes.template_references(
+            ["{{ .Values.a.b }} {{ $.Values.c }} {{- if .Values.d-e }}"]
+        )
+        self.assertEqual(references, frozenset({"a.b", "c", "d-e"}))
+        self.assertFalse(opaque)
+
+    def test_the_word_on_its_own_is_not_a_reference(self):
+        references, opaque = kubernetes.template_references(["# Values are read from values.yaml"])
+        self.assertEqual(references, frozenset())
+        self.assertFalse(opaque)
+
+    def test_dependencies_name_and_alias_both_count(self):
+        text = (
+            "dependencies:\n"
+            "  - name: redis\n    version: 1\n"
+            "  - name: postgresql\n    alias: db\n    version: 1\n"
+        )
+        self.assertEqual(
+            kubernetes.chart_dependencies(text), frozenset({"redis", "postgresql", "db"})
+        )
+
+    def test_a_chart_without_dependencies_names_none(self):
+        self.assertEqual(kubernetes.chart_dependencies("name: web\nversion: 1\n"), frozenset())
+
+
 if __name__ == "__main__":
     unittest.main()

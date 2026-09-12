@@ -4,6 +4,64 @@ All notable changes to BlueRayScan. This project follows [semantic
 versioning](https://semver.org/); until 1.0 the minor number carries breaking
 changes.
 
+## Unreleased
+
+### Added
+
+- **AP007: a JWT accepted with the `none` algorithm.** A token is a claim plus
+  a signature, and the signature is the only reason to believe the claim.
+  `none` is an algorithm in the specification meaning there is no signature,
+  so a library told to accept it accepts a token anybody can type: change the
+  subject to an administrator, re-encode, send. Read three ways, each in the
+  language it means something in -- `algorithms` naming `"none"` in Python or
+  JavaScript, and golang-jwt's `UnsafeAllowNoneSignatureType`. The call has to
+  name the library on the same line, because `none` is also what half the
+  world calls the absence of a compression or a cipher.
+
+  Measured across the twenty-one pinned repositories: **no findings**, which is
+  the expected result for an idiom nobody reaches for by accident. Not added,
+  after the same measurement: PyJWT's `options={"verify_signature": False}`,
+  which fired twenty-one times, every sampled one of them the honest two-step
+  of reading a header to find the key before verifying with it.
+
+- **`bluerayscan history`**, which reads a `git log -p` stream and reports the
+  credentials its commits introduced, each named with the commit that
+  introduced it and the day it became public. A value added, reverted and
+  added again is reported once, against the earliest commit that carried it.
+  This tool still does not run git: the caller does, the same bargain
+  `--paths-from` already makes. Only the credential rules run -- a container
+  that ran as root in 2021 and does not today is fixed, while a credential
+  that was ever committed is committed until somebody rotates it. Findings
+  carry an `origin` in the JSON output and an "added in" line everywhere else.
+
+- **A chart's values are read against its own templates.** The Kubernetes
+  family has always read `values.yaml` beside a `Chart.yaml` for the six
+  settings that mean the same thing wherever they are written, and always at
+  medium confidence, because the chart *should* pass them through and nothing
+  had read the template that does. Now something has: every file under
+  `templates/`, `_helpers.tpl` included, for the value paths it names. A
+  setting a template names is reported at **high** confidence; one the
+  templates were read and do not mention drops to **low**; and medium is kept
+  for the charts where there was nothing to read or where `{{ toYaml .Values }}`
+  reaches everything and names nothing. A top-level key naming a dependency in
+  `Chart.yaml` -- how an umbrella chart configures a subchart it does not
+  contain -- and `global`, which Helm hands to every subchart, are nobody's to
+  answer for and stay at medium.
+
+  Measured on the pinned prometheus-community charts: 46 charts, 37 of them
+  read, 4,513 value paths named. The same 23 findings as before; three moved
+  from medium to high and none was lost, because every setting those charts
+  ship is a setting they use.
+
+### Changed
+
+- **The SARIF fingerprint key is now `bluerayscan/v1`**, where it was
+  `repoSentinel/v1` -- the one place the rename's search-and-replace could not
+  see, because it was spelled in camel case. GitHub's code scanning tracks an
+  alert across runs by this key, so an existing alert appears once as a new
+  one. It changes here and not again, which is why it is a named constant with
+  the reason beside it.
+
 ## 0.3.1 - 2026-09-12
 
 ### Changed
@@ -248,6 +306,14 @@ import package remains `bluerayscan`.
   in one line: the credential is in the file, and it is in the process table of
   whichever machine runs the script, where every other user can read it. A value
   that arrives at run time is not a leak, so anything interpolated is skipped.
+- **A value written on the lines beneath its name is read** (SEC101). YAML
+  carries anything long that way, and neither line said anything alone: the
+  name was on one and the value on the next. The pieces are rejoined with
+  nothing between them, and the shape is narrow -- every line has to be a piece
+  of one value, no spaces, no colon, no `=` except base64's padding -- because
+  the loose version reported every CRD property, every translated sentence
+  under `api_key`, and the `NAME=vault/path` pairs a release workflow hands to
+  an action.
 - **A systemd unit and a crontab are value-position formats.** A unit is an
   INI file that runs as root, and the place a credential lands in one is
   `Environment=DB_PASSWORD=…` -- an assignment wrapped in an assignment, where

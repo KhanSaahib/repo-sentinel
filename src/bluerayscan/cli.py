@@ -16,7 +16,15 @@ import sys
 from collections.abc import Sequence
 
 from . import __version__, baseline as baseline_module, config as config_module
-from .commands import EXIT_ERROR, EXIT_FINDINGS, EXIT_OK, init_command, rules_command, scan_command
+from .commands import (
+    EXIT_ERROR,
+    EXIT_FINDINGS,
+    EXIT_OK,
+    history_command,
+    init_command,
+    rules_command,
+    scan_command,
+)
 from .engine import scan_path  # noqa: F401  (re-exported: this is the public API)
 
 __all__ = ["EXIT_ERROR", "EXIT_FINDINGS", "EXIT_OK", "build_parser", "main", "scan_path"]
@@ -174,6 +182,61 @@ def build_parser() -> argparse.ArgumentParser:
         help="do not record existing findings as accepted",
     )
 
+    history_parser = subparsers.add_parser(
+        "history",
+        help="read a git diff stream and report the credentials its commits added",
+        description=(
+            "Scan what a repository's history added rather than what it still "
+            "holds. This tool does not run git; the caller does: "
+            "`git log -p --date=iso | bluerayscan history`. Only the credential "
+            "rules run -- a container that ran as root in 2021 and does not "
+            "today is fixed, while a credential that was ever committed is "
+            "committed until somebody rotates it."
+        ),
+    )
+    history_parser.add_argument(
+        "file",
+        nargs="?",
+        default="-",
+        help="a file holding `git log -p` output, or - for standard input (default)",
+    )
+    history_parser.add_argument(
+        "--format",
+        choices=("text", "json", "sarif", "markdown", "github", "junit"),
+        default="text",
+        help="output format",
+    )
+    history_parser.add_argument(
+        "--output", metavar="FILE", help="write the report to FILE instead of stdout"
+    )
+    history_parser.add_argument(
+        "--min-severity", default="low", help="hide findings below this severity"
+    )
+    history_parser.add_argument(
+        "--min-confidence", default="low", help="hide findings below this confidence"
+    )
+    history_parser.add_argument(
+        "--fail-on",
+        default="medium",
+        help=(
+            "exit non-zero when a finding reaches this severity (default: "
+            "medium), or 'none' to report without ever failing"
+        ),
+    )
+    history_parser.add_argument(
+        "--no-example-allowlist",
+        action="store_true",
+        help="also report credentials published as vendor or RFC examples",
+    )
+    history_parser.add_argument(
+        "--quiet", action="store_true", help="print the summary and nothing else"
+    )
+    history_parser.add_argument("--no-color", action="store_true", help="disable coloured output")
+    # Two flags the shared renderer reads that this command does not offer: a
+    # diff stream has no file order to sort by, and nothing here writes a
+    # baseline.
+    history_parser.set_defaults(sort="severity")
+
     rules_parser = subparsers.add_parser("rules", help="list every rule the scanner knows")
     rules_parser.add_argument(
         "pattern",
@@ -255,6 +318,8 @@ def main(argv: "Sequence[str] | None" = None) -> int:
         return init_command(args, parser)
     if args.command == "rules":
         return rules_command(args)
+    if args.command == "history":
+        return history_command(args)
     return scan_command(args, parser)
 
 
