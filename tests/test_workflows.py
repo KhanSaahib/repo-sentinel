@@ -48,6 +48,32 @@ class TestActionPinning(unittest.TestCase):
         )
         self.assertIn("WF001", rule_ids(findings))
 
+    def test_a_third_party_tag_outweighs_a_first_party_one(self):
+        def severity(ref):
+            findings = workflows.scan_workflow(
+                ".github/workflows/ci.yml",
+                workflow(
+                    "permissions:\n  contents: read\njobs:\n  build:\n    steps:\n"
+                    f"      - uses: {ref}\n"
+                ),
+            )
+            return next(f for f in findings if f.rule_id == "WF001").severity
+
+        # Somebody else's action moving under you is the rule; GitHub moving
+        # GitHub, on a runner GitHub gave you, is the smaller half of it.
+        self.assertGreater(severity("vendor/deploy@v2"), severity("actions/checkout@v4"))
+        self.assertEqual(severity("actions/checkout@v4"), Severity.LOW)
+
+    def test_an_action_with_no_version_at_all_is_still_reported(self):
+        findings = workflows.scan_workflow(
+            ".github/workflows/ci.yml",
+            workflow(
+                "permissions:\n  contents: read\njobs:\n  build:\n    steps:\n"
+                "      - uses: vendor/deploy\n"
+            ),
+        )
+        self.assertIn("WF001", rule_ids(findings))
+
     def test_accepts_a_sha_pin(self):
         findings = workflows.scan_workflow(
             ".github/workflows/ci.yml",
@@ -258,6 +284,31 @@ class TestPerJobPermissions(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertIn("build", findings[0].evidence)
 
+    def test_a_file_where_no_job_declares_permissions_is_one_finding(self):
+        # The fix is one top-level block, however many jobs there are.
+        text = workflow_with_jobs(
+            "  build:\n    steps:\n      - run: make\n"
+            "  test:\n    steps:\n      - run: make test\n"
+            "  deploy:\n    steps:\n      - run: make deploy\n"
+        )
+        findings = [
+            f
+            for f in workflows.scan_workflow(".github/workflows/a.yml", text)
+            if f.rule_id == "WF002"
+        ]
+        self.assertEqual(len(findings), 1)
+        self.assertIn("3 jobs", findings[0].evidence)
+
+    def test_a_single_job_is_still_named(self):
+        text = workflow_with_jobs("  build:\n    steps:\n      - run: make\n")
+        findings = [
+            f
+            for f in workflows.scan_workflow(".github/workflows/a.yml", text)
+            if f.rule_id == "WF002"
+        ]
+        self.assertEqual(len(findings), 1)
+        self.assertIn("'build'", findings[0].evidence)
+
     def test_write_all_is_its_own_finding(self):
         text = workflow_with_jobs("  build:\n    permissions: write-all\n    steps: []\n")
         findings = workflows.scan_workflow(".github/workflows/a.yml", text)
@@ -289,6 +340,16 @@ class TestSecretHandoff(unittest.TestCase):
         findings = workflows.scan_workflow(".github/workflows/a.yml", text)
         handoff = next(f for f in findings if f.rule_id == "WF007")
         self.assertIn("DEPLOY_TOKEN", handoff.title)
+
+    def test_a_pinned_action_is_code_somebody_chose(self):
+        # The pin is the review. An action at a commit SHA cannot become
+        # something else tomorrow, which is the risk this rule is about.
+        text = workflow_with_jobs(
+            "  build:\n    steps:\n"
+            f"      - uses: some-vendor/deploy@{SHA}\n"
+            "        with:\n          token: ${{ secrets.DEPLOY_TOKEN }}\n"
+        )
+        self.assertNotIn("WF007", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
 
     def test_first_party_actions_are_not_third_parties(self):
         text = workflow_with_jobs(
@@ -322,6 +383,192 @@ class TestWorkflowRunCheckout(unittest.TestCase):
             "      - uses: actions/checkout@v4\n"
         )
         self.assertNotIn("WF008", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+
+def privileged(steps):
+    return (
+        "name: risky\non:\n  pull_request_target:\njobs:\n  build:\n"
+        "    permissions:\n      contents: read\n    steps:\n" + steps
+    )
+
+
+class TestPersistedCredentials(unittest.TestCase):
+    def test_checkout_under_a_privileged_trigger(self):
+        findings = workflows.scan_workflow(
+            ".github/workflows/a.yml", privileged("      - uses: actions/checkout@" + SHA + "\n")
+        )
+        self.assertIn("WF009", rule_ids(findings))
+
+    def test_disabling_it_settles_the_matter(self):
+        text = privileged(
+            "      - uses: actions/checkout@" + SHA + "\n"
+            "        with:\n          persist-credentials: false\n"
+        )
+        self.assertNotIn("WF009", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+    def test_an_ordinary_trigger_is_not_in_scope(self):
+        # The default is tolerable when the job only runs the repository's own
+        # code; scoping the rule is what keeps it from being ignored.
+        text = (
+            "name: ci\non:\n  push:\njobs:\n  build:\n    permissions:\n"
+            "      contents: read\n    steps:\n      - uses: actions/checkout@" + SHA + "\n"
+        )
+        self.assertNotIn("WF009", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+    def test_other_actions_are_not_checkouts(self):
+        text = privileged("      - uses: actions/setup-node@" + SHA + "\n")
+        self.assertNotIn("WF009", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+
+class TestExportedSecrets(unittest.TestCase):
+    def test_secret_written_to_a_job_output(self):
+        text = workflow(
+            "jobs:\n  build:\n    permissions:\n      contents: read\n    steps:\n"
+            '      - run: echo "token=${{ secrets.API_TOKEN }}" >> $GITHUB_OUTPUT\n'
+        )
+        findings = workflows.scan_workflow(".github/workflows/a.yml", text)
+        self.assertIn("WF010", rule_ids(findings))
+        self.assertIn("API_TOKEN", next(f for f in findings if f.rule_id == "WF010").title)
+
+    def test_secret_written_to_the_job_environment(self):
+        text = workflow(
+            "jobs:\n  build:\n    permissions:\n      contents: read\n    steps:\n"
+            '      - run: echo "T=${{ secrets.API_TOKEN }}" >> $GITHUB_ENV\n'
+        )
+        self.assertIn("WF010", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+    def test_using_a_secret_within_the_step_is_fine(self):
+        text = workflow(
+            "jobs:\n  build:\n    permissions:\n      contents: read\n    steps:\n"
+            "      - run: deploy.sh\n        env:\n          T: ${{ secrets.API_TOKEN }}\n"
+        )
+        self.assertNotIn("WF010", rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)))
+
+    def test_writing_something_that_is_not_a_secret_is_fine(self):
+        text = workflow(
+            "jobs:\n  build:\n    permissions:\n      contents: read\n    steps:\n"
+            '      - run: echo "version=1.2.3" >> $GITHUB_OUTPUT\n'
+        )
+        self.assertEqual(rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)), set())
+
+
+class TestInheritedSecrets(unittest.TestCase):
+    """WF011: secrets: inherit on a call to somebody else's workflow."""
+
+    def scan(self, body):
+        return workflows.scan_workflow(".github/workflows/a.yml", workflow(body))
+
+    def call(self, ref, secrets="    secrets: inherit\n"):
+        return (
+            "jobs:\n"
+            "  release:\n"
+            "    permissions:\n      contents: read\n"
+            f"    uses: {ref}\n" + secrets
+        )
+
+    def test_a_call_to_another_repository_hands_over_everything(self):
+        findings = self.scan(self.call("vendor/pipe/.github/workflows/r.yml@main"))
+        finding = next(f for f in findings if f.rule_id == "WF011")
+        self.assertEqual(finding.severity, Severity.HIGH)
+        self.assertIn("vendor/pipe", finding.title)
+
+    def test_a_call_within_this_repository_is_not_a_finding(self):
+        self.assertNotIn("WF011", rule_ids(self.scan(self.call("./.github/workflows/r.yml"))))
+
+    def test_naming_the_secrets_is_the_fix_and_is_not_reported(self):
+        body = self.call(
+            "vendor/pipe/.github/workflows/r.yml@main",
+            secrets="    secrets:\n      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}\n",
+        )
+        self.assertNotIn("WF011", rule_ids(self.scan(body)))
+
+    def test_a_pinned_call_is_still_reported_but_less_certainly(self):
+        pinned = self.scan(self.call(f"vendor/pipe/.github/workflows/r.yml@{SHA}"))
+        mutable = self.scan(self.call("vendor/pipe/.github/workflows/r.yml@main"))
+        pinned_finding = next(f for f in pinned if f.rule_id == "WF011")
+        mutable_finding = next(f for f in mutable if f.rule_id == "WF011")
+        self.assertLess(pinned_finding.confidence, mutable_finding.confidence)
+
+    def test_a_step_that_inherits_nothing_is_not_confused_for_a_call(self):
+        body = (
+            "jobs:\n"
+            "  build:\n"
+            "    permissions:\n      contents: read\n"
+            "    steps:\n"
+            f"      - uses: vendor/action@{SHA}\n"
+            "      - run: echo secrets: inherit\n"
+        )
+        self.assertNotIn("WF011", rule_ids(self.scan(body)))
+
+
+class TestCompositeActions(unittest.TestCase):
+    """The family also reads action.yml, which is a workflow fragment."""
+
+    ACTION = (
+        "name: deploy\n"
+        "runs:\n"
+        "  using: composite\n"
+        "  steps:\n"
+    )
+
+    def scan(self, steps):
+        return workflows.scan_action("action.yml", workflow(self.ACTION + steps))
+
+    def test_an_action_file_is_recognised_wherever_it_lives(self):
+        self.assertTrue(workflows.is_action_path(".github/actions/deploy/action.yml"))
+        self.assertTrue(workflows.is_action_path("action.yaml"))
+        self.assertFalse(workflows.is_action_path("actions.yml"))
+
+    def test_an_input_reaching_a_shell_is_reported(self):
+        findings = self.scan('    - run: echo "${{ inputs.tag }}"\n      shell: bash\n')
+        finding = next(f for f in findings if f.rule_id == "WF012")
+        self.assertEqual(finding.severity, Severity.MEDIUM)
+        self.assertIn("tag", finding.title)
+
+    def test_one_input_mentioned_five_times_is_one_finding(self):
+        findings = self.scan(
+            "    - run: |\n"
+            '        if [ -n "${{ inputs.tag }}" ]; then\n'
+            '          echo "${{ inputs.tag }}"\n'
+            "        fi\n"
+            "      shell: bash\n"
+        )
+        self.assertEqual([f.rule_id for f in findings].count("WF012"), 1)
+
+    def test_two_inputs_on_one_line_are_two_findings(self):
+        findings = self.scan(
+            '    - run: echo "${{ inputs.tag }} ${{ inputs.env }}"\n      shell: bash\n'
+        )
+        self.assertEqual([f.rule_id for f in findings].count("WF012"), 2)
+
+    def test_an_input_passed_through_the_environment_is_the_fix(self):
+        findings = self.scan(
+            "    - env:\n        TAG: ${{ inputs.tag }}\n"
+            '      run: echo "$TAG"\n      shell: bash\n'
+        )
+        self.assertNotIn("WF012", rule_ids(findings))
+
+    def test_an_action_called_by_a_mutable_tag_is_still_reported(self):
+        findings = self.scan("    - uses: vendor/setup@v1\n")
+        self.assertIn("WF001", rule_ids(findings))
+
+    def test_an_untrusted_context_inside_an_action_is_the_injection_rule(self):
+        findings = self.scan(
+            '    - run: echo "${{ github.event.issue.title }}"\n      shell: bash\n'
+        )
+        self.assertIn("WF003", rule_ids(findings))
+
+    def test_a_javascript_action_has_no_steps_to_read(self):
+        text = workflow(
+            "name: deploy\nruns:\n  using: node20\n  main: dist/index.js\n"
+        )
+        self.assertEqual(workflows.scan_action("action.yml", text), [])
+
+    def test_scan_files_picks_up_actions_as_well_as_workflows(self):
+        findings = workflows.scan_files(
+            [("action.yml", workflow(self.ACTION + "    - uses: vendor/setup@v1\n"))]
+        )
+        self.assertIn("WF001", rule_ids(findings))
 
 
 if __name__ == "__main__":

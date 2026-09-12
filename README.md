@@ -1,9 +1,16 @@
 # repo-sentinel
 
+[![CI](https://github.com/KhanSaahib/repo-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/KhanSaahib/repo-sentinel/actions/workflows/ci.yml)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/downloads/)
+[![No dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 A small command line auditor that reads a repository the way a security
 reviewer skims it: looking for credentials that should never have been
-committed, and for build configuration that hands the keys to whoever opens a
-pull request.
+committed, and for the configuration that quietly hands out more access than
+anyone intended -- a workflow an outside contributor can hijack, a container
+that runs as root, a security group open to the internet, a Compose service
+that publishes your database on every interface.
 
 **No runtime dependencies.** Standard library only, on Python 3.9 and up. A tool
 you run against your supply chain should not enlarge it.
@@ -16,6 +23,12 @@ cd repo-sentinel
 pip install .
 ```
 
+Or from a tag, without a checkout:
+
+```bash
+pip install git+https://github.com/KhanSaahib/repo-sentinel@v0.3.0
+```
+
 Or run it straight from a checkout, with no install at all:
 
 ```bash
@@ -24,26 +37,62 @@ PYTHONPATH=src python -m repo_sentinel scan .
 
 ## Use
 
+Start here:
+
+```bash
+repo-sentinel init .
+```
+
+That scans the repository, tells you what is in it, records the findings at or
+above `high` as a baseline so your first pipeline run is green, writes a
+`.repo-sentinel.json`, and prints the CI snippet for whichever CI system the
+repository already has -- GitHub Actions, GitLab, Azure Pipelines, CircleCI or
+Jenkins, the last four wired to draw the report rather than print it. Nothing
+is overwritten without `--force`.
+
+Then, day to day:
+
 ```bash
 repo-sentinel scan .                          # scan the working directory
 repo-sentinel scan ../other-project           # scan somewhere else
 repo-sentinel rules                           # what does this thing check for?
+repo-sentinel rules kubernetes                # ...or just that family
+repo-sentinel rules WF011                     # one rule, explained in full
+repo-sentinel init .                          # set a repository up
 
 repo-sentinel scan . --format json            # machine-readable output
 repo-sentinel scan . --format sarif --output results.sarif
+repo-sentinel scan . --format markdown         # a pull request comment
+repo-sentinel scan . --format github          # annotations on the diff
+repo-sentinel scan . --format junit           # a test report, for other CIs
 repo-sentinel scan . --min-severity high      # only show what matters most
 repo-sentinel scan . --min-confidence high    # only show what it is sure of
 repo-sentinel scan . --fail-on critical       # relax the CI gate
+repo-sentinel scan . --fail-on none           # report, never fail
 repo-sentinel scan . --exclude 'fixtures'     # skip a directory (repeatable)
 repo-sentinel scan . --no-gitignore           # also scan git-ignored files
 repo-sentinel scan . --no-example-allowlist   # include documented example keys
+repo-sentinel scan . --no-suppression         # read past the ignore markers
 
 repo-sentinel scan . --write-baseline         # accept what is already there
 repo-sentinel scan . --baseline               # fail only on what is new
+repo-sentinel scan . --prune-baseline         # drop entries that match nothing
+
+repo-sentinel scan . --disable K8S004         # switch off a rule or family
+repo-sentinel scan . --quiet                  # just the summary line
+repo-sentinel scan . --sort path              # group by file, to read rather than triage
+git diff --name-only origin/main | repo-sentinel scan . --paths-from -
 ```
 
+That last line is the fast per-pull-request run: the scan is restricted to the
+files the branch touched. A listed path that no longer exists is skipped, since
+a diff lists deletions too, and a listed path that `.gitignore` covers is
+scanned anyway -- you named it.
+
 Exit codes: `0` clean, `1` findings at or above `--fail-on` (default `medium`),
-`2` usage error, unreadable baseline, or unwritable output. That makes it a
+`2` usage error, unreadable baseline, or unwritable output. `--fail-on none`
+reports without ever returning `1`, which is what the job that uploads SARIF or
+posts the comment wants -- a `2` still means the run itself went wrong. That makes it a
 one-line CI gate:
 
 ```yaml
@@ -87,6 +136,12 @@ the rule is that it found a real instance. A documented token shape — a GitHub
 PAT, a Stripe live key — is high confidence; a high-entropy string next to a
 variable named `api_key` is a heuristic, and says so.
 
+Confidence also moves with where a file sits. A credential in `testdata/` or a
+README is usually invented, and a pipeline under `docs/` is a tutorial snippet
+rather than something that runs, so both drop a step. Neither is silenced --
+that is what `--min-confidence` is for, and a real key does get committed to a
+fixture directory.
+
 The split is what makes the tool tunable without making it useless. A pipeline
 that wants a hard gate can run `--fail-on high --min-confidence high` and be
 woken only for things the scanner can defend, while a human audit runs with
@@ -117,155 +172,98 @@ repo-sentinel scan . --no-gitignore
 
 ## What it checks
 
-`repo-sentinel rules` prints the whole catalogue, with `--format json` if you
-want to diff it between releases. The tables below are the same list, annotated.
+One hundred and thirty-two rules across sixteen families. [docs/RULES.md](docs/RULES.md) is the
+full list, with a paragraph on each family explaining what it is looking for
+and why; `repo-sentinel rules` prints the same catalogue from the tool.
 
-### Secrets
-
-| Rule | Finds | Severity | Confidence |
-| --- | --- | --- | --- |
-| SEC001 | AWS access key id | critical | high |
-| SEC002 | GitHub personal access token | critical | high |
-| SEC003 | GitHub fine-grained token | critical | high |
-| SEC004 | Private key block | critical | high |
-| SEC005 | Stripe live secret key | critical | high |
-| SEC006 | Slack token | high | high |
-| SEC007 | Google API key | high | high |
-| SEC008 | OpenAI-style API key | high | high |
-| SEC009 | JSON Web Token | medium | high |
-| SEC010 | Stripe test key | low | high |
-| SEC011 | Azure storage account key | critical | high |
-| SEC012 | Google OAuth client secret | critical | high |
-| SEC013 | SendGrid API key | critical | high |
-| SEC014 | Twilio API key SID | high | medium |
-| SEC015 | npm access token | critical | high |
-| SEC016 | PyPI upload token | critical | high |
-| SEC017 | Docker Hub access token | critical | high |
-| SEC018 | Slack incoming webhook URL | high | high |
-| SEC019 | Hugging Face access token | high | high |
-| SEC020 | Credentials embedded in a URL | high | medium |
-| SEC100 | High-entropy value in a quoted assignment | high | medium |
-| SEC101 | High-entropy value in an unquoted config value | high | medium |
-| SEC900 | Suppression block opened and never closed | medium | high |
-
-SEC900 is not a class of secret; it reports a suppression block that was opened
-and never closed. See [Suppressing a false positive](#suppressing-a-false-positive).
-
-SEC001–SEC020 match on documented token structure. Two of them are looser than
-the rest and say so through their confidence: SEC014 is a two-letter prefix in
-front of 32 hex characters, and SEC020 is any `scheme://user:password@host`.
-
-#### The entropy rules
-
-SEC100 and SEC101 are the heuristics. They fire when a name that promises a
-credential (`password`, `api_key`, `client_secret`, …) is assigned a value that
-looks generated rather than written. SEC100 reads quoted assignments in source
-code; SEC101 reads the formats that write credentials bare — `.env`, `.npmrc`,
-`.pypirc`, INI files, YAML — where there is no quoting to key on, and where the
-file's own syntax has to stand in for it.
-
-One consequence worth knowing: a real `.env` is usually git-ignored, so SEC101
-will not see it unless you pass `--no-gitignore`. Where it earns its keep by
-default is the committed cousins — `.env.example` with a real value left in it,
-a `docker-compose.yml` with a database password inline, an `.npmrc` carrying a
-publish token.
-
-"Looks generated" is a moving bar rather than a fixed one, because the maximum
-entropy a string can carry depends on its alphabet and its length. A 12-character
-hex token tops out at 3.58 bits per character and a 200-character base64 blob at
-6, so a single global threshold is simultaneously too strict for the first and
-too lax for the second. What generalises is the ratio: a generated credential
-lands near the ceiling of what its alphabet and length allow, and a hand-written
-value does not. The floor is 75% of that ceiling.
-
-Placeholders are filtered before entropy is measured at all — `your-password-here`,
-`${DB_PASSWORD}`, `xxxxxxxx`, `changeme` — and so is structure that is not a
-credential: paths, URLs without a password in them, version constraints, dotted
-identifiers, timestamps.
-
-Every reported value is redacted to its first and last four characters. Findings
-end up in CI logs and issue threads, so the scanner must never be the thing that
-leaks the credential it just found.
-
-#### Documented example credentials
-
-A README that quotes an AWS tutorial contains a string shaped exactly like a
-live access key id, and structure alone cannot tell the two apart. Rather than
-make every project bury its documentation under ignore markers, the scanner
-stays quiet about credentials that are public by design:
-
-| Mechanism | Example |
-| --- | --- |
-| Values published verbatim by a vendor or RFC | `AKIAIOSFODNN7EXAMPLE`, the AWS docs secret key, the jwt.io default token |
-| AWS's reserved `EXAMPLE` suffix | any `AKIA…EXAMPLE` / `ASIA…EXAMPLE` identifier, any 40-character `…EXAMPLEKEY` secret |
-| RFC 2606 reserved domains in JWT claims | the RFC 7519 sample tokens, which issue against `http://example.com/is_root` |
-
-Only the third mechanism inspects content: a JWT's header and payload are
-base64url-decoded (never signature-verified) and checked for `example.com` and
-its siblings, which exist so documentation can name a host that cannot resolve.
-A token that fails to decode is reported, not allowlisted.
-
-Pass `--no-example-allowlist` to see these findings anyway — useful when
-auditing what the scanner chose not to tell you.
-
-### GitHub Actions workflows
-
-| Rule | Finds | Severity |
+| Family | Rules | Looks at |
 | --- | --- | --- |
-| WF001 | Action pinned to a mutable tag, or not pinned at all | medium |
-| WF002 | Job inherits the default `GITHUB_TOKEN` permissions | medium |
-| WF003 | Attacker-controlled context interpolated into a `run:` block | critical |
-| WF004 | `pull_request_target` checking out untrusted code | critical |
-| WF005 | `GITHUB_TOKEN` granted `write-all` | high |
-| WF006 | Job runs on a self-hosted runner | medium |
-| WF007 | Secret passed as an input to a third-party action | medium |
-| WF008 | `workflow_run` checking out untrusted code | critical |
+| [Secrets](docs/RULES.md#secrets) | SEC001–SEC047, SEC100–SEC101 | Credentials in any text file, including inside base64 |
+| [File names](docs/RULES.md#file-names) | FN001–FN004 | Key material and credential files, which have no text to read |
+| [Shell scripts](docs/RULES.md#shell-scripts-and-makefiles) | SH001–SH003 | Where `curl \| sh` actually lives |
+| [Application code](docs/RULES.md#application-code) | AP001–AP003 | Verification off, debug on, predictable tokens |
+| [Dependencies](docs/RULES.md#dependencies) | SC001–SC004 | Where the rest of the build comes from |
+| [GitHub Actions](docs/RULES.md#github-actions-workflows) | WF001–WF012 | Script injection, token scope, privileged triggers |
+| [GitLab CI](docs/RULES.md#gitlab-ci) | GL001–GL004 | The same injection class, and debug tracing |
+| [Azure Pipelines](docs/RULES.md#azure-pipelines) | AZ001–AZ004 | The same injection, a third time |
+| [Jenkins](docs/RULES.md#jenkins) | JK001–JK003 | Groovy's quoting, which decides if it is a bug |
+| [CircleCI](docs/RULES.md#circleci) | CC001–CC004 | The same injection, a fourth time, plus moving orbs |
+| [Dockerfiles](docs/RULES.md#dockerfiles) | DK001–DK006 | Base images, root, pipe-to-shell, layer secrets |
+| [Docker Compose](docs/RULES.md#docker-compose) | DC001–DC006 | Privilege, host mounts, ports on every interface |
+| [Terraform](docs/RULES.md#terraform) | TF001–TF008 | Open ingress, public storage, wildcard policies |
+| [Ansible](docs/RULES.md#ansible) | AN001–AN003 | Decisions applied to every host at once |
+| [CloudFormation](docs/RULES.md#cloudformation) | CF001–CF006 | The same, in AWS's other vocabulary |
+| [Kubernetes](docs/RULES.md#kubernetes) | K8S001–K8S012 | Container escape routes, secrets in manifests |
 
-WF003 is the script-injection class: `${{ github.event.issue.title }}` inside a
-`run:` step is substituted into the shell command *before* the shell runs, so an
-issue title containing `$(...)` executes on the runner. The fix is always to
-route the value through an `env:` block and reference it as `"$VAR"`.
+Three things are worth knowing before you read the list.
 
-WF004 and WF008 are the same mistake through two doors. Both `pull_request_target`
-and `workflow_run` run from the base branch with the repository's secrets
-available; checking out the head commit that triggered them puts a fork's code
-inside that trust boundary.
+**Structure, not lines.** The Terraform, Kubernetes, Compose, CloudFormation
+and pipeline rules read block structure, through three small standard-library
+readers. It is the difference between `privileged: true` under
+`securityContext`, which is critical, and the same line under `annotations`,
+which is nothing. The workflow family is the exception and says so: it reads
+GitHub Actions files the way a reviewer skims them, splitting jobs and steps by
+indentation.
 
-WF002 is asked per job rather than per file. A job that declares its own
-`permissions:` block is already explicit, and warning about it because the file
-has no top-level block is the kind of finding that teaches people to skip the
-output. WF007 is asked per step, and only for actions outside the `actions/` and
-`github/` namespaces: an action can read every input it is given, so handing one
-a secret extends that secret's blast radius to that action's supply chain. It is
-often necessary and often fine — hence medium — but it should be a decision.
+**Recognition by content.** Kubernetes manifests are found by `apiVersion` plus
+`kind`, Compose files by their `services` map, GitLab pipelines by name or by
+shape. Not by directory: a workflow file that happens to live in `k8s/` is not
+a workload.
 
-Workflow checks are pattern-based rather than YAML-aware, a deliberate
-consequence of the zero-dependency rule. What the scanner does parse is
-structure: jobs and steps are split apart by indentation, because "does this job
-declare permissions" and "is this secret handed to a third party" are questions
-about a block, not about a line. Unusual formatting can still slip past, so treat
-a clean report as encouraging, not as proof.
+**Honest edges.** None of this evaluates Terraform, renders a chart, or runs a
+pipeline. A value arriving through a variable is invisible, and the rules say
+so rather than implying coverage they do not have.
 
-### Dockerfiles
+## Project defaults
 
-| Rule | Finds | Severity |
-| --- | --- | --- |
-| DK001 | Base image not pinned to a digest | medium (low for a specific tag) |
-| DK002 | Final image runs as root | medium |
-| DK003 | Build step pipes a download into a shell | high |
-| DK004 | Credential baked into an image layer | high |
-| DK005 | `ADD` fetches a remote URL without verification | medium |
-| DK006 | Build step disables transport security | medium |
+Every project that adopts a scanner ends up with a preferred invocation. Putting
+it in a `Makefile` means the pre-commit hook, the pipeline and whoever runs the
+tool by hand all disagree. Put it in `.repo-sentinel.json` beside the tree
+instead:
 
-Two details matter more than the list. Backslash continuations are joined before
-the rules run, so a `RUN` command split over eight lines is judged as the one
-command it is. And build stages are tracked, so DK002 is only asked of the stage
-that actually becomes the image — demanding an unprivileged user in a throwaway
-compiler stage is how a whole tool gets switched off.
+```json
+{
+  "fail_on": "high",
+  "min_confidence": "medium",
+  "exclude": ["vendor", "testdata"],
+  "disable": ["K8S004", "DC006"]
+}
+```
 
-DK004 is worth stating plainly: every `ENV` and `ARG` value survives in the image
-metadata, so `docker history` reads them back out of any published image, and
-deleting the value in a later layer does not remove it from the earlier one.
+The settings are `exclude`, `fail_on` (`"none"` included), `min_severity`,
+`min_confidence`, `baseline`, `sort`, `disable`, `gitignore` and
+`example_allowlist`. An unknown
+key is an error rather than a shrug: a typo in a security tool's configuration
+means a project believes it configured something it did not.
+
+Everything here is a *default*. Anything on the command line wins, so a config
+file can never stop someone auditing their own repository more strictly than the
+project usually does.
+
+Rules can also be switched off for one subtree rather than everywhere, which is
+usually what is actually wanted -- a vendored chart, an examples directory, a
+fixtures tree:
+
+```json
+{
+  "paths": {
+    "examples/**": { "disable": ["K8S*"] },
+    "charts/vendor/**": { "disable": ["*"] }
+  }
+}
+```
+
+The globs are the `.gitignore` dialect, matched by the same code, so
+`examples/`, `charts/vendor/**` and `*.tf` mean here exactly what they mean
+there. Inventing a second glob dialect for one config key is how a tool ends up
+with two subtly different answers to "does this path match".
+
+`disable` takes rule ids or family prefixes (`DC*`), and `--disable` does the
+same ad hoc. A disabled rule is still counted in the output -- *"3 finding(s)
+hidden by disabled rules"* -- because silence nobody can see is the failure mode
+this whole tool exists to avoid. An id that matches no rule is called out too:
+that typo leaves the rule switched on, which is the safe direction but not the
+one you meant.
 
 ## Baselines
 
@@ -293,22 +291,104 @@ calcifying. It is a list of debts, not a list of exemptions.
 An unreadable or corrupt baseline is an error, not an empty baseline. Failing
 open would mean a truncated file silently accepts everything.
 
+## The JSON output
+
+`--format json` is the one to build on. Each finding carries:
+
+```json
+{
+  "rule_id": "SEC001",
+  "severity": "critical",
+  "confidence": "high",
+  "title": "AWS access key id",
+  "path": "terraform/main.tf",
+  "line": 14,
+  "evidence": "AKIA************LM3D",
+  "remediation": "Deactivate the key in IAM, then rotate it. ...",
+  "fingerprint": "8f120d646369be74",
+  "occurrences": 1
+}
+```
+
+`occurrences` is how many places in that file hold the same value. One
+credential pasted six hundred times is one credential to rotate, so it is
+reported once, at the first of them, with the count attached.
+
+The `fingerprint` is the same identity a baseline uses: a hash of the rule, the
+path and the already-redacted evidence, with no line number in it, so it
+survives reformatting and changes when the value does. Paths always use forward
+slashes, on every platform, so a report reads the same wherever it was
+produced. `repo-sentinel rules --format json` describes the rules themselves,
+including the CWE each one reports.
+
+## Posting the result onto a pull request
+
+`--format markdown` writes a table meant to be pasted into a comment, where the
+people arguing about the change are already looking:
+
+```yaml
+- id: scan
+  run: repo-sentinel scan . --format markdown --output report.md --fail-on none
+- uses: actions/github-script@<sha>
+  with:
+    script: |
+      const body = require("fs").readFileSync("report.md", "utf8");
+      github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+```
+
+The table carries what triage needs -- how bad, which rule, where -- and the
+fixes go underneath in a collapsed block, once per rule rather than once per
+finding. Long reports are truncated with a count: a comment that needs scrolling
+past four hundred rows is one nobody reads.
+
+### Annotations, without asking for a permission
+
+`--format sarif` needs `security-events: write`, which a workflow triggered by
+a fork's pull request does not have. `--format github` writes the same findings
+as workflow commands, which the runner turns into annotations on the diff and
+which need no permission at all:
+
+```yaml
+- run: repo-sentinel scan . --format github
+```
+
+Same findings, worse home, far fewer prerequisites.
+
+### Every other CI: a test report
+
+GitLab, Azure Pipelines and Jenkins all render JUnit XML natively, as a list of
+failures with a message and a body -- which is a finding with its remediation
+attached. No plugin, no permission:
+
+```yaml
+# .gitlab-ci.yml
+scan:
+  script: repo-sentinel scan . --format junit --output report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+```
+
+One test case per finding, classed by family so the CI groups them the way the
+catalogue does, and a clean run is a single passing case rather than an empty
+suite -- an empty report renders as a broken job rather than a quiet one.
+
 ## Reporting to the GitHub Security tab
 
 `--format sarif` emits SARIF 2.1.0, which GitHub's code scanning ingests and
 turns into annotations on the pull request that introduced the line:
 
 ```yaml
-- run: repo-sentinel scan . --format sarif --output repo-sentinel.sarif
-  continue-on-error: true
+- run: repo-sentinel scan . --format sarif --output repo-sentinel.sarif --fail-on none
 - uses: github/codeql-action/upload-sarif@<sha>
   with:
     sarif_file: repo-sentinel.sarif
 ```
 
-The job needs `security-events: write`, and `continue-on-error` on the scan step
-so that a finding does not stop the run before it has published anything — put
-the actual gate in a separate job. This repository's own
+The job needs `security-events: write`, and `--fail-on none` on the scan step so
+that a finding does not stop the run before it has published anything — put the
+actual gate in a separate job. This repository's own
 [CI](.github/workflows/ci.yml) does exactly that.
 
 Each result carries a `partialFingerprint`, so code scanning follows a finding
@@ -344,6 +424,23 @@ sentence about it can switch off is worse than no scanner. Keeping the directive
 in the header also means you can see that a file is unscanned without reading to
 the bottom of it.
 
+All three can name the rules they mean, in brackets:
+
+```yaml
+image: nginx:latest  # repo-sentinel: ignore[K8S008]
+```
+
+Prefer this to the blunt form. A line exempted from everything stays exempt when
+a later release adds a rule that would have caught something real there, and the
+comment no longer records why the exemption exists. Family prefixes work too
+(`ignore[K8S*]`), and so do lists (`ignore[SEC100, DK002]`); the syntax is the
+same one `disable` uses in the config file.
+
+Every run says how many lines carry a marker, whether or not it obeyed them,
+and `--no-suppression` reads past all of them. A scanner that can be switched
+off invisibly is worse than no scanner, which is the same reason
+`--no-gitignore` exists.
+
 A block that is opened and never closed silences everything after it, so it is
 reported as SEC900 rather than trusted. Close the block, or say `ignore-file` and
 mean it.
@@ -359,16 +456,29 @@ forgets.
 PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
-CI runs the suite on Python 3.9, 3.11 and 3.13, scans this repository with the
-tool itself, and publishes the result to the Security tab.
+CI runs the suite on Python 3.9, 3.11 and 3.13, holds a line-coverage floor,
+scans this repository with the tool itself, and publishes the result to the
+Security tab.
+
+```bash
+python3 tools/coverage.py --show-missing
+```
+
+The coverage tool is standard library only, like everything else here. Writing
+one is a strange thing to do when a good one exists; the reason is that the
+promise "this pulls nothing into your environment" should hold for the tests
+too, so a contributor with no network can still check the floor.
 
 The test suite includes a corpus that trips **every** rule in the catalogue, and
-asserts in both directions: no scanner may emit a rule the catalogue does not
-describe, and no catalogue entry may describe a rule nothing can emit. Adding a
-rule without documenting it fails the build, and so does leaving an entry behind
-after deleting one.
+asserts in three directions: no scanner may emit a rule the catalogue does not
+describe, no catalogue entry may describe a rule nothing can emit, and no rule
+may be missing from [docs/RULES.md](docs/RULES.md). Adding a rule without
+documenting it fails the build, and so does leaving an entry behind after
+deleting one.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for how a new rule earns its place.
+[docs/DESIGN.md](docs/DESIGN.md) explains how the pieces fit and why they are
+shaped that way; [CONTRIBUTING.md](CONTRIBUTING.md) covers how a new rule earns
+its place.
 
 ## Security
 

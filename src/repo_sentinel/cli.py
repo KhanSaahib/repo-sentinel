@@ -1,9 +1,11 @@
-"""Command line entry point: argument handling, and nothing else.
+"""The command line: what was asked for, and which command answers it.
 
-Scanning lives in :mod:`.engine`, formatting in :mod:`.report`. What is left
-here is the part that has to decide what the user asked for and what the exit
-code should be -- which, for a tool whose whole job is to fail a build at the
-right moment, is worth keeping unmixed with anything else.
+Scanning lives in :mod:`.engine`, formatting in :mod:`.report`, and what each
+command actually does in :mod:`.commands`. What is left here is the parser, the
+config file that supplies its defaults, and the dispatch -- which is worth
+keeping unmixed with the rest, because for a tool whose job is to fail a build
+at the right moment, "did the user ask for this" and "is this a finding" are
+questions that should not be able to confuse each other.
 """
 
 from __future__ import annotations
@@ -13,14 +15,11 @@ import os
 import sys
 from collections.abc import Sequence
 
-from . import __version__, baseline as baseline_module, report
-from .discovery import DEFAULT_EXCLUDES
-from .engine import scan, scan_path  # noqa: F401  (scan_path is public API)
-from .findings import Confidence, Finding, Severity
+from . import __version__, baseline as baseline_module, config as config_module
+from .commands import EXIT_ERROR, EXIT_FINDINGS, EXIT_OK, init_command, rules_command, scan_command
+from .engine import scan_path  # noqa: F401  (re-exported: this is the public API)
 
-EXIT_OK = 0
-EXIT_FINDINGS = 1
-EXIT_ERROR = 2
+__all__ = ["EXIT_ERROR", "EXIT_FINDINGS", "EXIT_OK", "build_parser", "main", "scan_path"]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -34,7 +33,10 @@ def build_parser() -> argparse.ArgumentParser:
     scan_parser = subparsers.add_parser("scan", help="scan a directory or file")
     scan_parser.add_argument("path", nargs="?", default=".", help="path to scan (default: .)")
     scan_parser.add_argument(
-        "--format", choices=("text", "json", "sarif"), default="text", help="output format"
+        "--format",
+        choices=("text", "json", "sarif", "markdown", "github", "junit"),
+        default="text",
+        help="output format",
     )
     scan_parser.add_argument(
         "--output",
@@ -54,7 +56,10 @@ def build_parser() -> argparse.ArgumentParser:
     scan_parser.add_argument(
         "--fail-on",
         default="medium",
-        help="exit non-zero when a finding reaches this severity (default: medium)",
+        help=(
+            "exit non-zero when a finding reaches this severity (default: "
+            "medium), or 'none' to report without ever failing"
+        ),
     )
     scan_parser.add_argument(
         "--exclude",
@@ -81,9 +86,58 @@ def build_parser() -> argparse.ArgumentParser:
         help="record the current findings as accepted, then exit without failing",
     )
     scan_parser.add_argument(
+        "--prune-baseline",
+        nargs="?",
+        const=baseline_module.DEFAULT_PATH,
+        metavar="FILE",
+        help=(
+            "drop the entries that no longer match anything, and nothing else: "
+            "shrinks a baseline without accepting what has arrived since"
+        ),
+    )
+    scan_parser.add_argument(
+        "--config",
+        metavar="FILE",
+        help=(
+            "project defaults, as JSON "
+            f"(default: {config_module.DEFAULT_PATH} beside the scanned tree, if present)"
+        ),
+    )
+    scan_parser.add_argument(
+        "--disable",
+        action="append",
+        default=[],
+        metavar="RULE",
+        help="switch off a rule or a family ('K8S004', 'DC*'); repeatable",
+    )
+    scan_parser.add_argument(
+        "--paths-from",
+        metavar="FILE",
+        help=(
+            "scan only the files listed in FILE, one per line ('-' for stdin). "
+            "Pipe in `git diff --name-only origin/main` for a fast pull request run"
+        ),
+    )
+    scan_parser.add_argument(
+        "--sort",
+        choices=("severity", "path"),
+        default="severity",
+        help="order findings worst-first (default) or by file",
+    )
+    scan_parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="print only the summary, not each finding",
+    )
+    scan_parser.add_argument(
         "--no-gitignore",
         action="store_true",
         help="also scan files git was told to ignore",
+    )
+    scan_parser.add_argument(
+        "--no-suppression",
+        action="store_true",
+        help="read the 'repo-sentinel: ignore' markers but do not obey them",
     )
     scan_parser.add_argument(
         "--no-example-allowlist",
@@ -92,112 +146,105 @@ def build_parser() -> argparse.ArgumentParser:
     )
     scan_parser.add_argument("--no-color", action="store_true", help="disable coloured output")
 
+    init_parser = subparsers.add_parser(
+        "init", help="set this repository up: a config, a baseline, and a CI snippet"
+    )
+    init_parser.add_argument("path", nargs="?", default=".", help="repository to set up")
+    init_parser.add_argument(
+        "--fail-on",
+        default="high",
+        help="severity the generated config should fail on (default: high)",
+    )
+    init_parser.add_argument(
+        "--force", action="store_true", help="overwrite an existing config or baseline"
+    )
+    init_parser.add_argument(
+        "--no-baseline",
+        action="store_true",
+        help="do not record existing findings as accepted",
+    )
+
     rules_parser = subparsers.add_parser("rules", help="list every rule the scanner knows")
+    rules_parser.add_argument(
+        "pattern",
+        nargs="?",
+        help="show only rules matching an id, a family, or a word in the summary",
+    )
     rules_parser.add_argument("--format", choices=("text", "json"), default="text")
+    # Kept for the second parse in main(), where a config file supplies
+    # defaults that explicit flags then override.
+    parser.scan_parser = scan_parser  # type: ignore[attr-defined]
     return parser
 
 
-def _emit(text: str, destination: "str | None") -> int:
-    """Print a report, or write it to a file. Returns an exit code."""
-    if destination is None:
-        print(text)
-        return EXIT_OK
-    try:
-        os.makedirs(os.path.dirname(os.path.abspath(destination)), exist_ok=True)
-        with open(destination, "w", encoding="utf-8") as handle:
-            handle.write(text if text.endswith("\n") else text + "\n")
-    except OSError as error:
-        print(f"repo-sentinel: could not write {destination!r}: {error}", file=sys.stderr)
-        return EXIT_ERROR
-    return EXIT_OK
+#: Config key -> the argparse destination it supplies a default for. The two
+#: booleans are inverted because the flags are phrased as opt-outs.
+_CONFIG_TO_DEST = {
+    "exclude": ("exclude", False),
+    "fail_on": ("fail_on", False),
+    "min_severity": ("min_severity", False),
+    "min_confidence": ("min_confidence", False),
+    "baseline": ("baseline", False),
+    "sort": ("sort", False),
+    "disable": ("disable", False),
+    "gitignore": ("no_gitignore", True),
+    "example_allowlist": ("no_example_allowlist", True),
+}
 
 
-def _run_scan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
-    try:
-        min_severity = Severity.parse(args.min_severity)
-        min_confidence = Confidence.parse(args.min_confidence)
-        fail_on = Severity.parse(args.fail_on)
-    except ValueError as error:
-        parser.error(str(error))
-        return EXIT_ERROR  # pragma: no cover - argparse exits first
+def _apply_config(parser: argparse.ArgumentParser, argv: "Sequence[str] | None") -> argparse.Namespace:
+    """Parse twice: once to find the config file, once with it as defaults.
 
-    result = scan(
-        args.path,
-        DEFAULT_EXCLUDES + tuple(args.exclude),
-        allow_examples=not args.no_example_allowlist,
-        use_gitignore=not args.no_gitignore,
-    )
-    findings: "list[Finding]" = [
-        finding
-        for finding in result.findings
-        if finding.severity >= min_severity and finding.confidence >= min_confidence
-    ]
+    Parsing again is cheaper than working out whether each flag was passed
+    explicitly, and it gets the precedence right by construction -- argparse
+    already prefers what is on the command line to whatever the defaults say.
+    """
+    args = parser.parse_args(argv)
+    if args.command != "scan":
+        return args
+    args.path_scopes = []
 
-    if args.write_baseline:
-        return _write_baseline(args.write_baseline, findings)
+    path = config_module.find(args.path, args.config)
+    if path is None:
+        return args
 
-    notes: "list[str]" = []
-    if args.baseline:
-        try:
-            recorded = baseline_module.load(args.baseline)
-        except baseline_module.BaselineError as error:
-            print(f"repo-sentinel: {error}", file=sys.stderr)
-            return EXIT_ERROR
-        findings, accepted, stale = recorded.partition(findings)
-        if accepted:
-            notes.append(f"{len(accepted)} finding(s) accepted by {args.baseline}.")
-        if stale:
-            notes.append(
-                f"{len(stale)} baseline entr{'y' if len(stale) == 1 else 'ies'} "
-                "no longer match anything: prune with --write-baseline."
-            )
-
-    if args.format == "text":
-        notes.append(_scan_note(result))
-
-    exit_code = _emit(_render(args, findings, notes), args.output)
-    if exit_code != EXIT_OK:
-        return exit_code
-    if any(finding.severity >= fail_on for finding in findings):
-        return EXIT_FINDINGS
-    return EXIT_OK
-
-
-def _render(
-    args: argparse.Namespace, findings: "list[Finding]", notes: "list[str]"
-) -> str:
-    if args.format == "json":
-        return report.format_json(findings, version=__version__, notes=notes)
-    if args.format == "sarif":
-        return report.format_sarif(findings, version=__version__)
-    colour = not args.no_color and args.output is None and sys.stdout.isatty()
-    return report.format_text(findings, colour=colour, notes=notes)
-
-
-def _scan_note(result) -> str:
-    if result.file_count == 0:
-        return "Scanned 0 files. Check the path, the excludes and your .gitignore."
-    return f"Scanned {result.file_count} file(s) in {result.duration:.2f}s."
-
-
-def _write_baseline(path: str, findings: "list[Finding]") -> int:
-    try:
-        count = baseline_module.write(path, findings, version=__version__)
-    except baseline_module.BaselineError as error:
-        print(f"repo-sentinel: {error}", file=sys.stderr)
-        return EXIT_ERROR
-    print(f"Recorded {count} finding(s) as accepted in {path}.")
-    print("Commit it, then fix them: a baseline is a list of debts, not exemptions.")
-    return EXIT_OK
+    settings = config_module.load(path)
+    # A path in the config file is relative to the config file, not to
+    # whatever directory the command happened to be run from. Without this,
+    # `repo-sentinel scan some/repo` cannot find the baseline that repo's own
+    # config points at, which is exactly what `init` sets up.
+    if "baseline" in settings and not os.path.isabs(settings["baseline"]):
+        settings["baseline"] = os.path.join(os.path.dirname(path) or ".", settings["baseline"])
+    defaults = {}
+    for key, value in settings.items():
+        mapping = _CONFIG_TO_DEST.get(key)
+        if mapping is None:
+            continue  # a setting with no flag, like the paths table
+        dest, inverted = mapping
+        defaults[dest] = (not value) if inverted else value
+    parser.scan_parser.set_defaults(**defaults)  # type: ignore[attr-defined]
+    reparsed = parser.parse_args(argv)
+    reparsed.config = path
+    # Per-path rules have no command line form -- a glob table does not belong
+    # on one -- so unlike every other setting they travel on the namespace
+    # rather than through argparse's defaults.
+    reparsed.path_scopes = config_module.path_scopes(settings)
+    return reparsed
 
 
 def main(argv: "Sequence[str] | None" = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    try:
+        args = _apply_config(parser, argv)
+    except config_module.ConfigError as error:
+        print(f"repo-sentinel: {error}", file=sys.stderr)
+        return EXIT_ERROR
 
+    if args.command == "init":
+        return init_command(args, parser)
     if args.command == "rules":
-        return _emit(report.format_rule_catalogue(as_json=args.format == "json"), None)
-    return _run_scan(args, parser)
+        return rules_command(args)
+    return scan_command(args, parser)
 
 
 if __name__ == "__main__":  # pragma: no cover

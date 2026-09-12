@@ -1,0 +1,25 @@
+{
+  "comment": [
+    "Repositories the heuristics have been measured against, pinned to the",
+    "commit they were measured at. Pinned so that a change to a rule can be",
+    "measured rather than argued about: the same trees, the same findings,",
+    "and a difference that means something. Chosen for what they contain, not",
+    "for fame -- between them they carry every format the tool reads, in five",
+    "programming languages, with a translated interface and a fixture tree.",
+    "The last two are deliberately vulnerable and measure the other",
+    "direction: what the rules fail to notice."
+  ],
+  "repositories": [
+    {"name": "cli", "url": "https://github.com/cli/cli", "commit": "ba51bb47799e308109a980fca846a90d164f5811", "for": "a clean Go repository: the false-positive floor"},
+    {"name": "dagger", "url": "https://github.com/dagger/dagger", "commit": "9b235855b35bf4508b1a5ddf64a5f36b6033a188", "for": "composite actions, generated clients, documentation per release"},
+    {"name": "discourse", "url": "https://github.com/discourse/discourse", "commit": "c89b1a0506a3ec0a249b7f23ac86763b358dc177", "for": "Ruby, a translated interface, and a fixture full of one key"},
+    {"name": "authentik", "url": "https://github.com/goauthentik/authentik", "commit": "583cfe09c32804d7243f2a1ff8bd9d06be714225", "for": "OAuth and SAML: identifiers named after passwords"},
+    {"name": "ingress-nginx", "url": "https://github.com/kubernetes/ingress-nginx", "commit": "dbb11b92ddb77bee9c35e462479129354c84f939", "for": "Kubernetes at scale, and Go tests that skip verification"},
+    {"name": "vault-helm", "url": "https://github.com/hashicorp/vault-helm", "commit": "5b536bfd4ace9046f900045bb124b42dcc38016b", "for": "a Helm chart, templates and all"},
+    {"name": "grafana-operator", "url": "https://github.com/grafana/grafana-operator", "commit": "a0a582eff403bf81ad5413d5aaf62ee27efffbee", "for": "manifests, kustomize overlays, an operator SDK layout"},
+    {"name": "saleor", "url": "https://github.com/saleor/saleor", "commit": "6e2dc35d0cbc7de85ce3503d5e872e2f672ba70e", "for": "a large Django codebase"},
+    {"name": "laravel", "url": "https://github.com/laravel/laravel", "commit": "aa0cf127fc365a56ee016867144ddffabc2290ae", "for": "a PHP skeleton: small, and should stay silent"},
+    {"name": "terragoat", "url": "https://github.com/bridgecrewio/terragoat", "commit": "729f8da62c6a85ce4af5ad3d123de97776d954c4", "for": "deliberately vulnerable infrastructure: recall"},
+    {"name": "kubernetes-goat", "url": "https://github.com/madhuakula/kubernetes-goat", "commit": "723a0db478f050d173d23b4ce5044b65bce0bdd0", "for": "deliberately vulnerable workloads: recall"}
+  ]
+}

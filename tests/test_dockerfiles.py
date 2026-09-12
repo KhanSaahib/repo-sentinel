@@ -43,6 +43,10 @@ class TestBaseImages(unittest.TestCase):
         self.assertEqual(next(iter(floating)).severity, Severity.MEDIUM)
         self.assertEqual(next(iter(pinned)).severity, Severity.LOW)
 
+    def test_an_interpolated_tag_is_chosen_by_a_build_argument(self):
+        text = "ARG VARIANT=17\nFROM debian:${VARIANT}\nUSER app\n"
+        self.assertEqual(scan(text), [])
+
     def test_scratch_is_not_an_image_to_pin(self):
         self.assertEqual(scan("FROM scratch\nCOPY app /app\n"), [])
 
@@ -122,6 +126,17 @@ class TestSuppression(unittest.TestCase):
     def test_file_marker_silences_the_dockerfile(self):
         text = "# repo-sentinel: ignore-file\nFROM debian:latest\n"
         self.assertEqual(scan(text), [])
+
+    def test_a_marker_on_a_from_line_does_not_break_the_instruction(self):
+        # Docker has no inline comments, so the marker would otherwise become
+        # part of the image reference and the rule would find nothing to report
+        # -- suppression by accident rather than by decision.
+        text = "FROM debian:latest  # repo-sentinel: ignore\nUSER app\n"
+        self.assertEqual(scan(text), [])
+        self.assertEqual(
+            [f.rule_id for f in dockerfiles.scan_files([("Dockerfile", text)], honour_markers=False)],
+            ["DK001"],
+        )
 
     def test_line_marker_silences_one_instruction(self):
         text = (

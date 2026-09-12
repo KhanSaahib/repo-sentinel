@@ -5,11 +5,17 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 from enum import Enum
+from typing import TypeVar
 
 
 #: Declaration order is the ranking, memoised per enum class because ``rank``
 #: is read once per comparison and comparisons happen once per sort step.
 _RANKS: dict = {}
+
+
+#: So that Severity.parse() is typed as returning a Severity rather than the
+#: base class, which is what every caller actually needs.
+_RankedT = TypeVar("_RankedT", bound="_Ranked")
 
 
 class _Ranked(str, Enum):
@@ -45,7 +51,7 @@ class _Ranked(str, Enum):
         return self.rank < other.rank
 
     @classmethod
-    def parse(cls, value: str) -> "_Ranked":
+    def parse(cls: "type[_RankedT]", value: str) -> "_RankedT":
         try:
             return cls(value.strip().lower())
         except ValueError:
@@ -78,6 +84,17 @@ class Confidence(_Ranked):
     MEDIUM = "medium"
     HIGH = "high"
 
+    @property
+    def weaker(self) -> "Confidence":
+        """One step down, for a finding whose surroundings argue against it.
+
+        Documentation and fixture trees both weaken a rule without refuting
+        it, and both want the same arithmetic. Low is the floor: a rule that
+        is already guessing cannot guess less, and silencing it there would
+        be a filter pretending to be a judgement.
+        """
+        return Confidence.MEDIUM if self == Confidence.HIGH else Confidence.LOW
+
 
 def redact(secret: str, keep: int = 4) -> str:
     """Return a version of ``secret`` safe to print in a report or CI log.
@@ -103,12 +120,28 @@ class Finding:
     evidence: str = ""
     remediation: str = ""
     confidence: Confidence = Confidence.HIGH
+    #: What this finding is *about*, when two rules could legitimately find the
+    #: same thing -- in practice, the redacted credential. Findings that carry
+    #: the same subject at the same place are one problem reported twice, and
+    #: :func:`repo_sentinel.engine.collapse` keeps the best of them. An empty
+    #: subject, which is the default, never collapses: two rules sharing a line
+    #: by coincidence are two findings, and guessing otherwise loses one.
+    subject: str = ""
+    #: How many places in this file report the same subject. One credential
+    #: pasted into a fixture six hundred times is one credential to rotate,
+    #: and six hundred lines of report is nobody's idea of a finding.
+    #: :func:`repo_sentinel.engine.collapse` sets this; the finding itself
+    #: points at the first occurrence.
+    occurrences: int = 1
 
     def to_dict(self) -> dict:
         data = dataclasses.asdict(self)
         data["severity"] = self.severity.value
         data["confidence"] = self.confidence.value
         data["fingerprint"] = self.fingerprint
+        # Internal plumbing for de-duplication, not something a consumer of the
+        # report has any use for.
+        data.pop("subject", None)
         return data
 
     @property

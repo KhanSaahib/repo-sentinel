@@ -1,5 +1,47 @@
-"""Individual scanners. Each exposes ``scan_files(files) -> list[Finding]``."""
+"""Individual scanners.
 
-from . import allowlist, dockerfiles, secrets, workflows
+Most expose ``scan_files(files) -> list[Finding]`` over ``(path, text)`` pairs.
+:mod:`.filenames` is the exception: it works from paths alone, because the files
+it is about have no text to read.
+"""
 
-__all__ = ["allowlist", "dockerfiles", "secrets", "workflows"]
+from . import (
+    allowlist,
+    ansible,
+    appcode,
+    azure,
+    ci,
+    circleci,
+    cloudformation,
+    compose,
+    dependencies,
+    dockerfiles,
+    filenames,
+    gitlab,
+    jenkins,
+    kubernetes,
+    secrets,
+    shell,
+    terraform,
+    workflows,
+)
+
+__all__ = [
+    "allowlist",
+    "ansible",
+    "appcode",
+    "azure",
+    "circleci",
+    "cloudformation",
+    "compose",
+    "dependencies",
+    "dockerfiles",
+    "filenames",
+    "gitlab",
+    "jenkins",
+    "kubernetes",
+    "secrets",
+    "shell",
+    "terraform",
+    "workflows",
+]

@@ -1,3 +1,4 @@
+import base64
 import unittest
 
 import fixtures
@@ -131,10 +132,116 @@ class TestAdditionalProviders(unittest.TestCase):
     def test_huggingface_token(self):
         self.assert_rule("SEC019", 'HF = "h' + "f_" + "a" * 34 + '"')
 
+    def test_the_provider_rules_added_for_the_tokens_people_actually_leak(self):
+        # One apiece: the shapes are documented, so the test is that the
+        # pattern was transcribed correctly rather than that it is clever.
+        for rule_id, value in (
+            ("SEC023", "glp" + "at-" + "a1B2c3D4e5F6g7H8i9J0"),
+            ("SEC024", "glr" + "t-" + "a1B2c3D4e5F6g7H8i9J0"),
+            ("SEC025", "dop" + "_v1_" + "0a1b" * 16),
+            ("SEC026", "shp" + "at_" + "0a1b" * 8),
+            ("SEC027", "dap" + "i" + "0a1b" * 8),
+            ("SEC028", "dp" + ".pt." + "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4zaB3dEf7h"),
+            ("SEC029", "gls" + "a_" + "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4z_1a2b3c4d"),
+            ("SEC030", "1234567890" + ":AA" + "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4zQ"),
+            ("SEC031", "PMA" + "K-" + "0a1b" * 6 + "-" + "0a1b" * 8 + "aa"),
+            ("SEC032", "lin" + "_api_" + "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4zaB3dEf7h"),
+            ("SEC033", "ATA" + "TT3x" + "aB3dEf7h" * 13),
+            ("SEC034", "sq0" + "atp-" + "aB3dEf7hIj0kLm2nOp5qRs"),
+        ):
+            with self.subTest(rule=rule_id):
+                self.assertIn(rule_id, rule_ids(secrets.scan_text("app.py", f'k = "{value}"')))
+
+    def test_the_second_batch_of_provider_rules(self):
+        for rule_id, value in (
+            ("SEC035", "xap" + "p-1-A01B02C03-1234567890-" + "0a1b" * 8),
+            ("SEC036", "M" + "TA1B2c3D4e5F6g7H8i9J0k1L" + ".Ab3dEf." + "aB3dEf7hIj0kLm2nOp5qRs8tUv1"),
+            ("SEC037", "key" + "-" + "0a1b" * 8),
+            ("SEC038", "0a1b" * 8 + "-us21"),
+            ("SEC039", "NRA" + "K-" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ1"),
+            ("SEC040", "https://" + "0a1b" * 8 + "@o123.ingest.example.invalid/456"),
+            ("SEC041", "1/" + "1234567890123456" + ":" + "0a1b" * 8),
+            ("SEC042", "sl" + "." + "aB3dEf7h" * 17),
+            ("SEC043", "fig" + "d_" + "aB3dEf7hIj0kLm2nOp5qRs8tUv1wXy4zaB3dEf7h"),
+            ("SEC044", "pat" + "aB3dEf7hIj0kLm" + "." + "0a1b" * 16),
+            ("SEC045", "AKC" + "p8" + "aB3dEf7h" * 8),
+            ("SEC046", "aB3dEf7hIj0kLm" + ".atlasv1." + "aB3dEf7h" * 6),
+            ("SEC047", "AAA" + "A" + "aB3dEf7" + ":APA91b" + "aB3dEf7h" * 17),
+        ):
+            with self.subTest(rule=rule_id):
+                self.assertIn(rule_id, rule_ids(secrets.scan_text("app.py", f'k = "{value}"')))
+
+    def test_the_new_patterns_do_not_fire_on_their_own_prefixes(self):
+        # "glpat-" and friends turn up in documentation about tokens far more
+        # often than actual tokens do.
+        for value in (
+            "glpat-", "dop_v1_", "dapi", "PMAK-xxxx", "lin_api_short",
+            "xapp-", "figd_", "key-", "AKCp8", "sl.",
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(secrets.scan_text("docs/tokens.md", f'k = "{value}"'), [])
+
     def test_a_loose_shape_is_reported_at_lower_confidence(self):
         findings = secrets.scan_text("t.py", 'sid = "S' + "K" + "0a1b" * 8 + '"')
         twilio = next(f for f in findings if f.rule_id == "SEC014")
         self.assertEqual(twilio.confidence, Confidence.MEDIUM)
+
+
+class TestFixtureTrees(unittest.TestCase):
+    """Invented credentials live in fixture directories. So do real ones."""
+
+    LINE = 'api_key = "Qq7Zx9Lm2Pv4Rt8WcY6h"'
+
+    def test_a_guess_in_a_fixture_tree_is_reported_at_lower_confidence(self):
+        ordinary = secrets.scan_text("app/config.py", self.LINE)[0]
+        fixture = secrets.scan_text("config/testdata/conf.py", self.LINE)[0]
+        self.assertEqual(ordinary.confidence, Confidence.MEDIUM)
+        self.assertEqual(fixture.confidence, Confidence.LOW)
+
+    def test_a_documented_token_shape_keeps_its_confidence_anywhere(self):
+        # The entropy rules are guessing and fixtures make the guess worse. A
+        # provider pattern is not guessing, and a real key does get committed
+        # to a fixture tree -- that one is exactly what nobody is looking for.
+        finding = secrets.scan_text(
+            "tests/fixtures/creds.py", f'k = "{fixtures.REALISTIC_AWS_KEY_ID}"'
+        )[0]
+        self.assertEqual(finding.confidence, Confidence.HIGH)
+        self.assertEqual(finding.severity, Severity.CRITICAL)
+
+
+class TestDocumentation(unittest.TestCase):
+    """Prose is where credentials are examples, because that is what it is for."""
+
+    LINE = 'api_key = "Qq7Zx9Lm2Pv4Rt8WcY6h"'
+
+    def test_a_guess_in_documentation_is_reported_at_lower_confidence(self):
+        for path in ("README.md", "docs/install.md", "documentation/guide.rst"):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    secrets.scan_text(path, self.LINE)[0].confidence, Confidence.LOW
+                )
+
+    def test_source_keeps_its_confidence(self):
+        self.assertEqual(
+            secrets.scan_text("app/config.py", self.LINE)[0].confidence, Confidence.MEDIUM
+        )
+
+    def test_a_key_in_a_readme_is_reported_but_believed_less(self):
+        # Grafana's manual contains two dozen service account tokens and none
+        # of them is real. A live key does get pasted into a README, so the
+        # finding stays and keeps its severity; it is --min-confidence high
+        # that stops hearing about it.
+        finding = secrets.scan_text("README.md", f'k = "{fixtures.REALISTIC_AWS_KEY_ID}"')[0]
+        self.assertEqual(finding.confidence, Confidence.MEDIUM)
+        self.assertEqual(finding.severity, Severity.CRITICAL)
+
+    def test_a_documented_shape_in_a_fixture_tree_keeps_its_confidence(self):
+        # Different mistake, different weighing: the classic way a real key
+        # reaches a repository is a test that once talked to a real service.
+        finding = secrets.scan_text(
+            "tests/fixtures/creds.py", f'k = "{fixtures.REALISTIC_AWS_KEY_ID}"'
+        )[0]
+        self.assertEqual(finding.confidence, Confidence.HIGH)
 
 
 class TestUrlCredentials(unittest.TestCase):
@@ -187,6 +294,41 @@ class TestValuePositions(unittest.TestCase):
     def test_ignores_an_interpolated_reference(self):
         self.assertEqual(secrets.scan_text(".env", "API_TOKEN=${API_TOKEN}"), [])
 
+    def test_a_line_with_no_credential_word_is_not_examined(self):
+        # The gate in front of the assignment patterns. A line that mentions
+        # none of the words the rules require cannot produce a finding, and
+        # this is what makes a source tree finish.
+        text = 'greeting = "Xk92mQp7Lz4TvB8nRw1Y"\n'
+        self.assertEqual(secrets.scan_text("app.py", text), [])
+
+    def test_the_gate_lets_through_every_word_the_rules_need(self):
+        for name in (
+            "passwd", "password", "secret", "token", "api_key", "apikey",
+            "access_key", "private_key", "credential", "auth_token", "bearer",
+        ):
+            with self.subTest(name=name):
+                text = f'{name} = "Xk92mQp7Lz4TvB8nRw1Y"\n'
+                self.assertIn("SEC100", rule_ids(secrets.scan_text("app.py", text)))
+
+    def test_an_escaped_quote_does_not_end_the_string(self):
+        # Without this the sentence is cut at the backslash and the half that
+        # survives is measured as a credential.
+        text = 'password_too_long: "Devi disattivare \\"tokenize\\" prima di attivare."\n'
+        self.assertEqual(secrets.scan_text("server.it.yml", text), [])
+
+    def test_a_shell_continuation_is_not_part_of_the_value(self):
+        # A run: block in a workflow is full of these, and the backslash
+        # attached to the value defeats every filter that asks its shape.
+        text = "jobs:\n  b:\n    steps:\n      - run: |\n          tool \\\n"
+        text += "            --github-token=env:GITHUB_TOKEN \\\n"
+        self.assertEqual(secrets.scan_text(".github/workflows/a.yml", text), [])
+
+    def test_the_continuation_strip_does_not_lose_a_real_value(self):
+        text = "DATABASE_PASSWORD=Tv8nRw1YXk92mQp7Lz4T \\\n"
+        findings = secrets.scan_text(".env", text)
+        self.assertIn("SEC101", rule_ids(findings))
+        self.assertNotIn("\\", findings[0].evidence)
+
     def test_reports_a_compose_environment_value(self):
         text = "services:\n  db:\n    environment:\n      MYSQL_ROOT_PASSWORD: Qq7Zx9Lm2Pv4Rt8W\n"
         self.assertIn("SEC101", rule_ids(secrets.scan_text("docker-compose.yml", text)))
@@ -194,6 +336,81 @@ class TestValuePositions(unittest.TestCase):
     def test_does_not_report_the_same_value_twice(self):
         text = "AWS_SECRET_ACCESS_KEY=" + fixtures.REALISTIC_AWS_KEY_ID
         self.assertEqual(len(secrets.scan_text(".env", text)), 1)
+
+
+class TestEncodedCredentials(unittest.TestCase):
+    """base64 is an encoding, and encodings are not hiding places."""
+
+    def encoded(self, value):
+        return base64.b64encode(value.encode()).decode()
+
+    def test_finds_a_provider_token_inside_base64(self):
+        line = "token: " + self.encoded(fixtures.REALISTIC_AWS_KEY_ID)
+        findings = secrets.scan_text("kubeconfig.yaml", line)
+        self.assertEqual(rule_ids(findings), {"SEC022"})
+        self.assertIn("base64", findings[0].title)
+
+    def test_the_name_in_front_of_the_value_does_not_hide_it(self):
+        # "TOKEN=QUtJ..." is one unbroken run of base64 characters if "=" is
+        # part of the alphabet, and the joined string decodes to nothing.
+        for line in (
+            "TOKEN=" + self.encoded(fixtures.REALISTIC_AWS_KEY_ID),
+            "aws_" + self.encoded(fixtures.REALISTIC_AWS_KEY_ID),
+        ):
+            with self.subTest(line=line[:20]):
+                self.assertIn("SEC022", rule_ids(secrets.scan_text("ci.env", line)))
+
+    def test_the_entropy_rule_does_not_report_it_a_second_time(self):
+        line = "api_token: " + self.encoded(fixtures.REALISTIC_AWS_KEY_ID)
+        self.assertEqual(rule_ids(secrets.scan_text("config.yaml", line)), {"SEC022"})
+
+    def test_ordinary_base64_is_not_a_finding(self):
+        blob = self.encoded("the quick brown fox jumps over the lazy dog, twice over")
+        self.assertEqual(secrets.scan_text("a.py", f'BLOB = "{blob}"'), [])
+
+    def test_a_binary_blob_is_not_decoded_into_a_finding(self):
+        blob = base64.b64encode(bytes(range(256))).decode()
+        self.assertEqual(secrets.scan_text("a.py", f'BLOB = "{blob}"'), [])
+
+    def test_the_raw_value_never_reaches_the_report(self):
+        line = "token: " + self.encoded(fixtures.REALISTIC_AWS_KEY_ID)
+        finding = secrets.scan_text("kubeconfig.yaml", line)[0]
+        self.assertNotIn(fixtures.REALISTIC_AWS_KEY_ID, finding.evidence)
+
+
+class TestServiceAccountFiles(unittest.TestCase):
+    """A finding that only exists when the whole document is read at once."""
+
+    def document(self, *fields):
+        return "{\n" + ",\n".join(fields) + "\n}\n"
+
+    def test_type_and_private_key_together_are_a_key_file(self):
+        text = self.document(
+            '  "type": "service_account"',
+            '  "project_id": "x"',
+            '  "private_key_id": "a3f5c9d1b7e204863f2a"',
+        )
+        findings = secrets.scan_text("sa.json", text)
+        self.assertIn("SEC021", rule_ids(findings))
+        self.assertEqual(next(f for f in findings if f.rule_id == "SEC021").line, 2)
+
+    def test_the_type_alone_is_not_a_credential(self):
+        text = self.document('  "type": "service_account"', '  "client_email": "a@b.com"')
+        self.assertEqual(secrets.scan_text("sa.json", text), [])
+
+    def test_a_template_service_account_is_not_a_leak(self):
+        # Charts ship these to document the shape. The key field is there and
+        # empty, or filled with zeroes, which is the opposite of a credential.
+        for fields in (
+            ('  "type": "service_account"', '  "private_key": ""'),
+            ('  "type": "service_account"', '  "private_key_id": "' + "0" * 32 + '"'),
+        ):
+            with self.subTest(fields=fields):
+                self.assertEqual(secrets.scan_text("values.yaml", self.document(*fields)), [])
+
+    def test_a_private_key_field_alone_is_not_a_service_account(self):
+        text = self.document('  "private_key_id": "abc"')
+        self.assertNotIn("SEC021", rule_ids(secrets.scan_text("other.json", text)))
 
 
 if __name__ == "__main__":

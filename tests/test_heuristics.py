@@ -2,7 +2,7 @@
 
 import unittest
 
-from repo_sentinel import heuristics
+from repo_sentinel import heuristics, wellknown
 
 
 class TestEntropy(unittest.TestCase):
@@ -77,12 +77,116 @@ class TestLooksGenerated(unittest.TestCase):
             "bare-quoted-string",
             "Proxy-Authorization",
             "obs-local-part",
+            # A quoted type alias, which is what a module full of string
+            # annotations assigns to names like Token and Block.
+            "tuple[int, str, int]",
+            "dict[str, Node]",
+            # Each of these was a real false positive, measured against the
+            # Prometheus repository: a variable name being assembled, the name
+            # of an environment variable, and a relative path.
+            "GITHUB_TOKEN_${org^^}",
+            "AZURE_FEDERATED_TOKEN_FILE",
+            "testdata/secret_key",
+            # From a Helm chart repository: a YAML anchor, an alias, a label
+            # selector, and a filename on the right of a key called "secret".
+            "&externalAuthorization",
+            "*externalAuthorization",
+            "type!=kubernetes.io/dockercfg,type!=helm.sh/release.v1",
+            "tracing.yaml",
+            # From the GitLab runner: an HTTP header name, a placeholder in
+            # documentation, and a constant holding a Kubernetes type name.
+            "PRIVATE-TOKEN",
+            "glrt-<TOKEN>",
+            "ImagePullSecret",
+            # From the Express examples: what a placeholder in a sample app
+            # actually looks like.
+            "shhhh, very secret",
+            "manny is cool",
+            # From Dagger: a reference saying where the credential lives
+            # rather than what it is, a string annotation in a generated
+            # client, a fragment of Go picked up between two string literals,
+            # and a constant whose name -- not value -- ends in "secret".
+            "env:CARGO_REGISTRY_TOKEN",
+            "vault:secret/data/ci",
+            "Secret | None",
+            "list[Secret] | None",
+            "+fmt.Sprintf(",
+            "git.authheadersecret",
+            # From authentik: identifiers out of a specification, which is
+            # what an OAuth or SAML constants file is made of -- and every one
+            # of them ends in a word like "password" or "token".
+            "urn:ietf:params:oauth:token-type:jwt",
+            "urn:oasis:names:tc:SAML:1.0:am:password",
+            "code id_token token",
+            "dpop+id_token",
+            "authentik_policies_password.passwordpolicy",
+            "#/components/schemas/PasswordChallenge",
+            # From Discourse: a translated interface string, a Ruby constant
+            # path, a Redis key prefix, a hyphenated label, a modular crypt
+            # identifier, and an environment variable name with a private
+            # prefix. Every one of them assigned to a name with "password" or
+            # "token" in it.
+            "Wachtwoorden mogen maximaal 200 tekens lang zijn.",
+            "DiscourseAi::Tokenizer::Mistral",
+            "user_api_key:device:lock:",
+            "OAuth-clientgeheim",
+            "$pbkdf2-sha256$i=64000,l=32$",
+            "_DISCOURSE_USER_TOKEN",
         ):
             with self.subTest(value=value):
                 self.assertFalse(heuristics.looks_generated(value))
 
     def test_rejects_a_repeated_pair(self):
         self.assertFalse(heuristics.looks_generated("ababababababab"))
+
+
+class TestValuesThatSurviveTheFilters(unittest.TestCase):
+    """The filters must not swallow the things they sit next to."""
+
+    def test_an_uppercase_key_without_underscores_is_still_a_key(self):
+        # AZURE_FEDERATED_TOKEN_FILE is an identifier; A1B2C3D4E5F6G7H8I9J0 is
+        # an access key, and they differ only by punctuation.
+        self.assertTrue(heuristics.looks_generated("A1B2C3D4E5F6G7H8I9J0"))
+        self.assertTrue(heuristics.looks_generated("SCW0W8NG6024YHRJ7723"))
+
+    def test_a_password_ending_in_punctuation_is_not_prose(self):
+        # The prose filter wants a space in it. Without that requirement it
+        # swallows this, which is the finding terragoat exists to produce.
+        self.assertTrue(heuristics.looks_generated("AdminPassword123!"))
+        self.assertTrue(heuristics.looks_generated("Sup3rS3cretPassw0rd."))
+
+    def test_text_in_another_script_is_not_measured_for_entropy(self):
+        # A larger alphabet raises entropy per character for a reason that has
+        # nothing to do with randomness. Credentials are ASCII; they travel
+        # through headers and environment variables that are.
+        self.assertFalse(heuristics.looks_generated("كلمة المرور غير صحيحة."))
+        self.assertFalse(heuristics.looks_generated("パスワードが正しくありません"))
+
+    def test_a_credential_that_happens_to_start_with_a_word_is_kept(self):
+        # The reference filter is anchored to a scheme and a colon; a token
+        # beginning with letters is not a reference.
+        self.assertTrue(heuristics.looks_generated("envXk92mQp7Lz4TvB8nRw1Y"))
+        self.assertTrue(heuristics.looks_generated("secret-Xk92mQp7Lz4TvB8n"))
+
+    def test_a_base64_blob_with_slashes_is_not_read_as_a_path(self):
+        self.assertTrue(heuristics.looks_generated("aG9sZFRoZUxpbmVYeVo5/cXc4bTJrN3A1"))
+
+
+class TestTestPaths(unittest.TestCase):
+    def test_fixture_trees_and_test_files_are_recognised(self):
+        for path in (
+            "config/testdata/conf.yml",
+            "discovery/vultr/mock_test.go",
+            "tests/fixtures/key.pem",
+            "spec/support/thing.rb",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(wellknown.is_test_path(path))
+
+    def test_ordinary_source_is_not(self):
+        for path in ("src/app/main.go", "cmd/server/config.py", "latest/index.html"):
+            with self.subTest(path=path):
+                self.assertFalse(wellknown.is_test_path(path))
 
 
 class TestSecretNames(unittest.TestCase):

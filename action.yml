@@ -31,6 +31,12 @@ inputs:
     description: Write SARIF here as well as printing the text report. Leave empty to skip.
     required: false
     default: ""
+  annotations:
+    description: >-
+      Emit workflow commands so findings appear on the pull request diff. Needs
+      no permission, unlike a SARIF upload.
+    required: false
+    default: "true"
 
 runs:
   using: composite
@@ -54,6 +60,7 @@ runs:
         RS_MIN_CONFIDENCE: ${{ inputs.min-confidence }}
         RS_BASELINE: ${{ inputs.baseline }}
         RS_SARIF: ${{ inputs.sarif-file }}
+        RS_ANNOTATIONS: ${{ inputs.annotations }}
       run: |
         set -euo pipefail
         args=(
@@ -67,8 +74,13 @@ runs:
           args+=(--baseline "$RS_BASELINE")
         fi
         if [ -n "$RS_SARIF" ]; then
-          # The SARIF pass must not be skipped by the gate below, so it runs
-          # first and its exit code is deliberately ignored.
-          repo-sentinel "${args[@]}" --format sarif --output "$RS_SARIF" || true
+          # The reporting passes run first and must not be stopped by a
+          # finding -- that is the gate's job, below. "|| true" would hide a
+          # real failure too, so they say --fail-on none and keep their
+          # exit codes.
+          repo-sentinel "${args[@]}" --fail-on none --format sarif --output "$RS_SARIF"
+        fi
+        if [ "$RS_ANNOTATIONS" = "true" ]; then
+          repo-sentinel "${args[@]}" --fail-on none --format github
         fi
         repo-sentinel "${args[@]}"

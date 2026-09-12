@@ -52,6 +52,11 @@ EXAMPLE_CREDENTIALS: frozenset = frozenset(
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
         ".eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ"
         ".SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+        # Google's reCAPTCHA test pair, documented so that a test suite can
+        # always pass verification. Published for that purpose, and every
+        # project that has an automated login test has a copy.
+        "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI",
+        "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe",
     }
 )
 

@@ -7,6 +7,15 @@ Three scopes, in increasing blast radius:
   which is what a generated block or a fixture full of invented keys needs;
 * a file-level marker suppresses the whole file.
 
+Each of the three can name the rules it means, in brackets::
+
+    image: nginx:latest  # repo-sentinel: ignore[K8S008]
+
+An unqualified marker silences everything at that place, which is the blunt
+form and usually not what someone wants: a line exempted for one rule stays
+exempt when a later release adds a rule that would have caught something real
+there. Naming the rule keeps the exemption as narrow as the reason for it.
+
 A file-level directive counts only inside the first
 :data:`FILE_MARKER_MAX_LINE` lines. Without that restriction, any file that
 merely *describes* the directive - this project's own README, a style guide, a
@@ -27,13 +36,16 @@ import dataclasses
 import re
 from collections.abc import Iterable
 
+from . import rules
 from .findings import Finding, Severity
 
 __all__ = [
     "FILE_MARKER_MAX_LINE",
     "LINE_MARKER",
     "UNTERMINATED_RULE_ID",
+    "NONE",
     "Suppressions",
+    "marker",
     "marker_scope",
     "parse",
     "unterminated_finding",
@@ -54,15 +66,28 @@ UNTERMINATED_RULE_ID = "SEC900"
 # module whose source matched its own pattern would suppress itself. The
 # trailing lookahead makes a mistyped directive ("ignore-fil") match nothing at
 # all, so a typo fails towards reporting rather than towards silence.
-_MARKER = re.compile(r"repo-sentinel:[ \t]*ignore(?P<scope>-file|-start|-end)?(?![\w-])")
+_MARKER = re.compile(
+    r"repo-sentinel:[ \t]*ignore(?P<scope>-file|-start|-end)?"
+    r"(?:\[(?P<rules>[^\]]*)\])?(?![\w-])"
+)
 
 _SCOPES = {None: "line", "-file": "file", "-start": "start", "-end": "end"}
 
 
-def marker_scope(line: str) -> str | None:
+def marker_scope(line: str) -> "str | None":
     """Return the scope of the directive on ``line``, or None if it carries none.
 
     One of ``"line"``, ``"file"``, ``"start"`` or ``"end"``.
+    """
+    directive = marker(line)
+    return None if directive is None else directive[0]
+
+
+def marker(line: str) -> "tuple[str, frozenset] | None":
+    """The directive on ``line`` as ``(scope, rules)``, or None.
+
+    An empty rule set means "everything here", which is what an unqualified
+    marker asks for.
     """
     # Every line of every file passes through here twice, and almost none of
     # them carry a directive. A substring test is an order of magnitude cheaper
@@ -72,24 +97,59 @@ def marker_scope(line: str) -> str | None:
     match = _MARKER.search(line)
     if match is None:
         return None
-    return _SCOPES[match.group("scope")]
+    named = match.group("rules") or ""
+    return _SCOPES[match.group("scope")], frozenset(
+        part.strip() for part in named.split(",") if part.strip()
+    )
 
 
 @dataclasses.dataclass(frozen=True)
 class Suppressions:
-    """Which lines of one file its author asked the scanner to skip."""
+    """Which findings in one file its author asked the scanner to skip."""
 
+    #: True when an unqualified file-level marker silenced everything.
     whole_file: bool = False
-    lines: frozenset[int] = frozenset()
-    unterminated_start: int | None = None
+    #: Rules a qualified file-level marker named.
+    file_rules: frozenset = frozenset()
+    #: Line number -> the rules suppressed there; an empty set means all.
+    lines: dict = dataclasses.field(default_factory=dict)
+    unterminated_start: "int | None" = None
 
-    def suppresses(self, line: int) -> bool:
-        """True when a finding reported at ``line`` should be dropped."""
-        return self.whole_file or line in self.lines
+    @property
+    def marked_lines(self) -> frozenset:
+        """Every line carrying or covered by a directive."""
+        return frozenset(self.lines)
 
-    def filter_findings(self, findings: Iterable[Finding]) -> list[Finding]:
+    def suppresses(self, line: int, rule_id: str = "") -> bool:
+        """True when a finding from ``rule_id`` at ``line`` should be dropped.
+
+        Called without a rule id -- which is what a caller asking "is this line
+        exempt from everything" means -- only unqualified markers count. A
+        marker naming rules cannot silence a question that does not name one.
+        """
+        if self.whole_file:
+            return True
+        if self.file_rules and rule_id and rules.matcher(self.file_rules)(rule_id):
+            return True
+        named = self.lines.get(line)
+        if named is None:
+            return False
+        if not named:
+            return True
+        return bool(rule_id) and rules.matcher(named)(rule_id)
+
+    def filter_findings(self, findings: Iterable[Finding]) -> "list[Finding]":
         """Drop the findings that this file's directives cover."""
-        return [finding for finding in findings if not self.suppresses(finding.line)]
+        return [
+            finding
+            for finding in findings
+            if not self.suppresses(finding.line, finding.rule_id)
+        ]
+
+
+#: What a scan uses when it has been told to ignore markers. Shared rather
+#: than constructed per file, because it is immutable and there is one of it.
+NONE = Suppressions()
 
 
 def parse(text: str) -> Suppressions:
@@ -104,25 +164,31 @@ def parse(text: str) -> Suppressions:
     end hide behind a later pair.
     """
     whole_file = False
-    lines = set()
+    file_rules: set = set()
+    lines: "dict[int, frozenset]" = {}
     block_start = None
+    block_rules: frozenset = frozenset()
 
     for number, line in enumerate(text.splitlines(), start=1):
-        scope = marker_scope(line)
-        if scope is None:
+        directive = marker(line)
+        if directive is None:
             if block_start is not None:
-                lines.add(number)
+                lines[number] = block_rules
             continue
 
-        lines.add(number)
+        scope, named = directive
+        lines[number] = named
         if scope == "file" and number <= FILE_MARKER_MAX_LINE:
-            whole_file = True
+            if named:
+                file_rules |= set(named)
+            else:
+                whole_file = True
         elif scope == "start" and block_start is None:
-            block_start = number
+            block_start, block_rules = number, named
         elif scope == "end":
-            block_start = None
+            block_start, block_rules = None, frozenset()
 
-    return Suppressions(whole_file, frozenset(lines), block_start)
+    return Suppressions(whole_file, frozenset(file_rules), lines, block_start)
 
 
 def unterminated_finding(path: str, marks: Suppressions) -> Finding | None:

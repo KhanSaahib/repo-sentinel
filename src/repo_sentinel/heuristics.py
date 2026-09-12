@@ -56,7 +56,9 @@ _PLACEHOLDER = re.compile(
            todo|fixme|none|null|nil|true|false|test|testing|foo|bar|baz)
         [_-]?\w* |
         your[_-]?.* | my[_-]?.* | some[_-]?.* | insert[_-]?.* |
-        <.*> | \{\{.*\}\} | \$\{.*\} | \$\(.*\) | %\w+% | \$[A-Za-z_]\w* |
+        # Repeated dollars are how Compose escapes interpolation, so
+        # "$$(cat /run/secrets/db-password)" is a command, not a credential.
+        <.*> | \{\{.*\}\} | \$+\{.*\} | \$+\(.*\) | %\w+% | \$+[A-Za-z_]\w* |
         .*(?:example\.com|localhost|127\.0\.0\.1).*
     )$
     """
@@ -71,6 +73,91 @@ _STRUCTURED = (
     re.compile(r"^\d{4}-\d{2}-\d{2}[T \d:.+Z-]*$", re.I),  # timestamps
     re.compile(r"^[A-Za-z_][\w-]*(?:\.[A-Za-z_][\w-]*){2,}$"),  # com.example.thing
     re.compile(r"^[\[{]"),                                # a list or object, not a value
+    # A quoted type expression: tuple[int, str, int], dict[str, Node]. Common
+    # wherever annotations are strings, and this one caught this project out.
+    re.compile(r"^[A-Za-z_][\w.]*\[[^\]]*\]$"),
+    # A screaming identifier, snake or kebab: AZURE_FEDERATED_TOKEN_FILE is the
+    # name of an environment variable and PRIVATE-TOKEN is the name of an HTTP
+    # header. Real tokens in this shape do not exist; they carry mixed case,
+    # digits and punctuation.
+    re.compile(r"^_?[A-Z][A-Z0-9]*(?:[-_][A-Z0-9]+)+$"),
+    # Camel or Pascal case with no digits: "ImagePullSecret", "privateToken".
+    # Identifiers assigned to identifier-shaped names, which is what a
+    # constants file is. A generated credential carries digits or punctuation.
+    re.compile(r"^[A-Za-z][a-z]*(?:[A-Z][a-z]+)+$"),
+    # A URN, or anything else colon-separated and spelled out:
+    # "urn:ietf:params:oauth:token-type:jwt", "urn:oasis:names:tc:SAML:1.0:am:password".
+    # Identifiers in a specification, which is what an OAuth or SAML constants
+    # file is made of, and every one of them ends in a word like "password".
+    re.compile(r"^urn:[\w.:+-]+$", re.I),
+    re.compile(r"^[A-Za-z][\w.+-]*(?::[A-Za-z0-9][\w.+-]*){2,}$"),
+    # Space-separated identifiers: "code id_token token", the OAuth response
+    # types. Words with underscores in them, which the prose pattern below
+    # does not allow because prose has none.
+    re.compile(r"^[a-z][a-z0-9_+-]*(?: +[a-z][a-z0-9_+-]*)+$"),
+    # Two identifiers joined by a plus: "dpop+id_token". A media type or a
+    # scheme, and never a generated value.
+    re.compile(r"^[a-z][a-z0-9_-]*(?:\+[a-z][a-z0-9_-]*)+$"),
+    # A Ruby or C++ constant path: "DiscourseAi::Tokenizer::Mistral". The
+    # separator is two colons, which no credential format uses.
+    re.compile(r"^[A-Za-z_]\w*(?:::[A-Za-z_]\w*)+$"),
+    # Hyphenated words in any language: "OAuth-clientgeheim". Letters only --
+    # a credential of that length carries digits or punctuation, and a
+    # translated label does not.
+    re.compile(r"^[A-Za-z]+(?:[-_][A-Za-z]+)+$"),
+    # A namespaced key, colon-separated and lowercase, with or without the
+    # trailing colon a prefix carries: "user_api_key:device:lock:". Cache and
+    # queue keys live in constants whose names end in KEY or TOKEN.
+    re.compile(r"^[a-z][\w.-]*(?::[\w.-]+)+:?$"),
+    # A modular crypt identifier: "$pbkdf2-sha256$i=64000,l=32$". It names the
+    # algorithm and its parameters; the hash, when there is one, comes after.
+    re.compile(r"^\$[a-z0-9-]+\$[^$]*\$?$", re.I),
+    # A sentence in any Latin-script language: letters, digits, punctuation,
+    # and -- the part that matters -- a space in it. Translated interface
+    # strings are assigned to names like password_too_long in every locale a
+    # project ships. Without the space requirement this swallows
+    # "AdminPassword123!", which is a password ending in punctuation and is
+    # exactly the finding a deliberately vulnerable repository is testing for.
+    re.compile(r"^(?=[^\W\d_])(?=[^\n]*\s)[\w .,;:!?'’\"()\\/-]+[.!?\"]$"),
+    # Words with spaces between them: "shhhh, very secret", "manny is cool".
+    # Prose, in other words, which is what a placeholder in an example app
+    # looks like. A generated credential has no spaces in it.
+    re.compile(r"^[A-Za-z][A-Za-z'’.,!?-]*(?: +[A-Za-z][A-Za-z'’.,!?-]*)+$"),
+    # An all-lowercase relative path: "testdata/secret_key". Anchored to
+    # lowercase on purpose -- a base64 blob containing slashes has mixed case,
+    # so this does not swallow one.
+    re.compile(r"^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9._-]+)+$"),
+    # A YAML anchor or alias: "&externalAuthorization", "*externalAuthorization".
+    # The value is a name pointing at a block somewhere else in the document.
+    re.compile(r"^[&*][A-Za-z_][\w.-]*$"),
+    # A lowercase dotted name: "tracing.yaml", "example.internal",
+    # "com.example.app". Filenames turn up constantly on the right of a key
+    # ending in "secret" or "key", and none of them is a credential.
+    re.compile(r"^[a-z0-9][a-z0-9_-]*(?:\.[a-z0-9_-]{1,8})+$"),
+    # A query or selector expression: "type!=kubernetes.io/dockercfg,type!=x".
+    # Comparison operators do not appear in credentials; they appear in filters.
+    re.compile(r".*(?:!=|==|>=|<=).*$"),
+    # A reference to where the value lives, rather than the value: "env:NPM_TOKEN",
+    # "vault:secret/data/ci". The scheme-with-slashes form is already covered by
+    # the URL pattern above; this is the bare one, which CLI tools use precisely
+    # so that the credential does not appear in the command line.
+    re.compile(r"^(?:env|vault|secret|file|cmd|op|ssm|keyring):[\w./:@+-]+$", re.I),
+    # A quoted type expression carrying a union: "Secret | None",
+    # "list[Secret] | None". Python annotations are strings wherever they are
+    # forward references, and a generated client is thousands of them.
+    re.compile(r"^[A-Za-z_][\w.\[\], ]*(?:\s*\|\s*[A-Za-z_][\w.\[\], ]*)+$"),
+    # A fragment of code: `+fmt.Sprintf(`, picked up where a name inside one
+    # string literal meets a value inside the next. Brackets and operators do
+    # not appear in credentials; they appear in expressions.
+    re.compile(r"[()]|^[+*/&|]"),
+    # A reference into a document: "#/components/schemas/PasswordChallenge".
+    # An OpenAPI schema is tens of thousands of these, and the ones that end in
+    # a word like "Challenge" or "Token" are the ones a secret rule reads.
+    re.compile(r"^#/[\w./~%{}-]+$"),
+    # A lowercase dotted identifier with no digits: "git.authheadersecret".
+    # Constants files are full of these, and a constant whose *name* ends in
+    # "secret" is still a name.
+    re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$"),
     # Words joined by hyphens or underscores: "unstructured", "content-type",
     # "Proxy-Authorization". Generated credentials carry digits
     # or mixed case; a pure word-list slug is vocabulary. The cost is that a
@@ -131,10 +218,21 @@ def entropy_floor(value: str) -> float:
     return max(MIN_ENTROPY, ENTROPY_RATIO * ceiling)
 
 
+#: Interpolation anywhere in a value, not only at its start:
+#: ``"GITHUB_TOKEN_${org^^}"`` is a variable name being assembled.
+_EMBEDDED_INTERPOLATION = re.compile(r"\$\{|\$\(|\{\{|%\(|%\{|#\{")
+
+#: An angle-bracket placeholder anywhere in a value: "glrt-<TOKEN>" is what
+#: documentation writes where a real token will go.
+_ANGLE_PLACEHOLDER = re.compile(r"<[A-Za-z_][\w .-]*>")
+
+
 def looks_like_placeholder(value: str) -> bool:
     """True when a value is obviously a stand-in rather than a real credential."""
     stripped = value.strip()
     if not stripped or _PLACEHOLDER.match(stripped):
+        return True
+    if _EMBEDDED_INTERPOLATION.search(stripped) or _ANGLE_PLACEHOLDER.search(stripped):
         return True
     if any(pattern.match(stripped) for pattern in _STRUCTURED):
         return True
@@ -155,6 +253,14 @@ def looks_generated(value: str) -> bool:
     """
     stripped = value.strip()
     if len(stripped) < MIN_SECRET_LENGTH:
+        return False
+    if not stripped.isascii():
+        # Credentials are ASCII, because they travel through headers, URLs and
+        # environment variables that are. Text in another script is not, and
+        # its entropy is high for a reason that has nothing to do with
+        # randomness: a larger alphabet raises the per-character measure.
+        # Measured on Discourse, whose translated interface strings produced
+        # 1,600 findings -- "password" in Arabic, forty times per locale.
         return False
     if looks_like_placeholder(stripped):
         return False

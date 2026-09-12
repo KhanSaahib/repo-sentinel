@@ -19,17 +19,20 @@ import posixpath
 import re
 from collections.abc import Iterable, Iterator
 
-from .. import suppression
+from .. import suppression, wellknown
 from ..findings import Confidence, Finding, Severity, redact
 from ..heuristics import is_secret_name, looks_generated
 
 _INSTRUCTION = re.compile(r"^\s*(?P<name>[A-Za-z]+)\s+(?P<rest>.*)$")
+#: Docker has no inline comments -- a "#" mid-line is part of the argument --
+#: so a suppression marker written at the end of an instruction would
+#: otherwise become part of the image reference and stop it parsing. The
+#: marker is this tool's, so this tool removes it; every other "#" is left
+#: exactly where the author put it.
+_MARKER_COMMENT = re.compile(r"\s+#\s*repo-sentinel:.*$")
 _FROM = re.compile(
     r"^(?P<image>[^\s]+?)(?::(?P<tag>[^\s@]+))?(?:@(?P<digest>sha256:[0-9a-f]{64}))?"
     r"(?:\s+[Aa][Ss]\s+(?P<stage>\S+))?\s*$"
-)
-_PIPE_TO_SHELL = re.compile(
-    r"\b(?:curl|wget)\b[^|]*\|\s*(?:sudo\s+)?(?:/bin/)?(?:ba|z|k|da)?sh\b"
 )
 _INSECURE_FETCH = re.compile(
     r"\b(?:curl\b[^|;]*\s(?:-k|--insecure)|wget\b[^|;]*--no-check-certificate"
@@ -67,7 +70,7 @@ def iter_instructions(lines: list[str]) -> Iterator[tuple[int, str, str]]:
             index += 1
             joined = joined[:-1].rstrip() + " " + lines[index].strip()
         index += 1
-        match = _INSTRUCTION.match(joined)
+        match = _INSTRUCTION.match(_MARKER_COMMENT.sub("", joined))
         if match is None:
             continue
         yield start + 1, match.group("name").upper(), match.group("rest").strip()
@@ -79,7 +82,11 @@ def _check_base_image(path: str, line: int, argument: str) -> Iterator[Finding]:
     if match is None:
         return
     image = match.group("image")
-    if image.lower() == "scratch" or image.startswith("$"):
+    if image.lower() == "scratch":
+        return
+    # "java:0-${VARIANT}" is a tag chosen by a build argument, so its shape
+    # here says nothing about what will be pulled.
+    if wellknown.is_interpolated(argument):
         return
     if match.group("digest"):
         return
@@ -105,7 +112,7 @@ def _check_base_image(path: str, line: int, argument: str) -> Iterator[Finding]:
 
 def _check_run(path: str, line: int, command: str) -> Iterator[Finding]:
     """DK003 and DK006: what a build step trusts the network to hand it."""
-    if _PIPE_TO_SHELL.search(command):
+    if wellknown.downloads_and_runs(command):
         yield Finding(
             rule_id="DK003",
             severity=Severity.HIGH,
@@ -186,9 +193,11 @@ def _shorten(text: str, limit: int = 160) -> str:
     return collapsed if len(collapsed) <= limit else collapsed[: limit - 1] + "…"
 
 
-def scan_dockerfile(path: str, text: str) -> list[Finding]:
+def scan_dockerfile(
+    path: str, text: str, marks: "suppression.Suppressions | None" = None
+) -> list[Finding]:
     """Run every Dockerfile rule against one build file."""
-    marks = suppression.parse(text)
+    marks = suppression.parse(text) if marks is None else marks
     if marks.whole_file:
         return []
 
@@ -244,7 +253,7 @@ def _check_final_user(
         ),
         path=path,
         line=line,
-        evidence=f"FROM {image}" if user is None else f"USER {user}",
+        evidence="no USER instruction" if user is None else f"USER {user}",
         remediation=(
             "A process that is root in the container is root against the kernel "
             "if anything escapes. Create a user and end the final stage with a "
@@ -254,11 +263,14 @@ def _check_final_user(
     )
 
 
-def scan_files(files: Iterable[tuple[str, str]]) -> list[Finding]:
+def scan_files(
+    files: "Iterable[tuple[str, str]]", *, honour_markers: bool = True
+) -> "list[Finding]":
     """Scan ``(path, text)`` pairs, ignoring anything that is not a Dockerfile."""
+    markers = None if honour_markers else suppression.NONE
     return [
         finding
         for path, text in files
         if is_dockerfile_path(path)
-        for finding in scan_dockerfile(path, text)
+        for finding in scan_dockerfile(path, text, markers)
     ]
