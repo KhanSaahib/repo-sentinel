@@ -491,11 +491,13 @@ promise "this pulls nothing into your environment" should hold for the tests
 too, so a contributor with no network can still check the floor.
 
 The test suite includes a corpus that trips **every** rule in the catalogue, and
-asserts in three directions: no scanner may emit a rule the catalogue does not
-describe, no catalogue entry may describe a rule nothing can emit, and no rule
-may be missing from [docs/RULES.md](docs/RULES.md). Adding a rule without
-documenting it fails the build, and so does leaving an entry behind after
-deleting one.
+asserts in five directions: no scanner may emit a rule the catalogue does not
+describe, no catalogue entry may describe a rule nothing can emit, no rule may
+be missing from [docs/RULES.md](docs/RULES.md), no rule may be more severe in
+practice than the catalogue promises, and the severity in the documentation has
+to be the severity in the code. Adding a rule without documenting it fails the
+build, and so does leaving an entry behind after deleting one -- as does a
+number quoted in the README that the catalogue has moved past.
 
 [docs/DESIGN.md](docs/DESIGN.md) explains how the pieces fit and why they are
 shaped that way; [CONTRIBUTING.md](CONTRIBUTING.md) covers how a new rule earns
