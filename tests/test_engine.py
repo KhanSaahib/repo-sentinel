@@ -1,5 +1,6 @@
 """Running every scanner over a real tree, and reporting what was looked at."""
 
+import dataclasses
 import os
 import tempfile
 import unittest
@@ -173,9 +174,29 @@ class TestCollapse(unittest.TestCase):
         )
         self.assertEqual(sorted(finding.rule_id for finding in kept), ["DK001", "DK002"])
 
-    def test_the_same_value_on_different_lines_both_survive(self):
-        kept = engine.collapse([self.finding("SEC001", "critical"), self.finding("SEC001", "critical", line=9)])
+    def test_the_same_value_repeated_in_one_file_is_counted_not_repeated(self):
+        # One credential is one thing to rotate however many times it was
+        # pasted. The finding points at the first occurrence.
+        kept = engine.collapse(
+            [
+                self.finding("SEC001", "critical", line=9),
+                self.finding("SEC001", "critical"),
+                self.finding("SEC001", "critical", line=40),
+            ]
+        )
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(kept[0].occurrences, 3)
+        self.assertEqual(kept[0].line, 6)
+
+    def test_the_same_value_in_two_files_is_two_findings(self):
+        kept = engine.collapse(
+            [
+                self.finding("SEC001", "critical"),
+                dataclasses.replace(self.finding("SEC001", "critical"), path="other.py"),
+            ]
+        )
         self.assertEqual(len(kept), 2)
+        self.assertEqual({finding.occurrences for finding in kept}, {1})
 
 
 if __name__ == "__main__":

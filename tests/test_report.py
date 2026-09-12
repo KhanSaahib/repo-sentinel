@@ -1,5 +1,6 @@
 """Output formats: what the person, the pipeline and GitHub each get told."""
 
+import dataclasses
 import json
 import unittest
 
@@ -44,6 +45,42 @@ class TestText(unittest.TestCase):
     def test_colour_is_off_by_request(self):
         self.assertNotIn("\033", report.format_text([CRITICAL], colour=False))
         self.assertIn("\033", report.format_text([CRITICAL], colour=True))
+
+
+class TestRepeatedValues(unittest.TestCase):
+    """One credential pasted many times is one finding, and says so."""
+
+    REPEATED = Finding(
+        rule_id="SEC001",
+        severity=Severity.CRITICAL,
+        title="AWS access key id",
+        path="fixtures/data.rb",
+        line=27,
+        evidence="AKIA****RBBQ",
+        occurrences=758,
+    )
+
+    def test_the_text_report_says_how_many_other_lines(self):
+        self.assertIn("(and on 757 more lines)", report.format_text([self.REPEATED], colour=False))
+
+    def test_one_other_line_is_singular(self):
+        twice = dataclasses.replace(self.REPEATED, occurrences=2)
+        self.assertIn("(and on 1 more line)", report.format_text([twice], colour=False))
+
+    def test_a_single_occurrence_says_nothing(self):
+        self.assertNotIn("more line", report.format_text([CRITICAL], colour=False))
+
+    def test_the_sarif_message_carries_the_count(self):
+        payload = json.loads(report.format_sarif([self.REPEATED], version="0"))
+        message = payload["runs"][0]["results"][0]["message"]["text"]
+        self.assertIn("Repeated on 758 lines", message)
+
+    def test_the_annotation_carries_the_count(self):
+        self.assertIn("repeated on 758 lines", report.format_github([self.REPEATED]))
+
+    def test_the_json_carries_the_count(self):
+        payload = json.loads(report.format_json([self.REPEATED], version="0"))
+        self.assertEqual(payload["findings"][0]["occurrences"], 758)
 
 
 class TestTextGroupedByFile(unittest.TestCase):

@@ -294,6 +294,12 @@ class TestValuePositions(unittest.TestCase):
     def test_ignores_an_interpolated_reference(self):
         self.assertEqual(secrets.scan_text(".env", "API_TOKEN=${API_TOKEN}"), [])
 
+    def test_an_escaped_quote_does_not_end_the_string(self):
+        # Without this the sentence is cut at the backslash and the half that
+        # survives is measured as a credential.
+        text = 'password_too_long: "Devi disattivare \\"tokenize\\" prima di attivare."\n'
+        self.assertEqual(secrets.scan_text("server.it.yml", text), [])
+
     def test_a_shell_continuation_is_not_part_of_the_value(self):
         # A run: block in a workflow is full of these, and the backslash
         # attached to the value defeats every filter that asks its shape.

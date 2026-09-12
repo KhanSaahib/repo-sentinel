@@ -80,7 +80,7 @@ _STRUCTURED = (
     # name of an environment variable and PRIVATE-TOKEN is the name of an HTTP
     # header. Real tokens in this shape do not exist; they carry mixed case,
     # digits and punctuation.
-    re.compile(r"^[A-Z][A-Z0-9]*(?:[-_][A-Z0-9]+)+$"),
+    re.compile(r"^_?[A-Z][A-Z0-9]*(?:[-_][A-Z0-9]+)+$"),
     # Camel or Pascal case with no digits: "ImagePullSecret", "privateToken".
     # Identifiers assigned to identifier-shaped names, which is what a
     # constants file is. A generated credential carries digits or punctuation.
@@ -98,6 +98,27 @@ _STRUCTURED = (
     # Two identifiers joined by a plus: "dpop+id_token". A media type or a
     # scheme, and never a generated value.
     re.compile(r"^[a-z][a-z0-9_-]*(?:\+[a-z][a-z0-9_-]*)+$"),
+    # A Ruby or C++ constant path: "DiscourseAi::Tokenizer::Mistral". The
+    # separator is two colons, which no credential format uses.
+    re.compile(r"^[A-Za-z_]\w*(?:::[A-Za-z_]\w*)+$"),
+    # Hyphenated words in any language: "OAuth-clientgeheim". Letters only --
+    # a credential of that length carries digits or punctuation, and a
+    # translated label does not.
+    re.compile(r"^[A-Za-z]+(?:[-_][A-Za-z]+)+$"),
+    # A namespaced key, colon-separated and lowercase, with or without the
+    # trailing colon a prefix carries: "user_api_key:device:lock:". Cache and
+    # queue keys live in constants whose names end in KEY or TOKEN.
+    re.compile(r"^[a-z][\w.-]*(?::[\w.-]+)+:?$"),
+    # A modular crypt identifier: "$pbkdf2-sha256$i=64000,l=32$". It names the
+    # algorithm and its parameters; the hash, when there is one, comes after.
+    re.compile(r"^\$[a-z0-9-]+\$[^$]*\$?$", re.I),
+    # A sentence in any Latin-script language: letters, digits, punctuation,
+    # and -- the part that matters -- a space in it. Translated interface
+    # strings are assigned to names like password_too_long in every locale a
+    # project ships. Without the space requirement this swallows
+    # "AdminPassword123!", which is a password ending in punctuation and is
+    # exactly the finding a deliberately vulnerable repository is testing for.
+    re.compile(r"^(?=[^\W\d_])(?=[^\n]*\s)[\w .,;:!?'’\"()\\/-]+[.!?\"]$"),
     # Words with spaces between them: "shhhh, very secret", "manny is cool".
     # Prose, in other words, which is what a placeholder in an example app
     # looks like. A generated credential has no spaces in it.
@@ -199,7 +220,7 @@ def entropy_floor(value: str) -> float:
 
 #: Interpolation anywhere in a value, not only at its start:
 #: ``"GITHUB_TOKEN_${org^^}"`` is a variable name being assembled.
-_EMBEDDED_INTERPOLATION = re.compile(r"\$\{|\$\(|\{\{|%\(")
+_EMBEDDED_INTERPOLATION = re.compile(r"\$\{|\$\(|\{\{|%\(|%\{|#\{")
 
 #: An angle-bracket placeholder anywhere in a value: "glrt-<TOKEN>" is what
 #: documentation writes where a real token will go.
@@ -232,6 +253,14 @@ def looks_generated(value: str) -> bool:
     """
     stripped = value.strip()
     if len(stripped) < MIN_SECRET_LENGTH:
+        return False
+    if not stripped.isascii():
+        # Credentials are ASCII, because they travel through headers, URLs and
+        # environment variables that are. Text in another script is not, and
+        # its entropy is high for a reason that has nothing to do with
+        # randomness: a larger alphabet raises the per-character measure.
+        # Measured on Discourse, whose translated interface strings produced
+        # 1,600 findings -- "password" in Arabic, forty times per locale.
         return False
     if looks_like_placeholder(stripped):
         return False

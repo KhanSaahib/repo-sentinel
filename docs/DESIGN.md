@@ -41,6 +41,12 @@ participates, because two rules can legitimately report the same line for
 different reasons, and an earlier version keyed on evidence text quietly ate
 findings that way.
 
+The same subject in the same file is then folded across lines and counted.
+One credential is one thing to rotate however many times it was pasted, and
+Discourse has a presigned URL in a fixture whose access key id appears on 758
+lines. Findings *without* a subject are never folded, because there each line
+is its own edit: five unpinned actions in one workflow are five pins to write.
+
 **Filtering happens after scanning, never during.** Severity, confidence,
 disabled rules and the baseline are all decisions about which findings to
 *show*. Keeping them out of the scanners means a rule cannot accidentally

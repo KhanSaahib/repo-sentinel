@@ -121,6 +121,12 @@ class Finding:
     #: subject, which is the default, never collapses: two rules sharing a line
     #: by coincidence are two findings, and guessing otherwise loses one.
     subject: str = ""
+    #: How many places in this file report the same subject. One credential
+    #: pasted into a fixture six hundred times is one credential to rotate,
+    #: and six hundred lines of report is nobody's idea of a finding.
+    #: :func:`repo_sentinel.engine.collapse` sets this; the finding itself
+    #: points at the first occurrence.
+    occurrences: int = 1
 
     def to_dict(self) -> dict:
         data = dataclasses.asdict(self)

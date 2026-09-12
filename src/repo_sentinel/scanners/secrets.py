@@ -65,7 +65,10 @@ _QUOTED_ASSIGNMENT = re.compile(
            auth[_-]?(?:token|key|secret|pass|pw|header)|authorization|bearer)
      [A-Za-z0-9_.\[\]-]*)
     \s* [:=] \s*
-    (?P<quote>["'])(?P<value>[^"']{12,256})(?P=quote)
+    # An escaped quote is part of the string, not the end of it. Without this
+    # a translated sentence containing \" is cut in half, and the half that
+    # survives is measured as a credential.
+    (?P<quote>["'])(?P<value>(?:\\.|[^"'\\]){12,256})(?P=quote)
     """
 )
 

@@ -7,7 +7,8 @@ changes.
 ## 0.3.0
 
 0.2.0 was about the output people read. This one is about how much of a
-repository the tool can read at all: it grew from two file formats to six.
+repository the tool can read at all: two file formats became sixteen, and the
+last of them is the first that reads code rather than configuration.
 
 ### Added
 
@@ -208,6 +209,21 @@ repository the tool can read at all: it grew from two file formats to six.
   once per job. The fix is a single top-level block however many jobs there
   are; a file where some jobs are explicit and others are not is still reported
   per job, because there the fix genuinely is per job.
+- **The same credential repeated in one file is one finding**, counted rather
+  than listed: the report says "and on 757 more lines", the JSON carries an
+  `occurrences` field, and the finding points at the first one. One key is one
+  key to rotate. Findings without a subject are untouched -- five unpinned
+  actions in a workflow are five separate pins to write.
+- **Entropy is measured on ASCII only.** Text in another script has high
+  entropy per character because its alphabet is large, which is not randomness.
+  Discourse's translated interface alone produced 1,600 findings.
+- **Eight more false-positive classes from Discourse**: a Ruby `#{...}` or I18n
+  `%{...}` interpolation, a constant path (`DiscourseAi::Tokenizer::Mistral`),
+  a Redis key prefix, a hyphenated label in any language, a modular crypt
+  identifier (`$pbkdf2-sha256$i=64000,l=32$`), an environment variable name
+  with a leading underscore, a full sentence, and -- a parsing bug rather than
+  a heuristic -- an escaped quote inside a quoted value, which cut a translated
+  string in half and measured the half.
 - **Six more, measured against authentik**, whose OAuth and SAML code is made
   of identifiers that end in the word "password": URNs
   (`urn:oasis:names:tc:SAML:1.0:am:password`), space-separated response types

@@ -80,8 +80,15 @@ def _confidence_note(finding: Finding, *, colour: bool) -> str:
     return f"  {_DIM}{marker}{_RESET}" if colour else f"  {marker}"
 
 
+def _repeat_note(finding: Finding) -> str:
+    """``and on 12 more lines``, when one value was pasted more than once."""
+    if finding.occurrences < 2:
+        return ""
+    return f" (and on {finding.occurrences - 1} more line{'' if finding.occurrences == 2 else 's'})"
+
+
 def _body(finding: Finding, indent: str) -> "list[str]":
-    lines = [f"{indent}{finding.title}"]
+    lines = [f"{indent}{finding.title}{_repeat_note(finding)}"]
     if finding.evidence:
         lines.append(f"{indent}evidence: {finding.evidence}")
     if finding.remediation:
@@ -196,7 +203,7 @@ def format_markdown(
     lines.append("| --- | --- | --- | --- |")
     for finding in findings[:limit]:
         marker = f"{_MARKERS[finding.severity]} {finding.severity.value}"
-        detail = _escape(finding.title)
+        detail = _escape(finding.title) + _escape(_repeat_note(finding))
         if finding.confidence < Confidence.HIGH:
             detail += f" _({finding.confidence.value} confidence)_"
         lines.append(
@@ -263,6 +270,8 @@ def format_github(findings: Sequence[Finding], *, notes: Sequence[str] = ()) -> 
             f"line={max(finding.line, 1)},title={title}"
         )
         message = finding.title
+        if finding.occurrences > 1:
+            message = f"{message} (repeated on {finding.occurrences} lines in this file)"
         if finding.remediation:
             message = f"{message} — {finding.remediation}"
         lines.append(f"::{level} {location}::{_annotation_escape(message, in_property=False)}")
@@ -363,6 +372,8 @@ def _sarif_result(finding: Finding, rule_index: int) -> dict:
 
 def _sarif_message(finding: Finding) -> str:
     parts = [finding.title]
+    if finding.occurrences > 1:
+        parts.append(f"Repeated on {finding.occurrences} lines in this file.")
     if finding.evidence:
         parts.append(f"Evidence: {finding.evidence}")
     if finding.remediation:

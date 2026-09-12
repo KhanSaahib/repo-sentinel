@@ -132,6 +132,12 @@ invented credentials are the point of a fixture. A documented token shape is
 not worth less, because the classic way a real key reaches a repository is a
 test that once talked to a real service.
 
+Entropy is measured on ASCII only. Credentials travel through headers, URLs
+and environment variables that are ASCII, and text in another script is not --
+its entropy per character is high because its alphabet is large, which has
+nothing to do with randomness. Discourse's translated interface produced 1,600
+findings before this rule existed: "password", forty times per locale.
+
 Placeholders are filtered before entropy is measured at all — `your-password-here`,
 `${DB_PASSWORD}`, `xxxxxxxx`, `changeme` — and so is structure that is not a
 credential: paths, URLs without a password in them, version constraints, dotted

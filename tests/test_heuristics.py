@@ -121,6 +121,17 @@ class TestLooksGenerated(unittest.TestCase):
             "dpop+id_token",
             "authentik_policies_password.passwordpolicy",
             "#/components/schemas/PasswordChallenge",
+            # From Discourse: a translated interface string, a Ruby constant
+            # path, a Redis key prefix, a hyphenated label, a modular crypt
+            # identifier, and an environment variable name with a private
+            # prefix. Every one of them assigned to a name with "password" or
+            # "token" in it.
+            "Wachtwoorden mogen maximaal 200 tekens lang zijn.",
+            "DiscourseAi::Tokenizer::Mistral",
+            "user_api_key:device:lock:",
+            "OAuth-clientgeheim",
+            "$pbkdf2-sha256$i=64000,l=32$",
+            "_DISCOURSE_USER_TOKEN",
         ):
             with self.subTest(value=value):
                 self.assertFalse(heuristics.looks_generated(value))
@@ -137,6 +148,19 @@ class TestValuesThatSurviveTheFilters(unittest.TestCase):
         # an access key, and they differ only by punctuation.
         self.assertTrue(heuristics.looks_generated("A1B2C3D4E5F6G7H8I9J0"))
         self.assertTrue(heuristics.looks_generated("SCW0W8NG6024YHRJ7723"))
+
+    def test_a_password_ending_in_punctuation_is_not_prose(self):
+        # The prose filter wants a space in it. Without that requirement it
+        # swallows this, which is the finding terragoat exists to produce.
+        self.assertTrue(heuristics.looks_generated("AdminPassword123!"))
+        self.assertTrue(heuristics.looks_generated("Sup3rS3cretPassw0rd."))
+
+    def test_text_in_another_script_is_not_measured_for_entropy(self):
+        # A larger alphabet raises entropy per character for a reason that has
+        # nothing to do with randomness. Credentials are ASCII; they travel
+        # through headers and environment variables that are.
+        self.assertFalse(heuristics.looks_generated("كلمة المرور غير صحيحة."))
+        self.assertFalse(heuristics.looks_generated("パスワードが正しくありません"))
 
     def test_a_credential_that_happens_to_start_with_a_word_is_kept(self):
         # The reference filter is anchored to a scheme and a colon; a token

@@ -190,6 +190,14 @@ def collapse(findings: "Iterable[Finding]") -> "list[Finding]":
     Where subjects do match, the more severe finding wins; on a tie the rule
     whose id sorts first does, which keeps the format-specific rule over the
     generic one, since every format prefix sorts ahead of SEC.
+
+    The same subject in the same file is then folded across lines, counted
+    rather than repeated. One credential is one thing to rotate however many
+    times it was pasted: Discourse has a presigned URL in a fixture whose
+    access key id appears on 758 lines, and 758 findings about one key is a
+    report nobody reads to the end of. Findings without a subject are never
+    folded, because there each line is its own edit -- five unpinned actions
+    in one workflow are five pins to write.
     """
     best: "dict[tuple[str, int, str], Finding]" = {}
     kept: "list[Finding]" = []
@@ -204,7 +212,27 @@ def collapse(findings: "Iterable[Finding]") -> "list[Finding]":
             < (-current.severity.rank, -current.confidence.rank, current.rule_id)
         ):
             best[key] = finding
-    return kept + list(best.values())
+    return kept + _fold_repeats(best.values())
+
+
+def _fold_repeats(findings: "Iterable[Finding]") -> "list[Finding]":
+    """One finding per subject per file, pointing at its first occurrence."""
+    folded: "dict[tuple[str, str], Finding]" = {}
+    counts: "dict[tuple[str, str], int]" = {}
+    for finding in findings:
+        key = (finding.path, finding.subject)
+        counts[key] = counts.get(key, 0) + 1
+        current = folded.get(key)
+        if current is None or (
+            (-finding.severity.rank, -finding.confidence.rank, finding.line)
+            < (-current.severity.rank, -current.confidence.rank, current.line)
+        ):
+            folded[key] = finding
+    return [
+        finding if counts[key] == 1
+        else dataclasses.replace(finding, occurrences=counts[key])
+        for key, finding in folded.items()
+    ]
 
 
 def scan_path(
