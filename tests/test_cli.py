@@ -519,6 +519,24 @@ class TestBaselineIntegration(unittest.TestCase):
         self.assertEqual(code, cli.EXIT_OK)
         self.assertIn("accepted by", output)
 
+    def test_the_baseline_is_named_the_way_findings_are(self):
+        # A config resolves the baseline against its own directory, so the
+        # path arrives absolute; the rest of the report is relative to the
+        # scan, and one sentence should not mix the two.
+        with sample_repo() as root:
+            path = os.path.join(root, "baseline.json")
+            run(["scan", root, "--write-baseline", path])
+            _, output = run(["scan", root, "--baseline", path])
+        self.assertIn("accepted by baseline.json", output)
+        self.assertNotIn(root, output.split("accepted by")[1])
+
+    def test_a_baseline_outside_the_tree_keeps_its_path(self):
+        with sample_repo() as root, tempfile.TemporaryDirectory() as elsewhere:
+            path = os.path.join(elsewhere, "baseline.json")
+            run(["scan", root, "--write-baseline", path])
+            _, output = run(["scan", root, "--baseline", path])
+        self.assertIn(path, output)
+
     def test_a_new_finding_still_fails_the_build(self):
         with sample_repo() as root:
             path = os.path.join(root, "baseline.json")

@@ -146,7 +146,10 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
             return EXIT_ERROR
         findings, accepted, stale = recorded.partition(findings)
         if accepted:
-            notes.append(f"{len(accepted)} finding(s) accepted by {args.baseline}.")
+            notes.append(
+                f"{len(accepted)} finding(s) accepted by "
+                f"{_as_written(args.baseline, args.path)}."
+            )
         if stale:
             notes.append(
                 f"{len(stale)} baseline entr{'y' if len(stale) == 1 else 'ies'} "
@@ -225,6 +228,21 @@ def _file_size_limit(value: "str | None") -> int:
     if not digits.isdigit() or int(digits) <= 0:
         raise ValueError(f"unreadable size {value!r} (try 2M, 500k, or a number of bytes)")
     return int(digits) * scale
+
+
+def _as_written(path: str, root: str) -> str:
+    """A path the way the rest of the report writes them: relative to the scan.
+
+    The baseline's location arrives absolute when it came from a config file,
+    which resolves it against the config's own directory. Printing that in a
+    sentence otherwise full of repository-relative paths reads as a different
+    kind of thing, which it is not.
+    """
+    try:
+        relative = os.path.relpath(path, root if os.path.isdir(root) else os.path.dirname(root))
+    except ValueError:  # pragma: no cover - different drives on Windows
+        return path
+    return path if relative.startswith("..") else relative.replace(os.sep, "/")
 
 
 def _fail_threshold(value: str) -> "Severity | None":

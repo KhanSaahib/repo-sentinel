@@ -424,6 +424,10 @@ last of them is the first that reads code rather than configuration.
 - **A path that does not exist scanned clean.** `repo-sentinel scan tests/fixtues`
   walked nothing, found nothing and said "no findings" -- the one answer this
   tool must never give for a tree it did not read. It is an error now.
+- **The baseline is named the way findings are.** A config resolves it against
+  the config's own directory, so the path arrived absolute and sat in a
+  sentence otherwise full of repository-relative ones. A baseline kept outside
+  the tree still shows its full path, because there is nothing else to call it.
 - **An unreadable file is named the way the report names everything else.** A
   dangling symlink -- the common case, and kubernetes-goat has one -- was
   reported by absolute path, in a sentence otherwise full of relative ones.
