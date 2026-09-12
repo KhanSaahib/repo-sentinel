@@ -699,8 +699,142 @@ def chart_directories(paths: "Iterable[str]") -> "frozenset[str]":
     )
 
 
+#: A chart value named inside a Go template: ``.Values.image.tag``,
+#: ``$.Values.global.registry``. The leading dot is what separates a reference
+#: from the word Values in a comment. A match with an empty path is a bare
+#: ``.Values`` -- ``toYaml .Values``, ``index .Values $name`` -- which reaches
+#: everything and names nothing, and is read as "cannot tell" below.
+_VALUES_REFERENCE = re.compile(r"\.Values(?P<path>(?:\.[A-Za-z_][A-Za-z0-9_-]*)*)")
+
+#: Where a chart keeps the files that consume its values. ``_helpers.tpl`` is
+#: in here too: a named template is where half of a large chart's value
+#: references actually live.
+_TEMPLATE_SUFFIXES = (".yaml", ".yml", ".tpl", ".txt", ".json")
+
+#: A key whose subtree belongs to somebody else's templates. ``global`` is
+#: Helm's own: it is handed to every subchart by definition.
+_PASSTHROUGH_ALWAYS = frozenset({"global"})
+
+
+@dataclasses.dataclass(frozen=True)
+class Chart:
+    """What a chart's own templates say about the values file beside them.
+
+    The default is the answer this scanner gave before it read any templates:
+    nothing is known, so every finding keeps the medium confidence that says
+    "the chart should pass this through and nobody has checked".
+    """
+
+    #: Dotted value paths named somewhere in the chart's templates.
+    references: "frozenset[str]" = frozenset()
+    #: True when the templates reach values in a way this cannot follow, or
+    #: when there were no templates to read.
+    opaque: bool = True
+    #: Top-level keys configuring a dependency rather than this chart.
+    passthrough: "frozenset[str]" = _PASSTHROUGH_ALWAYS
+
+
+def template_references(texts: "Iterable[str]") -> "tuple[frozenset[str], bool]":
+    """The value paths a chart's templates name, and whether any are opaque."""
+    references: "set[str]" = set()
+    opaque = False
+    for text in texts:
+        if ".Values" not in text:
+            continue
+        for match in _VALUES_REFERENCE.finditer(text):
+            named = match.group("path").lstrip(".")
+            if named:
+                references.add(named)
+            else:
+                opaque = True
+    return frozenset(references), opaque
+
+
+def chart_dependencies(text: str) -> "frozenset[str]":
+    """The names and aliases a ``Chart.yaml`` gives its dependencies.
+
+    A parent chart configures a subchart by writing the subchart's name as a
+    top-level key in its own values. Those keys are never referenced by the
+    parent's templates, and reading their absence as "unused" would be wrong
+    about every umbrella chart there is.
+    """
+    document = yamlish.parse_one(text)
+    if document is None:
+        return frozenset()
+    dependencies = document.get("dependencies")
+    if dependencies is None:
+        return frozenset()
+    names = set()
+    for entry in dependencies.entries():
+        for key in ("name", "alias"):
+            found = entry.get(key)
+            if found is not None and found.text.strip().strip("\"\'"):
+                names.add(found.text.strip().strip("\"\'"))
+    return frozenset(names)
+
+
+def chart_contexts(pairs: "Iterable[tuple[str, str]]") -> "dict[str, Chart]":
+    """What each chart directory's templates say, keyed by that directory."""
+    contents = {path.replace("\\", "/"): text for path, text in pairs}
+    charts = chart_directories(contents)
+    if not charts:
+        return {}
+
+    templates: "dict[str, list[str]]" = {directory: [] for directory in charts}
+    for path, text in contents.items():
+        if not path.lower().endswith(_TEMPLATE_SUFFIXES):
+            continue
+        directory = posixpath.dirname(path)
+        # "templates" and anything under it, which is where a chart of any size
+        # ends up putting its partials.
+        while directory:
+            parent, _, name = directory.rpartition("/")
+            if name == "templates" and parent in templates:
+                templates[parent].append(text)
+                break
+            directory = parent
+
+    contexts = {}
+    for directory in charts:
+        references, opaque = template_references(templates[directory])
+        chart_file = posixpath.join(directory, "Chart.yaml") if directory else "Chart.yaml"
+        manifest = contents.get(chart_file) or contents.get(chart_file.replace(".yaml", ".yml"), "")
+        contexts[directory] = Chart(
+            references=references,
+            opaque=opaque or not templates[directory],
+            passthrough=_PASSTHROUGH_ALWAYS | chart_dependencies(manifest),
+        )
+    return contexts
+
+
+def _values_confidence(chart: "Chart | None", path: "tuple[str, ...]") -> Confidence:
+    """How sure the scanner is that a value in the file reaches a container.
+
+    Three answers, and the middle one is the one this started with:
+
+    * **high** -- a template names this path, or a path above or below it.
+    * **medium** -- there was nothing to read, or the chart reaches its values
+      in a way no reader that is not Helm can follow.
+    * **low** -- the templates were read and none of them mentions this. The
+      setting is most likely dead, but "most likely" is why it is still
+      reported: a value can arrive from a parent chart's file instead.
+    """
+    if chart is None or chart.opaque:
+        return Confidence.MEDIUM
+    if path and path[0] in chart.passthrough:
+        return Confidence.MEDIUM
+    for reference in chart.references:
+        parts = tuple(reference.split("."))
+        if parts[: len(path)] == path[: len(parts)]:
+            return Confidence.HIGH
+    return Confidence.LOW
+
+
 def scan_values(
-    path: str, text: str, marks: "suppression.Suppressions | None" = None
+    path: str,
+    text: str,
+    marks: "suppression.Suppressions | None" = None,
+    chart: "Chart | None" = None,
 ) -> "list[Finding]":
     """Read a chart's values for the settings that mean the same anywhere.
 
@@ -711,8 +845,13 @@ def scan_values(
     is the container setting wherever it is written, because that is the only
     thing a chart can do with a key of that name.
 
-    Reported at medium confidence throughout: the chart *should* pass these
-    through, and this reader has not read the template that does it.
+    Confidence depends on what the chart's own templates say, when ``chart``
+    carries them. A setting a template names is reported at high confidence;
+    one no template mentions drops to low, because it is probably a value the
+    chart stopped using and forgot to delete; and medium -- the answer this
+    rule gave before it read any templates -- is kept for the charts where
+    there was nothing to read, or where the templates reach their values
+    through an expression no reader short of Helm can follow.
     """
     marks = suppression.parse(text) if marks is None else marks
     if marks.whole_file:
@@ -723,12 +862,14 @@ def scan_values(
     source = yamlish.strip_templates(text) if yamlish.is_templated(text) else text
     findings: "list[Finding]" = []
     for document in yamlish.parse(source):
-        findings.extend(_values_findings(path, document))
+        findings.extend(_values_findings(path, document, chart))
     return marks.filter_findings(findings)
 
 
-def _values_findings(path: str, document: "yamlish.Node") -> "Iterator[Finding]":
-    for key, node in document.walk():
+def _values_findings(
+    path: str, document: "yamlish.Node", chart: "Chart | None" = None
+) -> "Iterator[Finding]":
+    for keys, key, node in document.walk_paths():
         for name, rule_id, severity, what, remediation in _VALUE_FLAGS:
             if key == name and node.truthy():
                 yield Finding(
@@ -739,14 +880,14 @@ def _values_findings(path: str, document: "yamlish.Node") -> "Iterator[Finding]"
                     line=node.line,
                     evidence=f"{name}: {node.text.strip()}",
                     remediation=remediation,
-                    confidence=Confidence.MEDIUM,
+                    confidence=_values_confidence(chart, keys),
                 )
         if key != "securityContext" or not node.is_map:
             continue
-        yield from _values_security_context(path, node)
+        yield from _values_security_context(path, node, _values_confidence(chart, keys))
         continue
 
-    for key, node in document.walk():
+    for keys, key, node in document.walk_paths():
         if key != "hostPath" or not node.is_map:
             continue
         # A Kubernetes hostPath volume always carries a path -- the API
@@ -768,11 +909,13 @@ def _values_findings(path: str, document: "yamlish.Node") -> "Iterator[Finding]"
                 "that mounts it. Use a PersistentVolume, a projected volume, "
                 "or a CSI driver."
             ),
-            confidence=Confidence.MEDIUM,
+            confidence=_values_confidence(chart, keys),
         )
 
 
-def _values_security_context(path: str, context: "yamlish.Node") -> "Iterator[Finding]":
+def _values_security_context(
+    path: str, context: "yamlish.Node", confidence: Confidence = Confidence.MEDIUM
+) -> "Iterator[Finding]":
     """The securityContext keys a chart can only mean one way."""
     privileged = context.get("privileged")
     if privileged is not None and privileged.truthy():
@@ -788,7 +931,7 @@ def _values_security_context(path: str, context: "yamlish.Node") -> "Iterator[Fi
                 "the node's devices. Grant the one capability the workload "
                 "needs instead."
             ),
-            confidence=Confidence.MEDIUM,
+            confidence=confidence,
         )
 
     escalation = context.get("allowPrivilegeEscalation")
@@ -804,7 +947,7 @@ def _values_security_context(path: str, context: "yamlish.Node") -> "Iterator[Fi
                 "Setting this to false blocks setuid binaries from gaining "
                 "privileges the pod was not granted. Very little needs it."
             ),
-            confidence=Confidence.MEDIUM,
+            confidence=confidence,
         )
 
     profile = context.get("seccompProfile", "type")
@@ -820,7 +963,7 @@ def _values_security_context(path: str, context: "yamlish.Node") -> "Iterator[Fi
                 "Unconfined leaves every syscall available to the container. "
                 "RuntimeDefault is the profile the runtime already ships."
             ),
-            confidence=Confidence.MEDIUM,
+            confidence=confidence,
         )
 
     added = context.get("capabilities", "add")
@@ -847,7 +990,7 @@ def _values_security_context(path: str, context: "yamlish.Node") -> "Iterator[Fi
                 "SYS_PTRACE in particular. Drop ALL and add back only what the "
                 "workload calls for."
             ),
-            confidence=Confidence.MEDIUM,
+            confidence=confidence,
         )
 
 
@@ -920,16 +1063,22 @@ def scan_files(
     A values file is only read when a ``Chart.yaml`` sits in the same
     directory. Without that test, every ``values.yaml`` in every application
     repository -- and they are everywhere -- would be read as a chart's.
+
+    Having the whole file set here is also what lets a values file be read
+    against the templates that consume it, which is the difference between
+    "this chart ships a privileged container" and "this key is still in the
+    file".
     """
     markers = None if honour_markers else suppression.NONE
     pairs = list(files)
-    charts = chart_directories(path for path, _ in pairs)
+    charts = chart_contexts(pairs)
     findings: "list[Finding]" = []
     for path, text in pairs:
         if is_manifest_path(path):
             findings.extend(scan_manifest(path, text, markers))
-        if is_values_path(path) and posixpath.dirname(path.replace("\\", "/")) in charts:
-            findings.extend(scan_values(path, text, markers))
+        directory = posixpath.dirname(path.replace("\\", "/"))
+        if is_values_path(path) and directory in charts:
+            findings.extend(scan_values(path, text, markers, charts[directory]))
         if is_kustomization_path(path):
             findings.extend(scan_kustomization(path, text, markers))
     return findings

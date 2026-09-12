@@ -6,6 +6,27 @@ changes.
 
 ## Unreleased
 
+### Added
+
+- **A chart's values are read against its own templates.** The Kubernetes
+  family has always read `values.yaml` beside a `Chart.yaml` for the six
+  settings that mean the same thing wherever they are written, and always at
+  medium confidence, because the chart *should* pass them through and nothing
+  had read the template that does. Now something has: every file under
+  `templates/`, `_helpers.tpl` included, for the value paths it names. A
+  setting a template names is reported at **high** confidence; one the
+  templates were read and do not mention drops to **low**; and medium is kept
+  for the charts where there was nothing to read or where `{{ toYaml .Values }}`
+  reaches everything and names nothing. A top-level key naming a dependency in
+  `Chart.yaml` -- how an umbrella chart configures a subchart it does not
+  contain -- and `global`, which Helm hands to every subchart, are nobody's to
+  answer for and stay at medium.
+
+  Measured on the pinned prometheus-community charts: 46 charts, 37 of them
+  read, 4,513 value paths named. The same 23 findings as before; three moved
+  from medium to high and none was lost, because every setting those charts
+  ship is a setting they use.
+
 ### Changed
 
 - **The rename finished.** 0.3.0 renamed the distribution and the executable

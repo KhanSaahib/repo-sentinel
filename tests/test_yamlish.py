@@ -152,5 +152,28 @@ class TestWalk(unittest.TestCase):
         self.assertIn("", keys)  # sequence elements
 
 
+class TestWalkPaths(unittest.TestCase):
+    def test_the_keys_that_lead_to_a_node(self):
+        document = yamlish.parse_one("a:\n  b:\n    c: 1\n")
+        self.assertIn((("a", "b", "c"), "c", "1"), [
+            (path, key, node.text) for path, key, node in document.walk_paths()
+        ])
+
+    def test_a_list_element_carries_its_parent_s_path(self):
+        # Nothing addresses a list element by index where this is used: a Helm
+        # template reaches one with range, which names the list.
+        document = yamlish.parse_one("volumes:\n  - name: data\n")
+        found = [(path, key) for path, key, _ in document.walk_paths()]
+        self.assertIn((("volumes",), ""), found)
+        self.assertIn((("volumes", "name"), "name"), found)
+
+    def test_it_yields_what_walk_yields_in_the_same_order(self):
+        document = yamlish.parse_one("a:\n  b: 1\nc:\n  - d: 2\n  - 3\n")
+        self.assertEqual(
+            [(key, node) for key, node in document.walk()],
+            [(key, node) for _, key, node in document.walk_paths()],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
