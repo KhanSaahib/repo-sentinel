@@ -1,191 +1,89 @@
-# Design
+# Roadmap
 
-How the pieces fit, and why they are shaped the way they are. This is for
-someone about to change the code; [RULES.md](RULES.md) is for someone about to
-read a finding.
+The backlog for repo-sentinel, roughly in priority order. Work moves top-down.
+Tick an item when it lands on `main` with tests and a green CI run.
 
-## The pipeline
+Anything here can be reordered, rewritten, or dropped if it turns out to be a
+bad idea. A crossed-out item with a note explaining why it was wrong is a
+better outcome than a feature nobody wanted.
 
-```
-discovery.walk ──► Entry(path, text|None)
-                        │
-                        ├─► scanners.filenames      (names, including binaries)
-                        ├─► scanners.secrets        (every text file)
-                        └─► the format scanners     (each filters by content)
-                                    │
-                                    ▼
-                              list[Finding]
-                                    │
-                        engine.collapse ──► sort ──► CLI filters ──► report
-```
+## Detection quality
 
-Four things happen in that order and the order matters:
+- [x] Allowlist documented public example credentials so the scanner stops
+      flagging documentation
+- [x] Respect `.gitignore` when walking a repository, nested files included,
+      with `--no-gitignore` to audit what was hidden
+- [x] File-level, block-level and rule-scoped suppression, each counted in the
+      summary so silence is never free
+- [x] Baseline file with fingerprints that omit line numbers, plus
+      `--prune-baseline` for entries that match nothing
+- [x] ~~Track the entropy floor separately per rule~~ — per *rule* was the wrong
+      axis. The threshold depends on the value's own alphabet and length, which
+      is what `heuristics.entropy_floor` measures
+- [x] Secrets in value positions (`.env`, `.npmrc`, `.pypirc`, Compose), where
+      there is no quoted assignment to match
+- [x] Confidence as an axis of its own, weighed by where the file sits, with
+      `--min-confidence` to gate on it
+- [x] GCP service account JSON as a whole document (SEC021), and credentials
+      hidden inside base64 (SEC022)
+- [ ] Multi-line detection generally: the scanner is line-by-line, so a PEM body
+      or a wrapped JSON credential is only caught by its first line
+- [ ] Report the *shape* of a near miss: a value that failed the entropy floor
+      by a hair next to a credential-shaped name is worth a low-confidence
+      finding, and today it is silent
+- [ ] Verify a candidate is not already public (git history vs. working tree),
+      and report the first-seen commit
+- [ ] ~~Optional live validation (`--verify`)~~ — off by default and probably
+      always: it turns a static scan into an outbound request carrying the
+      credential it is unsure about
 
-**The walk yields every path it reaches**, with text where it could read it and
-`None` where it could not. Before that, a binary was dropped before any rule
-saw it, which made a committed `id_rsa` or `.p12` invisible. A scanner that
-only ever sees text cannot report a file that has none.
+## Workflow and CI analysis
 
-**Each scanner decides for itself whether a file is its business**, and mostly
-by content rather than by path. A Kubernetes manifest is a document with
-`apiVersion` and `kind`; a Compose file is one with a `services` map and no
-`apiVersion`; a GitLab pipeline is one named `.gitlab-ci.yml` *or* one whose
-top-level keys carry scripts. Directory conventions are guesses, and a workflow
-file living in `k8s/` is not a workload.
+- [x] Per-job `permissions:` analysis, `write-all`, secrets passed to a
+      third-party action, `workflow_run` checking out the triggering head,
+      self-hosted runners, and a token that outlives its step
+- [x] GitLab, Azure Pipelines, CircleCI and Jenkins, each with its own
+      injection vocabulary and its own quoting rules
+- [ ] Reusable workflow calls (`uses:` at job level) pinned to a mutable ref
+- [ ] Warn on `contents: write` without an obvious need — needs a notion of
+      "obvious need" that does not just move the noise somewhere else
+- [ ] Composite actions in the repository itself (`action.yml`), which are
+      workflows in all but trigger
 
-**`engine.collapse` drops the second report of one problem.** Scanners overlap
-deliberately -- a credential inside a Kubernetes `Secret` is both a manifest
-problem and a secret -- and each rule says something the other cannot. What
-collapses is an explicit `subject`: the redacted credential. Nothing else
-participates, because two rules can legitimately report the same line for
-different reasons, and an earlier version keyed on evidence text quietly ate
-findings that way.
+## Beyond GitHub Actions
 
-**Filtering happens after scanning, never during.** Severity, confidence,
-disabled rules and the baseline are all decisions about which findings to
-*show*. Keeping them out of the scanners means a rule cannot accidentally
-become unreachable, and means every filter can report what it hid.
+- [x] Dockerfiles, Compose, Terraform, CloudFormation, Kubernetes, Ansible,
+      dependency manifests, shell scripts and Makefiles
+- [ ] Helm `values.yaml` read against its chart's templates, so a value that
+      lands in a `securityContext` is judged as one
+- [ ] Kustomize overlays, where the patch and the base disagree
+- [ ] systemd units and cron files: the other two places a repository decides
+      what runs as root
 
-## The two readers
+## Output and integration
 
-`hcl` and `yamlish` exist because most rules ask questions about a *block*, and
-a line cannot answer them. `privileged: true` under `securityContext` is
-critical and the same line under `annotations` is nothing; `cidr_blocks` in an
-`ingress` block is a finding and in `egress` it is normal.
+- [x] SARIF with stable partial fingerprints, CWE tags and help URLs
+- [x] Pre-commit hook, GitHub Action wrapper, `rules` command, `init` command
+- [x] `--paths-from FILE` for per-PR runs, `--format markdown` for a PR comment,
+      `--format github` for annotations
+- [x] `--quiet`, `--sort`, `--disable`, per-path configuration
+- [ ] `--explain RULE`: the catalogue entry, the reasoning, the remediation and
+      the CWE in one place, so a reviewer does not have to open the docs
+- [ ] Group findings by file in text output when there are many
+- [ ] Publish to PyPI so `pipx run repo-sentinel` works — the release workflow
+      is written and uses trusted publishing; it needs the project registered
 
-Neither is a parser, and both say so in their module docstring. The rule they
-follow is that **unknown structure degrades to a scalar**, never to a wrong
-shape: a flow collection, an anchor, a tag comes through as text, so a rule
-looking for nesting finds none and stays quiet. Silence is the safe direction
-for a parser this small, and it is the only direction that lets the zero
-dependency rule survive contact with real files.
+## Engineering health
 
-Line numbers are carried on every node. A finding that points at the wrong line
-of a Helm chart is worse than no finding, which is why template flattening
-replaces expressions in place rather than deleting them.
-
-## Severity and confidence
-
-They answer different questions and collapsing them loses both.
-
-*Severity* is what the finding costs if it is real. *Confidence* is how sure
-the rule is that it is. A documented token shape is high confidence; entropy
-next to a variable named `api_key` is a guess and says so.
-
-Two consequences worth knowing before touching a rule:
-
-- The catalogue's severity is the **worst case**, asserted by a test. A rule
-  may grade itself down by context -- TF001 is critical at port 22 and high at
-  443 -- but never up past what the catalogue promises.
-- Confidence is weighed by **where a file sits**. A rule already at medium
-  drops to low in fixture trees and documentation, because a credential in
-  `testdata/` or a README is usually invented. Nothing is silenced: a real key
-  does get committed to a fixture directory, and that one is exactly what
-  nobody is looking for.
-
-If you find yourself lowering a severity because a rule is unreliable, lower
-the confidence instead. That is what it is for.
-
-## Five CI systems, one bug
-
-GitHub expands `${{ github.event.issue.title }}`, GitLab expands
-`$CI_COMMIT_TITLE`, Azure expands `$(Build.SourceVersionMessage)`, CircleCI
-expands `$CIRCLE_BRANCH`, and Groovy expands `${env.BRANCH_NAME}` -- each into
-the command line, before the shell parses it, each from a value an outside
-contributor writes. The syntax differs; the bug does not.
-
-Jenkins is the one that does not share the machinery, because its pipelines are
-Groovy rather than YAML, and it earns its own rule anyway: there the *quoting*
-decides whether the interpolation happens at all.
-
-`scanners/ci.py` holds the parts that do not depend on syntax: finding the
-shell lines in a step, and the list of fields that cannot carry an injection.
-Each scanner keeps its own pattern and vocabulary, because those are exactly
-what differ. The reason to share the rest is not brevity -- it is that a fix
-found in one system belongs in all of them, and the harmless-fields list was
-written for GitHub and then written again, identically, for Azure.
-
-## Two gates in front of the patterns
-
-Almost no line in a repository contains a credential, and the scanner's cost is
-dominated by proving that about each one. So the secret rules run behind two
-cheap questions.
-
-The first is one small pattern: does this line have a fourteen-character run of
-credential characters, a PEM header, or a URL carrying a password? Four fifths
-of lines do not.
-
-The second is a map from literal to rule. Each hint -- `AKIA`, `ghp_`,
-`xoxb-` -- is searched for once, and the ones present select the two or three
-patterns worth running. Asking each rule in turn whether it was interested
-costs twice as much, because several hints are common enough to appear on
-ordinary lines and the question "does any rule want this" then gets asked
-forty-five times instead of once.
-
-Both are correctness risks as much as speed wins, because a line a gate rejects
-is never looked at again, and a hint absent from what a pattern matches
-disables that rule silently. The corpus test is what makes them safe: every
-rule must fire on a line carrying its own shape, so a bad gate or a bad hint
-fails the build rather than quietly removing a rule.
-
-## The catalogue
-
-`rules.py` lists every rule, and the scanners hold the detection logic and the
-remediation text. That duplication is deliberate and defended by a test with
-three assertions: every rule a scanner emits is in the catalogue, every
-catalogue entry is reachable from a scanner, and every rule appears in
-`docs/RULES.md`. A corpus in `tests/corpus.py` trips all of them.
-
-The effect is that a rule cannot ship undocumented, a deleted rule cannot leave
-its entry behind, and the README's tables cannot describe the release before
-last. Adding a rule means touching four places, and the build says which one
-you forgot.
-
-## Suppression and configuration
-
-Three scopes of marker -- line, block, file -- each able to name the rules it
-means (`# repo-sentinel: ignore[K8S008]`). A configuration file supplies
-defaults, including rules disabled globally or under a glob.
-
-Two invariants hold across all of it:
-
-- **The command line always wins.** A config file can never stop somebody
-  auditing their own repository more strictly than the project usually does.
-- **Silence is always counted, and can always be read past.** A disabled rule,
-  a baselined finding, a suppressed line: each is reported as a number in the
-  output, and each has a flag that ignores it -- `--disable` is answered by the
-  count, the baseline by `--write-baseline`, the markers by `--no-suppression`,
-  `.gitignore` by `--no-gitignore`, and the example allowlist by
-  `--no-example-allowlist`. Silence nobody can see is the failure this whole
-  tool exists to avoid, and a scanner that can be switched off invisibly is
-  worse than no scanner.
-
-The unterminated suppression block is the same principle as a rule: SEC900
-reports a marker that silences the rest of a file, because otherwise the file
-goes quiet and looks clean.
-
-## No dependencies
-
-Not one, at runtime. A tool pointed at your supply chain should not enlarge it,
-and the constraint has been good for the design: it is why the scanners read
-structure the way a reviewer skims it rather than building trees nobody asked
-for, and why the coverage tool in `tools/` is fifty lines of `dis` and
-`sys.settrace`.
-
-What it costs is stated where a user can see it: exotic formatting slips past,
-JSON CloudFormation templates are not read, and a value arriving through a
-variable is invisible. A scanner that implies more coverage than it has is
-worse than one that admits its edges.
-
-## Adding a rule
-
-1. Detection in the scanner for that format. Provider patterns are data; the
-   structural rules are functions taking a parsed block.
-2. An entry in `rules.py`.
-3. A fixture in `tests/corpus.py` that trips it.
-4. A row in `docs/RULES.md`.
-5. Tests for what it should *not* match -- which matters more than the positive
-   case, because that is why anyone still has it switched on next quarter.
-6. `python3 tools/measure.py` over real repositories before trusting a
-   heuristic. Every false positive this project has fixed came from reading
-   real output, and not one was imagined in advance.
+- [x] A corpus that trips every rule, asserted four ways against the catalogue,
+      the scanners, the docs and the severity ceiling
+- [x] Coverage measurement in CI with a floor, using the standard library
+- [x] Property-based and seeded-fuzz tests over all three readers, with time
+      bounds and scaling guards for the shapes that were quadratic
+- [x] Type annotations checked with mypy in CI
+- [x] Issue templates, CONTRIBUTING.md, SECURITY.md
+- [x] Benchmark against large repositories: the Python standard library went
+      5.1s → 1.3s, Prometheus a five-minute timeout → 3.7s
+- [ ] A fixed corpus of real repositories pinned by commit, so a heuristic
+      change can be measured rather than argued about
+- [ ] Enable CodeQL default setup and branch protection on `main`

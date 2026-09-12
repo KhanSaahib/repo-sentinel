@@ -4,7 +4,9 @@ The bar for this project is not "does the check work". It is "will people still
 be reading the output six months from now". Most of what follows is about that.
 
 [docs/DESIGN.md](docs/DESIGN.md) is the shorter road into the codebase: the
-pipeline, the two readers, and the invariants the tests defend.
+pipeline, the three readers, and the invariants the tests defend.
+[ROADMAP.md](ROADMAP.md) is what is known to be missing, which is the easiest
+place to find work that is already wanted.
 
 ## Ground rules
 
@@ -15,10 +17,11 @@ building a YAML tree nobody asked for. Test-time and CI-time tooling is a
 different question, but it has to earn its place too.
 
 **Read structure, not lines, wherever the question is about structure.** There
-are two small readers for this -- `hcl` for Terraform blocks and `yamlish` for
-YAML documents -- and neither is a parser. Both are explicit in their docstrings
-about what they do not handle, and both degrade to "no nested value here" rather
-than to a wrong answer, so a rule built on them goes quiet rather than lying. If
+are three small readers for this -- `hcl` for Terraform blocks, `yamlish` for
+YAML documents and `jsonish` for JSON that keeps its line numbers -- and none of
+them is a parser. All three are explicit in their docstrings about what they do
+not handle, and each degrades to "no nested value here" rather than to a wrong
+answer, so a rule built on them goes quiet rather than lying. If
 you need something they cannot do, extend them with the same discipline: unknown
 structure becomes a scalar, and silence is the safe direction.
 

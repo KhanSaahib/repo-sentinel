@@ -46,15 +46,15 @@ disabled rules and the baseline are all decisions about which findings to
 *show*. Keeping them out of the scanners means a rule cannot accidentally
 become unreachable, and means every filter can report what it hid.
 
-## The two readers
+## The three readers
 
-`hcl` and `yamlish` exist because most rules ask questions about a *block*, and
-a line cannot answer them. `privileged: true` under `securityContext` is
-critical and the same line under `annotations` is nothing; `cidr_blocks` in an
-`ingress` block is a finding and in `egress` it is normal.
+`hcl`, `yamlish` and `jsonish` exist because most rules ask questions about a
+*block*, and a line cannot answer them. `privileged: true` under
+`securityContext` is critical and the same line under `annotations` is nothing;
+`cidr_blocks` in an `ingress` block is a finding and in `egress` it is normal.
 
-Neither is a parser, and both say so in their module docstring. The rule they
-follow is that **unknown structure degrades to a scalar**, never to a wrong
+None of them is a parser, and each says so in its module docstring. The rule
+they follow is that **unknown structure degrades to a scalar**, never to a wrong
 shape: a flow collection, an anchor, a tag comes through as text, so a rule
 looking for nesting finds none and stays quiet. Silence is the safe direction
 for a parser this small, and it is the only direction that lets the zero
