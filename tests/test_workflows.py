@@ -625,6 +625,10 @@ class TestCompositeActions(unittest.TestCase):
         )
         self.assertEqual(workflows.scan_action("action.yml", text), [])
 
+    def test_a_whole_file_marker_silences_an_action(self):
+        text = workflow("# repo-sentinel: ignore-file\n" + self.ACTION + "    - uses: v/a@v1\n")
+        self.assertEqual(workflows.scan_action("action.yml", text), [])
+
     def test_scan_files_picks_up_actions_as_well_as_workflows(self):
         findings = workflows.scan_files(
             [("action.yml", workflow(self.ACTION + "    - uses: vendor/setup@v1\n"))]
