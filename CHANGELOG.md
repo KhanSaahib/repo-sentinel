@@ -191,6 +191,13 @@ repository the tool can read at all: it grew from two file formats to six.
 
 ### Fixed
 
+- **Five more false-positive classes, measured against Dagger.** A value that
+  says where the credential lives rather than what it is (`env:NPM_TOKEN`,
+  `vault:secret/data/ci`); a string type annotation in a generated client
+  (`"Secret | None"`); a fragment of Go picked up between two string literals
+  (`+fmt.Sprintf(`); a constant whose *name* ends in "secret"
+  (`git.authheadersecret`); and a shell line continuation left attached to the
+  value, which defeated every filter that asks what shape a value has.
 - **`pool: Azure Pipelines` is the pool Microsoft runs**, not a self-hosted
   one, and AZ002 said otherwise -- so the rule was loudest in exactly the place
   it was most wrong, since "Azure Pipelines" is what every tutorial writes. The

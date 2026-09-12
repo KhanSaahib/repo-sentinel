@@ -294,6 +294,19 @@ class TestValuePositions(unittest.TestCase):
     def test_ignores_an_interpolated_reference(self):
         self.assertEqual(secrets.scan_text(".env", "API_TOKEN=${API_TOKEN}"), [])
 
+    def test_a_shell_continuation_is_not_part_of_the_value(self):
+        # A run: block in a workflow is full of these, and the backslash
+        # attached to the value defeats every filter that asks its shape.
+        text = "jobs:\n  b:\n    steps:\n      - run: |\n          tool \\\n"
+        text += "            --github-token=env:GITHUB_TOKEN \\\n"
+        self.assertEqual(secrets.scan_text(".github/workflows/a.yml", text), [])
+
+    def test_the_continuation_strip_does_not_lose_a_real_value(self):
+        text = "DATABASE_PASSWORD=Tv8nRw1YXk92mQp7Lz4T \\\n"
+        findings = secrets.scan_text(".env", text)
+        self.assertIn("SEC101", rule_ids(findings))
+        self.assertNotIn("\\", findings[0].evidence)
+
     def test_reports_a_compose_environment_value(self):
         text = "services:\n  db:\n    environment:\n      MYSQL_ROOT_PASSWORD: Qq7Zx9Lm2Pv4Rt8W\n"
         self.assertIn("SEC101", rule_ids(secrets.scan_text("docker-compose.yml", text)))

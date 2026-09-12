@@ -102,6 +102,16 @@ class TestLooksGenerated(unittest.TestCase):
             # actually looks like.
             "shhhh, very secret",
             "manny is cool",
+            # From Dagger: a reference saying where the credential lives
+            # rather than what it is, a string annotation in a generated
+            # client, a fragment of Go picked up between two string literals,
+            # and a constant whose name -- not value -- ends in "secret".
+            "env:CARGO_REGISTRY_TOKEN",
+            "vault:secret/data/ci",
+            "Secret | None",
+            "list[Secret] | None",
+            "+fmt.Sprintf(",
+            "git.authheadersecret",
         ):
             with self.subTest(value=value):
                 self.assertFalse(heuristics.looks_generated(value))
@@ -118,6 +128,12 @@ class TestValuesThatSurviveTheFilters(unittest.TestCase):
         # an access key, and they differ only by punctuation.
         self.assertTrue(heuristics.looks_generated("A1B2C3D4E5F6G7H8I9J0"))
         self.assertTrue(heuristics.looks_generated("SCW0W8NG6024YHRJ7723"))
+
+    def test_a_credential_that_happens_to_start_with_a_word_is_kept(self):
+        # The reference filter is anchored to a scheme and a colon; a token
+        # beginning with letters is not a reference.
+        self.assertTrue(heuristics.looks_generated("envXk92mQp7Lz4TvB8nRw1Y"))
+        self.assertTrue(heuristics.looks_generated("secret-Xk92mQp7Lz4TvB8n"))
 
     def test_a_base64_blob_with_slashes_is_not_read_as_a_path(self):
         self.assertTrue(heuristics.looks_generated("aG9sZFRoZUxpbmVYeVo5/cXc4bTJrN3A1"))

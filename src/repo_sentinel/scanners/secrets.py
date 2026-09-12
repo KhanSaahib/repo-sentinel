@@ -82,6 +82,19 @@ _BARE_ASSIGNMENT = re.compile(
     """
 )
 
+def _without_continuation(value: str) -> str:
+    """Drop a shell line continuation from the end of a bare value.
+
+    A YAML ``run:`` block is full of lines like
+    ``--github-token=env:GITHUB_TOKEN \\``, which the value-position rule reads
+    as an assignment -- correctly, as far as it goes. The backslash is the
+    shell's, not the value's, and leaving it attached defeats every filter that
+    asks what shape the value has.
+    """
+    trimmed = value.rstrip()
+    return trimmed[:-1].rstrip() if trimmed.endswith("\\") else trimmed
+
+
 #: File formats that write credentials bare, without quotes.
 _VALUE_POSITION_NAMES = frozenset(
     {".env", ".npmrc", ".pypirc", ".netrc", "_netrc", ".dockercfg", ".pgpass", ".my.cnf"}
@@ -202,7 +215,7 @@ def _scan_assignments(
                     "SEC101",
                     bare.group("name"),
                     bare.span("value"),
-                    bare.group("value"),
+                    _without_continuation(bare.group("value")),
                     Severity.HIGH,
                 )
             )

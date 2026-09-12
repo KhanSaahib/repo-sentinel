@@ -103,6 +103,23 @@ _STRUCTURED = (
     # A query or selector expression: "type!=kubernetes.io/dockercfg,type!=x".
     # Comparison operators do not appear in credentials; they appear in filters.
     re.compile(r".*(?:!=|==|>=|<=).*$"),
+    # A reference to where the value lives, rather than the value: "env:NPM_TOKEN",
+    # "vault:secret/data/ci". The scheme-with-slashes form is already covered by
+    # the URL pattern above; this is the bare one, which CLI tools use precisely
+    # so that the credential does not appear in the command line.
+    re.compile(r"^(?:env|vault|secret|file|cmd|op|ssm|keyring):[\w./:@+-]+$", re.I),
+    # A quoted type expression carrying a union: "Secret | None",
+    # "list[Secret] | None". Python annotations are strings wherever they are
+    # forward references, and a generated client is thousands of them.
+    re.compile(r"^[A-Za-z_][\w.\[\], ]*(?:\s*\|\s*[A-Za-z_][\w.\[\], ]*)+$"),
+    # A fragment of code: `+fmt.Sprintf(`, picked up where a name inside one
+    # string literal meets a value inside the next. Brackets and operators do
+    # not appear in credentials; they appear in expressions.
+    re.compile(r"[()]|^[+*/&|]"),
+    # A lowercase dotted identifier with no digits: "git.authheadersecret".
+    # Constants files are full of these, and a constant whose *name* ends in
+    # "secret" is still a name.
+    re.compile(r"^[a-z]+(?:\.[a-z]+)+$"),
     # Words joined by hyphens or underscores: "unstructured", "content-type",
     # "Proxy-Authorization". Generated credentials carry digits
     # or mixed case; a pure word-list slug is vocabulary. The cost is that a
