@@ -4,8 +4,8 @@ import dataclasses
 import json
 import unittest
 
-from repo_sentinel import report, rules
-from repo_sentinel.findings import Confidence, Finding, Severity
+from bluerayscan import report, rules
+from bluerayscan.findings import Confidence, Finding, Severity
 
 CRITICAL = Finding(
     rule_id="SEC001",

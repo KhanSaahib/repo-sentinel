@@ -8,8 +8,8 @@ would suppress itself the moment anyone pointed the scanner at it.
 import unittest
 
 import fixtures
-from repo_sentinel import suppression
-from repo_sentinel.scanners import secrets, workflows
+from bluerayscan import suppression
+from bluerayscan.scanners import secrets, workflows
 
 _MARK = "repo-sentinel:"
 LINE = f"# {_MARK} ignore"
@@ -198,7 +198,7 @@ class TestRuleScopedMarkers(unittest.TestCase):
         self.assertFalse(marks.suppresses(99, "DK001"))
 
     def test_findings_are_filtered_by_rule(self):
-        from repo_sentinel.findings import Finding, Severity
+        from bluerayscan.findings import Finding, Severity
 
         marks = suppression.parse("x = 1  # repo-sentinel: ignore[SEC100]\n")
         findings = [

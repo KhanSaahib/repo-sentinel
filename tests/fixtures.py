@@ -7,7 +7,7 @@ They are built by concatenation at import time because a secret scanner cannot
 know any of that. GitHub's push protection rejects this repository outright
 when a well-formed AWS access key id appears as a contiguous literal -- which
 is correct behaviour on its part, and is precisely the false-positive problem
-that :mod:`repo_sentinel.scanners.allowlist` exists to solve for documentation.
+that :mod:`bluerayscan.scanners.allowlist` exists to solve for documentation.
 Splitting the literal is not an attempt to smuggle anything past a scanner; it
 keeps a string that no scanner could clear out of the repository's bytes, so
 that a fixture never costs a human being a judgement call.

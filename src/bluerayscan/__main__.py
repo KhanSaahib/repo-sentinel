@@ -1,4 +1,4 @@
-"""Allow ``python -m repo_sentinel``."""
+"""Allow ``python -m bluerayscan``."""
 
 from .cli import main
 

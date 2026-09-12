@@ -52,7 +52,7 @@ choice: a tag is a decision, and `main` is whatever was merged this morning.
 Or run it straight from a checkout, with no install at all:
 
 ```bash
-PYTHONPATH=src python -m repo_sentinel scan .
+PYTHONPATH=src python -m bluerayscan scan .
 ```
 
 ## Use

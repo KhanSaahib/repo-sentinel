@@ -4,8 +4,8 @@ import pathlib
 import unittest
 
 import corpus
-from repo_sentinel import rules
-from repo_sentinel.scanners import (
+from bluerayscan import rules
+from bluerayscan.scanners import (
     ansible,
     appcode,
     azure,
@@ -64,7 +64,7 @@ class TestCoverageOfTheScanners(unittest.TestCase):
     def test_every_scanner_module_is_asked(self):
         # A new scanner missing from CONTENT_SCANNERS would make the drift
         # tests pass by not asking it anything.
-        from repo_sentinel import scanners
+        from bluerayscan import scanners
 
         modules = {
             getattr(scanners, name)

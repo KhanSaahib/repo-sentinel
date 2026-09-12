@@ -2,8 +2,8 @@
 
 import unittest
 
-from repo_sentinel.findings import Confidence, Severity
-from repo_sentinel.scanners import filenames
+from bluerayscan.findings import Confidence, Severity
+from bluerayscan.scanners import filenames
 
 
 def scan(path, text=None):

@@ -2,7 +2,7 @@
 
 import unittest
 
-from repo_sentinel import heuristics, wellknown
+from bluerayscan import heuristics, wellknown
 
 
 class TestEntropy(unittest.TestCase):

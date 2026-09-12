@@ -4,7 +4,7 @@ import os
 import tempfile
 import unittest
 
-from repo_sentinel import discovery
+from bluerayscan import discovery
 
 
 def tree(files):

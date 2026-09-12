@@ -5,7 +5,7 @@ import os
 import tempfile
 import unittest
 
-from repo_sentinel import cli, config
+from bluerayscan import cli, config
 
 
 def write(root, payload):

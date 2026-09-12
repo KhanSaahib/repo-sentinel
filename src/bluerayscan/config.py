@@ -162,7 +162,7 @@ def path_scopes(settings: dict) -> "list[PathScope]":
 def disabled_matcher(patterns: 'Iterable[str]'):
     """The predicate for rules a project has switched off.
 
-    The syntax is :func:`repo_sentinel.rules.matcher`'s, shared with the
+    The syntax is :func:`bluerayscan.rules.matcher`'s, shared with the
     suppression markers, so that naming a rule means the same thing in a config
     file and in a comment.
     """

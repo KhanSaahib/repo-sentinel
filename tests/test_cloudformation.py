@@ -2,8 +2,8 @@
 
 import unittest
 
-from repo_sentinel.findings import Severity
-from repo_sentinel.scanners import cloudformation
+from bluerayscan.findings import Severity
+from bluerayscan.scanners import cloudformation
 
 
 def rule_ids(findings):

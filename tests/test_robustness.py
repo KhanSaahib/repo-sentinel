@@ -23,9 +23,9 @@ import unittest
 import xml.etree.ElementTree as ElementTree
 from pathlib import Path
 
-from repo_sentinel import hcl, heuristics, jsonish, report, yamlish
-from repo_sentinel.findings import redact
-from repo_sentinel.scanners import secrets
+from bluerayscan import hcl, heuristics, jsonish, report, yamlish
+from bluerayscan.findings import redact
+from bluerayscan.scanners import secrets
 def _scanner_modules():
     """Every scanner that takes files, discovered rather than listed.
 
@@ -34,7 +34,7 @@ def _scanner_modules():
     this module was written were all missing from the one it used to have --
     which is exactly how a robustness test quietly stops covering anything.
     """
-    from repo_sentinel import scanners
+    from bluerayscan import scanners
 
     return [
         (name, getattr(scanners, name))
@@ -215,7 +215,7 @@ class TestReportFormatsSurviveAnything(unittest.TestCase):
     ALPHABET = string.printable + "éü中\u200b\u2028\u2029|<>&\"'\x00\x01\x0b\x1f"
 
     def findings(self, seed, count=120):
-        from repo_sentinel.findings import Confidence, Finding, Severity
+        from bluerayscan.findings import Confidence, Finding, Severity
 
         rng = random.Random(seed)
         severities = list(Severity)
@@ -339,7 +339,7 @@ class TestFixturesAreNotCredentials(unittest.TestCase):
     """
 
     def test_no_documented_token_shape_is_written_out_whole(self):
-        from repo_sentinel import engine
+        from bluerayscan import engine
 
         tests_root = Path(__file__).resolve().parent
         report = engine.scan(str(tests_root))
@@ -355,7 +355,7 @@ class TestFixturesAreNotCredentials(unittest.TestCase):
 
     def test_the_check_would_notice(self):
         # A test that can only pass is not a test.
-        from repo_sentinel.scanners import secrets
+        from bluerayscan.scanners import secrets
 
         whole = "AKIA" + "ZZ7Q4TWFN2XKLM3D"
         self.assertTrue(secrets.scan_text("fixture.py", f'key = "{whole}"'))

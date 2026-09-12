@@ -2,7 +2,7 @@
 
 import unittest
 
-from repo_sentinel import yamlish
+from bluerayscan import yamlish
 
 
 def parse(text):

@@ -2,8 +2,8 @@
 
 import unittest
 
-from repo_sentinel.findings import Confidence, Severity
-from repo_sentinel.scanners import appcode
+from bluerayscan.findings import Confidence, Severity
+from bluerayscan.scanners import appcode
 
 
 def rule_ids(findings):
@@ -222,7 +222,7 @@ class TestFixtureTrees(unittest.TestCase):
     CODE = "cfg := &tls.Config{InsecureSkipVerify: true}\n"
 
     def weighed(self, path):
-        from repo_sentinel import engine
+        from bluerayscan import engine
 
         return engine._weigh_by_context(scan(path, self.CODE))
 

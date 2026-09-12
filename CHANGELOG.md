@@ -12,7 +12,7 @@ last of them is the first that reads code rather than configuration.
 
 The PyPI distribution and primary executable are now named `bluerayscan`.
 `repo-sentinel` remains available as a compatibility command, and the Python
-import package remains `repo_sentinel`.
+import package remains `bluerayscan`.
 
 ### Added
 

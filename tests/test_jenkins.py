@@ -2,8 +2,8 @@
 
 import unittest
 
-from repo_sentinel.findings import Severity
-from repo_sentinel.scanners import jenkins
+from bluerayscan.findings import Severity
+from bluerayscan.scanners import jenkins
 
 
 def rule_ids(findings):

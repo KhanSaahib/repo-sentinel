@@ -3,8 +3,8 @@
 import base64
 import unittest
 
-from repo_sentinel.findings import Severity
-from repo_sentinel.scanners import kubernetes
+from bluerayscan.findings import Severity
+from bluerayscan.scanners import kubernetes
 
 
 def rule_ids(findings):

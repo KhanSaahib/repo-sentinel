@@ -7,9 +7,9 @@ import tempfile
 import unittest
 
 import fixtures
-from repo_sentinel import cli
-from repo_sentinel.discovery import iter_files
-from repo_sentinel.findings import Severity
+from bluerayscan import cli
+from bluerayscan.discovery import iter_files
+from bluerayscan.findings import Severity
 
 
 @contextlib.contextmanager
@@ -169,7 +169,7 @@ class TestFileSizeLimit(unittest.TestCase):
         self.assertNotIn("larger than the size limit", output)
 
     def test_every_spelling_of_a_size(self):
-        from repo_sentinel.commands import _file_size_limit
+        from bluerayscan.commands import _file_size_limit
 
         self.assertEqual(_file_size_limit("1024"), 1024)
         self.assertEqual(_file_size_limit("2M"), 2 * 1024 * 1024)
@@ -245,7 +245,7 @@ class TestJsonScanFacts(unittest.TestCase):
 
 
 class TestModuleEntryPoint(unittest.TestCase):
-    """``python -m repo_sentinel`` is how the README says to run it."""
+    """``python -m bluerayscan`` is how the README says to run it."""
 
     def test_the_module_runs_the_cli_and_exits_with_its_code(self):
         import runpy
@@ -255,7 +255,7 @@ class TestModuleEntryPoint(unittest.TestCase):
         stdout = io.StringIO()
         try:
             with contextlib.redirect_stdout(stdout), self.assertRaises(SystemExit) as caught:
-                runpy.run_module("repo_sentinel", run_name="__main__")
+                runpy.run_module("bluerayscan", run_name="__main__")
         finally:
             sys.argv = argv
         self.assertEqual(caught.exception.code, 0)

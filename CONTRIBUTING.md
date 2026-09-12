@@ -179,7 +179,7 @@ on a function called `path` is worse than nothing.
 
 ## Releasing
 
-Bump the version in `pyproject.toml` and `src/repo_sentinel/__init__.py`, move
+Bump the version in `pyproject.toml` and `src/bluerayscan/__init__.py`, move
 the changelog's unreleased notes under a heading for it, then tag:
 
 ```bash

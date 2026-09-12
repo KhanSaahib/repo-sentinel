@@ -1,8 +1,8 @@
 import textwrap
 import unittest
 
-from repo_sentinel.findings import Severity
-from repo_sentinel.scanners import workflows
+from bluerayscan.findings import Severity
+from bluerayscan.scanners import workflows
 
 SHA = "11bd71901bbe5b1630ceea73d27597364c9af683"
 

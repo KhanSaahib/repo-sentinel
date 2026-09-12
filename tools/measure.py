@@ -43,7 +43,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-from repo_sentinel import engine  # noqa: E402  (after the path fix above)
+from bluerayscan import engine  # noqa: E402  (after the path fix above)
 
 
 CORPUS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "corpus.json")
@@ -151,7 +151,7 @@ def main(argv=None) -> int:
     if not paths:
         parser.error("name some repositories, or point --corpus at the pinned ones")
 
-    from repo_sentinel.findings import Confidence
+    from bluerayscan.findings import Confidence
 
     floor = Confidence.parse(args.min_confidence)
     totals: "collections.Counter" = collections.Counter()
