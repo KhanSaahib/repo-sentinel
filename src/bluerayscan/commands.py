@@ -13,7 +13,8 @@ import argparse
 import json
 import os
 import sys
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
+from typing import TextIO
 
 from . import (
     __version__,
@@ -241,7 +242,7 @@ def history_command(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def _history_stream(name: str) -> "tuple[Iterable[str], bool]":
+def _history_stream(name: str) -> "tuple[TextIO, bool]":
     """The lines to read, and whether this opened a file that must be closed."""
     if name == "-":
         return sys.stdin, False
