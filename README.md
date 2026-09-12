@@ -189,10 +189,13 @@ and why; `repo-sentinel rules` prints the same catalogue from the tool.
 
 Three things are worth knowing before you read the list.
 
-**Structure, not lines.** The workflow, Terraform, Kubernetes, Compose and
-GitLab rules read block structure, through two small standard-library readers.
-It is the difference between `privileged: true` under `securityContext`, which
-is critical, and the same line under `annotations`, which is nothing.
+**Structure, not lines.** The Terraform, Kubernetes, Compose, CloudFormation
+and pipeline rules read block structure, through three small standard-library
+readers. It is the difference between `privileged: true` under
+`securityContext`, which is critical, and the same line under `annotations`,
+which is nothing. The workflow family is the exception and says so: it reads
+GitHub Actions files the way a reviewer skims them, splitting jobs and steps by
+indentation.
 
 **Recognition by content.** Kubernetes manifests are found by `apiVersion` plus
 `kind`, Compose files by their `services` map, GitLab pipelines by name or by
@@ -293,9 +296,14 @@ open would mean a truncated file silently accepts everything.
   "line": 14,
   "evidence": "AKIA************LM3D",
   "remediation": "Deactivate the key in IAM, then rotate it. ...",
-  "fingerprint": "8f120d646369be74"
+  "fingerprint": "8f120d646369be74",
+  "occurrences": 1
 }
 ```
+
+`occurrences` is how many places in that file hold the same value. One
+credential pasted six hundred times is one credential to rotate, so it is
+reported once, at the first of them, with the count attached.
 
 The `fingerprint` is the same identity a baseline uses: a hash of the rule, the
 path and the already-redacted evidence, with no line number in it, so it
