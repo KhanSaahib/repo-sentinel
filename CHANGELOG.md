@@ -310,6 +310,10 @@ last of them is the first that reads code rather than configuration.
   once per job. The fix is a single top-level block however many jobs there
   are; a file where some jobs are explicit and others are not is still reported
   per job, because there the fix genuinely is per job.
+- **Each application-code rule checks for its own word first.** A TypeScript
+  monorepo is mostly files that mention "debug" and nothing else, and running
+  the other thirteen patterns over each of them was the largest single cost in
+  a scan: n8n 82s → 57s, with the corpus reporting identical findings.
 - **A third gate in front of the entropy rules**: both need a name carrying
   one of a dozen credential words, and looking for the word first is far
   cheaper than running a pattern with a greedy class in front of its

@@ -14,6 +14,45 @@ def scan(path, text):
     return appcode.scan_source(path, text)
 
 
+class TestHints(unittest.TestCase):
+    """A hint a rule's own match does not contain disables it, silently."""
+
+    CASES = {
+        "verify=False": "app.py",
+        "ssl._create_unverified_context()": "app.py",
+        "check_hostname=False": "app.py",
+        "rejectUnauthorized: false": "a.js",
+        "NODE_TLS_REJECT_UNAUTHORIZED=0": "a.js",
+        "InsecureSkipVerify: true": "main.go",
+        "curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);": "a.php",
+        "OpenSSL::SSL::VERIFY_NONE": "a.rb",
+        "DEBUG = True": "settings.py",
+        "app.run(debug=True)": "app.py",
+        "yaml.load(body)": "app.py",
+        'unserialize($_POST["x"])': "a.php",
+        "hashlib.md5(password)": "app.py",
+        'system("ls " . $_GET["d"]);': "a.php",
+        'subprocess.run(f"tar {name}", shell=True)': "app.py",
+        "exec(`git log ${branch}`)": "a.js",
+        "token = Math.random()": "a.js",
+    }
+
+    def test_every_rule_fires_on_a_line_carrying_its_own_shape(self):
+        # The gate rejects a file that mentions none of a rule's words, so a
+        # wrong word means the rule never runs and nothing says so.
+        fired = set()
+        for line, path in self.CASES.items():
+            findings = appcode.scan_source(path, line + "\n")
+            self.assertTrue(findings, line)
+            fired.update(finding.rule_id for finding in findings)
+        self.assertEqual(fired, {rule.rule_id for rule in appcode._RULES})
+
+    def test_every_rule_has_hints(self):
+        for rule in appcode._RULES:
+            with self.subTest(rule=rule.rule_id, pattern=rule.pattern.pattern[:40]):
+                self.assertTrue(rule.hints)
+
+
 class TestWhichFilesAreRead(unittest.TestCase):
     def test_the_languages_the_rules_know(self):
         for path in ("a.py", "a.js", "a.ts", "a.tsx", "a.go", "a.php", "a.rb"):
