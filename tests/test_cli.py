@@ -183,6 +183,19 @@ class TestFileSizeLimit(unittest.TestCase):
             run(["scan", root, "--max-file-size", "big"])
         self.assertEqual(caught.exception.code, 2)
 
+    def test_an_explicit_file_list_honours_the_limit_and_says_so(self):
+        # --paths-from is the fast per-PR run. A file the caller named and the
+        # tool did not read is worth more of an explanation, not less.
+        with tempfile.TemporaryDirectory() as root:
+            self.repository(root)
+            listing = os.path.join(root, "changed.txt")
+            with open(listing, "w", encoding="utf-8") as handle:
+                handle.write("dump.json\napp.py\n")
+            _, skipped = run(["scan", root, "--paths-from", listing])
+            _, raised = run(["scan", root, "--paths-from", listing, "--max-file-size", "4M"])
+        self.assertIn("larger than the size limit", skipped)
+        self.assertNotIn("larger than the size limit", raised)
+
     def test_a_clean_run_says_nothing_about_the_limit(self):
         with tempfile.TemporaryDirectory() as root:
             with open(os.path.join(root, "app.py"), "w", encoding="utf-8") as handle:

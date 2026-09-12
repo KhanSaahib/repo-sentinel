@@ -116,10 +116,9 @@ def scan(
             )
         )
     else:
-        entries = [
-            walk_entry
-            for walk_entry in _entries_for(path, only_paths, excludes)
-        ]
+        entries = _entries_for(
+            path, only_paths, excludes, max_bytes, unreadable, oversized
+        )
     files = [(entry.path, entry.text) for entry in entries if entry.text is not None]
 
     found = filenames.scan_paths(
@@ -182,10 +181,23 @@ def _count_markers(text: str) -> int:
 
 
 def _entries_for(
-    path: str, only_paths: "Iterable[str]", excludes: "tuple[str, ...]"
+    path: str,
+    only_paths: "Iterable[str]",
+    excludes: "tuple[str, ...]",
+    max_bytes: int,
+    unreadable: "list[str]",
+    oversized: "list[str]",
 ) -> "list[Entry]":
     """Explicit paths as walk entries, so the name rules see them too."""
-    return [Entry(name, text) for name, text in read_listed(path, only_paths, excludes=excludes)]
+    listed = read_listed(
+        path,
+        only_paths,
+        excludes=excludes,
+        max_bytes=max_bytes,
+        unreadable=unreadable,
+        oversized=oversized,
+    )
+    return [Entry(name, text) for name, text in listed]
 
 
 def collapse(findings: "Iterable[Finding]") -> "list[Finding]":

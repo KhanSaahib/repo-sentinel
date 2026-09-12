@@ -181,6 +181,9 @@ def read_listed(
     paths: "Iterable[str]",
     excludes: "tuple[str, ...]" = (),
     max_bytes: int = MAX_FILE_BYTES,
+    *,
+    unreadable: "list[str] | None" = None,
+    oversized: "list[str] | None" = None,
 ) -> Iterator[tuple[str, str]]:
     """Yield ``(relative_path, text)`` for an explicit list of files.
 
@@ -192,7 +195,9 @@ def read_listed(
 
     ``.gitignore`` is deliberately not consulted here. The caller named these
     files, and second-guessing an explicit list is how a tool acquires a
-    reputation for missing things.
+    reputation for missing things. For the same reason ``unreadable`` and
+    ``oversized`` are collected here as well: a named file that went unread is
+    worth more of an explanation than one the walk happened upon.
     """
     root = os.path.abspath(root)
     seen: set = set()
@@ -213,7 +218,7 @@ def read_listed(
             continue
         if any(fnmatch.fnmatch(part, pattern) for part in relative.split("/") for pattern in excludes):
             continue
-        text = _read_text(absolute, max_bytes)
+        text = _read_text(absolute, max_bytes, unreadable, relative, oversized)
         if text is not None:
             yield relative, text
 
