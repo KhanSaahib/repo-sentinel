@@ -197,6 +197,13 @@ last of them is the first that reads code rather than configuration.
   directory. Terraform at `--min-confidence medium`: 180 findings → 17.
 - **A fixture's URL is not a package source.** `git = "[ROOTURL]/git-package"`
   is what Cargo's test suite writes, eleven times.
+- **AP004 and AP005**: untrusted data deserialised into objects
+  (`yaml.load()` without a `Loader`, PHP's `unserialize()` on a superglobal),
+  and a password put through a digest built for speed. The second is medium
+  confidence because the idiom has two legitimate homes -- a breach-list check
+  and a compatibility hasher -- and across nineteen repositories it found three
+  instances, all of which were one of those two and all of which are password
+  handling worth reading.
 - **SH004**: a password handed to a command as an argument. `curl -u
   admin:hunter2`, `mysql -phunter2`, `sshpass -p`, `PGPASSWORD=`. Two problems
   in one line: the credential is in the file, and it is in the process table of

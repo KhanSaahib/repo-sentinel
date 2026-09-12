@@ -409,8 +409,10 @@ runs:
       shell: bash
 """
 
-APPLICATION_CODE = """import random
+APPLICATION_CODE = """import hashlib
+import random
 import requests
+import yaml
 
 DEBUG = True
 
@@ -422,6 +424,14 @@ def fetch(url):
 def issue():
     reset_token = random.choice("0123456789")
     return reset_token
+
+
+def load(body):
+    return yaml.load(body)
+
+
+def store(password):
+    return hashlib.md5(password.encode()).hexdigest()
 """
 
 #: ``(path, text)`` pairs, in the shape :func:`iter_files` yields.

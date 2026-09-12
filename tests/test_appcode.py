@@ -103,6 +103,46 @@ class TestPredictableCredentials(unittest.TestCase):
         self.assertEqual(scan("auth.py", text), [])
 
 
+class TestUnsafeDeserialisation(unittest.TestCase):
+    def test_yaml_load_without_a_loader(self):
+        findings = scan("app.py", "data = yaml.load(body)\n")
+        finding = next(f for f in findings if f.rule_id == "AP004")
+        self.assertEqual(finding.severity, Severity.HIGH)
+
+    def test_a_loader_makes_the_call_a_decision(self):
+        text = "data = yaml.load(body, Loader=yaml.SafeLoader)\n"
+        self.assertNotIn("AP004", rule_ids(scan("app.py", text)))
+
+    def test_safe_load_is_the_fix(self):
+        self.assertEqual(scan("app.py", "data = yaml.safe_load(body)\n"), [])
+
+    def test_php_unserialising_a_superglobal(self):
+        text = '$o = unserialize($_POST["data"]);\n'
+        self.assertIn("AP004", rule_ids(scan("index.php", text)))
+
+    def test_php_unserialising_something_it_wrote_itself(self):
+        text = "$o = unserialize($cached);\n"
+        self.assertNotIn("AP004", rule_ids(scan("index.php", text)))
+
+
+class TestPasswordHashing(unittest.TestCase):
+    def test_a_password_through_a_fast_digest(self):
+        for line in (
+            "digest = hashlib.md5(password.encode()).hexdigest()\n",
+            "$h = sha1($passwd);\n",
+            "const h = sha256(password)\n",
+        ):
+            with self.subTest(line=line.strip()):
+                path = "app.py" if "hashlib" in line else ("a.php" if "$" in line else "a.js")
+                self.assertIn("AP005", rule_ids(scan(path, line)))
+
+    def test_a_checksum_of_something_that_is_not_a_password(self):
+        self.assertEqual(scan("app.py", "digest = hashlib.sha256(file_bytes).hexdigest()\n"), [])
+
+    def test_a_slow_hash_is_the_fix(self):
+        self.assertEqual(scan("app.py", "digest = bcrypt.hashpw(password, salt)\n"), [])
+
+
 class TestFixtureTrees(unittest.TestCase):
     """An end-to-end suite talking to a self-signed server is the ordinary case."""
 
