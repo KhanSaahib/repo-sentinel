@@ -138,8 +138,9 @@ jobs:
       # The gate lives in the self-scan job above; this one exists to publish,
       # so a finding must not stop it before it has published anything.
       - name: Produce a SARIF report
-        run: python -m repo_sentinel scan . --format sarif --output repo-sentinel.sarif
-        continue-on-error: true
+        run: >-
+          python -m repo_sentinel scan . --format sarif
+          --output repo-sentinel.sarif --fail-on none
         env:
           PYTHONPATH: src
 

@@ -194,6 +194,11 @@ last of them is the first that reads code rather than configuration.
   changing under you is the rule; `actions/checkout@v4` is GitHub changing
   GitHub on a runner GitHub gave you, and is reported at low. Dagger at
   `--min-severity medium`: 122 findings → 98; Discourse 161 → 127.
+- **`--fail-on none`**: report everything, fail on nothing. The job that
+  uploads SARIF or posts the comment must not stop at the first finding, and
+  every CI has its own word for that -- continue-on-error, allow_failure,
+  continueOnError, catchError. Saying it in the command means the gate and the
+  report differ by one readable flag. A usage error still exits 2.
 - **`init` knows five CI systems, not two.** The snippet it prints is for the
   one the repository already has -- Azure, CircleCI and Jenkins included, each
   wired to draw the JUnit report. Suggesting GitHub Actions to a project that

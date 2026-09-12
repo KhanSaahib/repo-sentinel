@@ -134,6 +134,34 @@ class TestSeverityParsing(unittest.TestCase):
             Severity.parse("catastrophic")
 
 
+class TestFailThreshold(unittest.TestCase):
+    """--fail-on none: report everything, fail on nothing."""
+
+    def test_findings_still_fail_by_default(self):
+        with sample_repo() as root:
+            code, _ = run(["scan", root])
+        self.assertEqual(code, 1)
+
+    def test_none_reports_the_findings_and_exits_zero(self):
+        with sample_repo() as root:
+            code, output = run(["scan", root, "--fail-on", "none"])
+        self.assertEqual(code, 0)
+        self.assertIn("finding(s)", output)
+
+    def test_none_does_not_hide_an_error(self):
+        # A reporting job still has to fail on a broken invocation.
+        with tempfile.TemporaryDirectory() as root:
+            code, _ = run(["scan", os.path.join(root, "nope"), "--fail-on", "none"])
+        self.assertEqual(code, 2)
+
+    def test_nonsense_is_still_rejected(self):
+        # argparse exits rather than returning, which is what it does for
+        # every other bad value too.
+        with sample_repo() as root, self.assertRaises(SystemExit) as caught:
+            run(["scan", root, "--fail-on", "catastrophic"])
+        self.assertEqual(caught.exception.code, 2)
+
+
 class TestInit(unittest.TestCase):
     """The first five minutes: what is here, what to accept, what to run."""
 

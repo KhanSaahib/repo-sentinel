@@ -94,7 +94,7 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
     try:
         min_severity = Severity.parse(args.min_severity)
         min_confidence = Confidence.parse(args.min_confidence)
-        fail_on = Severity.parse(args.fail_on)
+        fail_on = _fail_threshold(args.fail_on)
     except ValueError as error:
         parser.error(str(error))
         return EXIT_ERROR  # pragma: no cover - argparse exits first
@@ -154,7 +154,7 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
     exit_code = _emit(_render(args, findings, notes, result.duration), args.output)
     if exit_code != EXIT_OK:
         return exit_code
-    if any(finding.severity >= fail_on for finding in findings):
+    if fail_on is not None and any(finding.severity >= fail_on for finding in findings):
         return EXIT_FINDINGS
     return EXIT_OK
 
@@ -181,6 +181,21 @@ def _render(
     return report.format_text(
         findings, colour=colour, notes=notes, by_file=args.sort == "path"
     )
+
+
+def _fail_threshold(value: str) -> "Severity | None":
+    """The severity that fails the run, or None for "report, never fail".
+
+    A reporting job -- the one that uploads SARIF, posts the comment, writes
+    the JUnit file -- must not stop at the first finding, and every CI system
+    has its own word for that: continue-on-error, allow_failure,
+    continueOnError, catchError. Saying it here instead means the gate and the
+    report are the same command with one flag between them, and the flag is
+    readable from the pipeline.
+    """
+    if value.strip().lower() == "none":
+        return None
+    return Severity.parse(value)
 
 
 def _listed_paths(source: "str | None") -> "list[str] | None":

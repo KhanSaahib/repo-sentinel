@@ -63,6 +63,7 @@ repo-sentinel scan . --format junit           # a test report, for other CIs
 repo-sentinel scan . --min-severity high      # only show what matters most
 repo-sentinel scan . --min-confidence high    # only show what it is sure of
 repo-sentinel scan . --fail-on critical       # relax the CI gate
+repo-sentinel scan . --fail-on none           # report, never fail
 repo-sentinel scan . --exclude 'fixtures'     # skip a directory (repeatable)
 repo-sentinel scan . --no-gitignore           # also scan git-ignored files
 repo-sentinel scan . --no-example-allowlist   # include documented example keys
@@ -84,7 +85,9 @@ a diff lists deletions too, and a listed path that `.gitignore` covers is
 scanned anyway -- you named it.
 
 Exit codes: `0` clean, `1` findings at or above `--fail-on` (default `medium`),
-`2` usage error, unreadable baseline, or unwritable output. That makes it a
+`2` usage error, unreadable baseline, or unwritable output. `--fail-on none`
+reports without ever returning `1`, which is what the job that uploads SARIF or
+posts the comment wants -- a `2` still means the run itself went wrong. That makes it a
 one-line CI gate:
 
 ```yaml
@@ -319,8 +322,7 @@ people arguing about the change are already looking:
 
 ```yaml
 - id: scan
-  run: repo-sentinel scan . --format markdown --output report.md
-  continue-on-error: true
+  run: repo-sentinel scan . --format markdown --output report.md --fail-on none
 - uses: actions/github-script@<sha>
   with:
     script: |
@@ -372,16 +374,15 @@ suite -- an empty report renders as a broken job rather than a quiet one.
 turns into annotations on the pull request that introduced the line:
 
 ```yaml
-- run: repo-sentinel scan . --format sarif --output repo-sentinel.sarif
-  continue-on-error: true
+- run: repo-sentinel scan . --format sarif --output repo-sentinel.sarif --fail-on none
 - uses: github/codeql-action/upload-sarif@<sha>
   with:
     sarif_file: repo-sentinel.sarif
 ```
 
-The job needs `security-events: write`, and `continue-on-error` on the scan step
-so that a finding does not stop the run before it has published anything — put
-the actual gate in a separate job. This repository's own
+The job needs `security-events: write`, and `--fail-on none` on the scan step so
+that a finding does not stop the run before it has published anything — put the
+actual gate in a separate job. This repository's own
 [CI](.github/workflows/ci.yml) does exactly that.
 
 Each result carries a `partialFingerprint`, so code scanning follows a finding

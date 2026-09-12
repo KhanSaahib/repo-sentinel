@@ -56,7 +56,10 @@ def build_parser() -> argparse.ArgumentParser:
     scan_parser.add_argument(
         "--fail-on",
         default="medium",
-        help="exit non-zero when a finding reaches this severity (default: medium)",
+        help=(
+            "exit non-zero when a finding reaches this severity (default: "
+            "medium), or 'none' to report without ever failing"
+        ),
     )
     scan_parser.add_argument(
         "--exclude",
