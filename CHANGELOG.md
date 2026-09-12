@@ -180,6 +180,9 @@ last of them is the first that reads code rather than configuration.
   of every credential the repository holds. Medium confidence when the call is
   pinned to a SHA, which at least fixes the code that will read them.
 
+- **SC003 reads a Gemfile too**, where the source is a keyword rather than a
+  URL: `github: "acme/x"` installs whatever that default branch holds. Found
+  one in Discourse's own Gemfile.
 - **`pyproject.toml` and `Cargo.toml` are read**, by table rather than by line:
   a URL in `[[tool.poetry.source]]` or `[source.mirror]` is a package source
   and one in `[project.urls]` is a link in a README. SC003 asks there whether a

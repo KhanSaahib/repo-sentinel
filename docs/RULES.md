@@ -234,7 +234,10 @@ a URL in `[[tool.poetry.source]]` is a package source and one in
 `[project.urls]` is a link in a README -- with no TOML parser behind it, since
 `tomllib` arrived in 3.11 and this runs on 3.9. In those two, SC003 asks
 whether a `git` dependency carries a `rev` or a `tag`: without one it installs
-whatever the default branch holds at build time. The checks are shallow on purpose -- this is not a resolver, and it
+whatever the default branch holds at build time. It asks the same of a
+`Gemfile`, where the source is a keyword rather than a URL -- `github:`,
+`git:`, `gist:` -- and where `ref:` and `tag:` are the two spellings that pin
+it. `branch:` is not one of them. The checks are shallow on purpose -- this is not a resolver, and it
 does not know what a version means -- because these four mistakes are visible
 in the text.
 

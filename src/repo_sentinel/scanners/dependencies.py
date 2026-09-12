@@ -326,6 +326,30 @@ def _moving_source(path: str, name: str, line: int, evidence: str) -> Finding:
     )
 
 
+_GEM_LINE = re.compile(r"""^\s*gem\s+['"](?P<name>[^'"]+)['"](?P<rest>.*)$""")
+_GEM_SOURCE = re.compile(r"\b(?:git|github|gist|bitbucket)\s*:\s*['\"]")
+_GEM_PINNED = re.compile(r"\b(?:ref|tag)\s*:\s*['\"]")
+
+
+def _check_gemfile_dependencies(path: str, text: str) -> "Iterator[Finding]":
+    """SC003 for Bundler: a gem from a repository with nothing pinning it.
+
+    ``gem "x", github: "acme/x"`` installs whatever the default branch holds
+    the next time the lockfile is regenerated. ``ref:`` and ``tag:`` are the
+    two spellings that stop that, and ``branch:`` is not one of them.
+    """
+    for number, line in enumerate(text.splitlines(), start=1):
+        if suppression.marker_scope(line) is not None:
+            continue
+        entry = _GEM_LINE.match(line)
+        if entry is None:
+            continue
+        rest = entry.group("rest")
+        if not _GEM_SOURCE.search(rest) or _GEM_PINNED.search(rest):
+            continue
+        yield _moving_source(path, entry.group("name"), number, line.strip())
+
+
 def _check_verification(path: str, kind: str, text: str) -> "Iterator[Finding]":
     """SC004: certificate verification switched off to make an install work."""
     for number, line in enumerate(text.splitlines(), start=1):
@@ -477,6 +501,8 @@ def scan_manifest(
         findings = list(_check_plaintext_sources(path, kind, text))
         if kind == "pip" and name.startswith("requirement"):
             findings += _check_requirement_urls(path, text)
+        if kind == "bundler":
+            findings += _check_gemfile_dependencies(path, text)
     findings += _check_verification(path, kind, text)
     return marks.filter_findings(findings)
 

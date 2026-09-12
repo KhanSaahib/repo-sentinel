@@ -207,6 +207,33 @@ class TestSourceDependencies(unittest.TestCase):
         self.assertEqual(scan("requirements.txt", "requests==2.31.0\n# a comment\n\n"), [])
 
 
+class TestGemfileDependencies(unittest.TestCase):
+    """SC003 for Bundler, where the source is a keyword rather than a URL."""
+
+    def gemfile(self, line):
+        return 'source "https://rubygems.org"\n' + line + "\n"
+
+    def test_a_gem_from_a_github_shorthand(self):
+        findings = scan("Gemfile", self.gemfile('gem "shared", github: "acme/shared"'))
+        finding = next(f for f in findings if f.rule_id == "SC003")
+        self.assertIn("'shared'", finding.title)
+
+    def test_a_gem_on_a_branch_is_still_moving(self):
+        text = self.gemfile(
+            'gem "branchy", git: "https://github.com/acme/b", branch: "main"'
+        )
+        self.assertIn("SC003", rule_ids(scan("Gemfile", text)))
+
+    def test_a_ref_or_a_tag_pins_it(self):
+        for pin in ('ref: "abc1234"', 'tag: "v1.0"'):
+            with self.subTest(pin=pin):
+                text = self.gemfile(f'gem "pinned", git: "https://github.com/acme/p", {pin}')
+                self.assertNotIn("SC003", rule_ids(scan("Gemfile", text)))
+
+    def test_an_ordinary_version_constraint_says_nothing(self):
+        self.assertEqual(scan("Gemfile", self.gemfile('gem "rails", "~> 7.0"')), [])
+
+
 class TestTomlManifests(unittest.TestCase):
     """pyproject.toml and Cargo.toml, read by table rather than by line."""
 
