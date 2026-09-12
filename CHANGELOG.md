@@ -50,6 +50,11 @@ changes.
   obeyed, in all four of its scopes. A marker lives in somebody else's file,
   and a release that turned every one of them back on would be a screen of
   findings arriving with no explanation attached.
+- **The SARIF fingerprint key is now `bluerayscan/v1`**, where it was
+  `repoSentinel/v1` -- the one place the rename's search-and-replace could not
+  see, because it was spelled in camel case. GitHub's code scanning tracks an
+  alert across runs by this key, so an existing alert will appear once as a new
+  one. It changes here, in the release that finishes the rename, and not again.
 - **The pre-commit hook id is now `bluerayscan`**, and this one has no alias.
   A config naming the old id fails with "hook id not found", which says what
   happened and what to type instead; pinning `rev: v0.3.0`, which is what

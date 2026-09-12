@@ -480,14 +480,24 @@ def _sarif_rule(rule_id: str, findings: Sequence[Finding]) -> dict:
     }
 
 
+#: The key GitHub's code scanning tracks an alert by across runs. It carries
+#: the tool's name, so it changed with the rename -- once, deliberately, in the
+#: release that finished it. Changing it again would make every open alert
+#: appear as a new one, so it is not a name to tidy later.
+SARIF_FINGERPRINT_KEY = "bluerayscan/v1"
+
+
 def _sarif_result(finding: Finding, rule_index: int) -> dict:
+    properties = {"confidence": finding.confidence.value}
+    if finding.origin:
+        properties["origin"] = finding.origin
     return {
         "ruleId": finding.rule_id,
         "ruleIndex": rule_index,
         "level": _SARIF_LEVELS[finding.severity],
         "message": {"text": _sarif_message(finding)},
-        "partialFingerprints": {"repoSentinel/v1": finding.fingerprint},
-        "properties": {"confidence": finding.confidence.value},
+        "partialFingerprints": {SARIF_FINGERPRINT_KEY: finding.fingerprint},
+        "properties": properties,
         "locations": [
             {
                 "physicalLocation": {
