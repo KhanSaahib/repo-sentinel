@@ -278,6 +278,39 @@ class TestAdditionalProviders(unittest.TestCase):
         self.assertEqual(twilio.confidence, Confidence.MEDIUM)
 
 
+class TestTemplateFiles(unittest.TestCase):
+    """A file whose name says "template" is documentation with an extension."""
+
+    LINE = "API_TOKEN=Qq7Zx9Lm2Pv4Rt8WcY6h"
+
+    def test_an_example_file_is_weighed_like_prose(self):
+        real = secrets.scan_text(".env", self.LINE)[0]
+        template = secrets.scan_text(".env.example", self.LINE)[0]
+        self.assertLess(template.confidence, real.confidence)
+
+    def test_both_conventions_for_saying_so(self):
+        for path in (
+            ".env.example", "config.sample.yml", "values.template.yaml", "app.conf.dist",
+        ):
+            with self.subTest(path=path):
+                findings = secrets.scan_text(path, self.LINE)
+                self.assertEqual(findings[0].confidence, Confidence.LOW)
+
+    def test_a_template_is_read_as_the_format_it_will_become(self):
+        # "app.conf.dist" is a .conf file somebody is meant to copy, and the
+        # value-position rules only apply to formats they know.
+        from repo_sentinel.scanners.secrets import has_value_positions
+
+        for path in ("app.conf.dist", "settings.ini.template", ".env.example"):
+            with self.subTest(path=path):
+                self.assertTrue(has_value_positions(path))
+        self.assertFalse(has_value_positions("notes.md"))
+
+    def test_it_is_weakened_rather_than_silenced(self):
+        # A real key does get left in the file people copy.
+        self.assertIn("SEC101", rule_ids(secrets.scan_text(".env.example", self.LINE)))
+
+
 class TestFixtureTrees(unittest.TestCase):
     """Invented credentials live in fixture directories. So do real ones."""
 

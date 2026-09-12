@@ -122,17 +122,11 @@ _HISTORY_NAMES = frozenset(
     }
 )
 
-#: Suffixes that mark a file as a documented shape rather than a real one.
-_EXAMPLE_MARKERS = (".example", ".sample", ".template", ".dist", ".tpl", ".defaults")
-
 _DOT_ENV = re.compile(r"^\.env(?:\.|$)")
 
-
-def _is_example(name: str) -> bool:
-    lowered = name.lower()
-    return lowered.endswith(_EXAMPLE_MARKERS) or any(
-        marker.strip(".") in lowered.split(".")[1:-1] for marker in _EXAMPLE_MARKERS
-    )
+#: The same question the secrets rules ask, asked once. See
+#: :func:`wellknown.is_example_path`.
+_is_example = wellknown.is_example_path
 
 
 def _in_a_test_tree(path: str) -> bool:

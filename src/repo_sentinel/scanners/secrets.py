@@ -139,6 +139,13 @@ def has_value_positions(path: str) -> bool:
     """
     name = posixpath.basename(path.replace("\\", "/"))
     lowered = name.lower()
+    # "app.conf.dist" is a .conf file somebody is meant to copy, and the
+    # format underneath decides how to read it. The marker is dropped, once:
+    # the answer for the template is the answer for the thing it becomes.
+    for marker in wellknown.EXAMPLE_MARKERS:
+        if lowered.endswith(marker):
+            lowered = lowered[: -len(marker)]
+            break
     if lowered in _VALUE_POSITION_NAMES or lowered.startswith(".env"):
         return True
     return lowered.endswith(_VALUE_POSITION_SUFFIXES)
@@ -455,7 +462,11 @@ def _weigh_for_context(path: str, findings: "list[Finding]") -> "list[Finding]":
     """
     if not findings:
         return findings
-    prose = wellknown.is_prose_path(path)
+    # A file whose name says "template" is documentation with a different
+    # extension: ".env.example" exists to be copied and filled in, and n8n's
+    # says sk-ant-api03-REPLACE_ME. The obvious placeholders are already
+    # filtered; this weighs the rest, because a real key does get left in one.
+    prose = wellknown.is_prose_path(path) or wellknown.is_example_path(path)
     fixtures = wellknown.is_test_path(path)
     if not (prose or fixtures):
         return findings

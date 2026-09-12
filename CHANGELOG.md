@@ -219,6 +219,10 @@ last of them is the first that reads code rather than configuration.
   INI file that runs as root, and the place a credential lands in one is
   `Environment=DB_PASSWORD=…` -- an assignment wrapped in an assignment, where
   the name that matters is the inner one.
+- **A `.example` file is weighed like documentation.** A file whose name says
+  template exists to be copied and filled in, and it is where a placeholder
+  lives. Weakened, not silenced: a real key does get left in the file people
+  copy.
 - **A `classpath:` reference is not a private key.** Spring configuration says
   where a key file is -- `private-key: classpath:server.key` -- and spring-boot
   writes that a dozen times.

@@ -144,7 +144,11 @@ A finding is weighed by where it was made, and the two places are weighed
 differently because the mistakes people make in them differ.
 
 In **documentation** (`docs/`, `*.md`, `*.rst`) every secret finding drops one
-step of confidence, documented token shapes included. A credential written into
+step of confidence, documented token shapes included. A file whose *name* says
+template -- `.env.example`, `config.sample.yml`, `values.template.yaml`,
+`app.conf.dist` -- is documentation with a different extension and is weighed
+the same way: it exists to be copied and filled in. n8n's says
+`sk-ant-api03-REPLACE_ME`. A credential written into
 prose is usually an example, which is what prose is for: Grafana's own manual
 contains two dozen service account tokens and not one of them is real. Nothing
 is silenced -- a live key does get pasted into a README -- but
