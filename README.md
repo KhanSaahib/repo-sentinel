@@ -225,8 +225,9 @@ instead:
 }
 ```
 
-The settings are `exclude`, `fail_on`, `min_severity`, `min_confidence`,
-`baseline`, `sort`, `disable`, `gitignore` and `example_allowlist`. An unknown
+The settings are `exclude`, `fail_on` (`"none"` included), `min_severity`,
+`min_confidence`, `baseline`, `sort`, `disable`, `gitignore` and
+`example_allowlist`. An unknown
 key is an error rather than a shrug: a typo in a security tool's configuration
 means a project believes it configured something it did not.
 

@@ -148,6 +148,16 @@ class TestFailThreshold(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("finding(s)", output)
 
+    def test_a_config_file_can_ask_for_it_too(self):
+        with sample_repo() as root:
+            with open(
+                os.path.join(root, ".repo-sentinel.json"), "w", encoding="utf-8"
+            ) as handle:
+                handle.write('{"fail_on": "none"}')
+            code, output = run(["scan", root])
+        self.assertEqual(code, 0)
+        self.assertIn("finding(s)", output)
+
     def test_none_does_not_hide_an_error(self):
         # A reporting job still has to fail on a broken invocation.
         with tempfile.TemporaryDirectory() as root:

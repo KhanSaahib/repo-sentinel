@@ -44,7 +44,10 @@ better outcome than a feature nobody wanted.
       self-hosted runners, and a token that outlives its step
 - [x] GitLab, Azure Pipelines, CircleCI and Jenkins, each with its own
       injection vocabulary and its own quoting rules
-- [ ] Reusable workflow calls (`uses:` at job level) pinned to a mutable ref
+- [x] ~~Reusable workflow calls (`uses:` at job level) pinned to a mutable
+      ref~~ -- already covered: WF001 reads any `uses:`, with or without the
+      list dash. WF011 is the part that was actually missing, and it is about
+      the secrets, not the ref
 - [ ] Warn on `contents: write` without an obvious need — needs a notion of
       "obvious need" that does not just move the noise somewhere else
 - [ ] Composite actions in the repository itself (`action.yml`), which are
