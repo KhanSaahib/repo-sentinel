@@ -36,3 +36,9 @@ RFC_7519_SAMPLE_JWT = (
     "LmNvbS9pc19yb290Ijp0cnVlfQ"
     ".dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
 )
+
+#: An invented 32-character hex API key whose symbols happen to be unevenly
+#: spread: 2.92 bits per character, which the old flat 3.2-bit floor rejected
+#: even though a uniformly random hex token of this length averages only 3.61.
+#: It grants nothing; it exists to pin the hex profile's floor in place.
+UNEVEN_HEX_TOKEN = "d66dfa006466f04ffa4cdafaf63bf3f3"

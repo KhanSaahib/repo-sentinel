@@ -32,8 +32,9 @@ class TestEntropy(unittest.TestCase):
         self.assertEqual(secrets.shannon_entropy("aaaaaaaa"), 0.0)
 
     def test_random_string_scores_above_the_floor(self):
+        value = "Xk92mQp7Lz4TvB8nRw1Y"
         self.assertGreater(
-            secrets.shannon_entropy("Xk92mQp7Lz4TvB8nRw1Y"), secrets.ENTROPY_FLOOR
+            secrets.shannon_entropy(value), secrets.entropy_floor(value)
         )
 
     def test_english_prose_scores_below_a_generated_token(self):
@@ -91,6 +92,30 @@ class TestEntropyAssignments(unittest.TestCase):
     def test_ignores_low_entropy_values(self):
         findings = secrets.scan_text("cfg.py", 'api_key = "aaaabbbbccccdddd"')
         self.assertNotIn("SEC100", rule_ids(findings))
+
+    def test_flags_a_short_hex_token_the_flat_floor_missed(self):
+        # The regression the per-class floor exists for: hex cannot exceed 4
+        # bits per character, so a flat 3.2-bit floor rejected around half of
+        # all genuine hex tokens.
+        token = fixtures.UNEVEN_HEX_TOKEN
+        self.assertLess(secrets.shannon_entropy(token), 3.2)
+        findings = secrets.scan_text("settings.py", f'API_KEY = "{token}"')
+        self.assertIn("SEC100", rule_ids(findings))
+
+    def test_ignores_structured_text_the_flat_floor_admitted(self):
+        # The other half of the regression: these all score above 3.2, and a
+        # base64-shaped alphabet is the only reason they ever looked random.
+        for value in (
+            "staging-deploy-token-value",
+            "database_connection_password",
+            "/var/run/secrets/app/token",
+            "2026-09-12T14:32:07.512Z",
+            "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+        ):
+            with self.subTest(value=value):
+                self.assertGreater(secrets.shannon_entropy(value), 3.2)
+                findings = secrets.scan_text("cfg.yaml", f'secret_value = "{value}"')
+                self.assertNotIn("SEC100", rule_ids(findings), value)
 
     def test_ignores_unrelated_variable_names(self):
         findings = secrets.scan_text("a.py", 'greeting = "Xk92mQp7Lz4TvB8nRw1Y"')

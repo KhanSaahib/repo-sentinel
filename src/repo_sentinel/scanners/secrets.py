@@ -7,7 +7,8 @@ Two complementary strategies:
    confidence and rarely wrong.
 2. **Entropy on assignment.** A variable literally named ``password`` or
    ``api_key`` assigned a long, random-looking string. Lower confidence, so it
-   is gated behind a Shannon-entropy floor and a placeholder filter.
+   is gated behind a placeholder filter and an entropy floor that :mod:`..entropy`
+   derives from the candidate's own alphabet and length.
 
 Both strategies are filtered through :mod:`.allowlist`, which drops credentials
 that vendors and RFCs publish as examples. Structure alone cannot distinguish a
@@ -17,13 +18,24 @@ scanner people learn to ignore.
 
 from __future__ import annotations
 
-import math
 import re
 from collections.abc import Iterable, Iterator
 
 from .. import suppression
+from ..entropy import entropy_floor, is_high_entropy, shannon_entropy
 from ..findings import Finding, Severity, redact
 from . import allowlist
+
+__all__ = [
+    "IGNORE_MARKER",
+    "entropy_floor",
+    "is_high_entropy",
+    "looks_like_placeholder",
+    "scan_files",
+    "scan_line",
+    "scan_text",
+    "shannon_entropy",
+]
 
 #: The one-line form of the suppression marker. :mod:`..suppression` owns the
 #: file-level and block-level forms, which need the whole file to interpret.
@@ -127,22 +139,6 @@ _PLACEHOLDER = re.compile(
     """
 )
 
-#: Anything below this is too structured to be a generated credential.
-ENTROPY_FLOOR = 3.2
-
-
-def shannon_entropy(value: str) -> float:
-    """Bits of entropy per character. Random base64 lands near 6, English near 4."""
-    if not value:
-        return 0.0
-    counts: dict[str, int] = {}
-    for char in value:
-        counts[char] = counts.get(char, 0) + 1
-    length = len(value)
-    return -sum(
-        (count / length) * math.log2(count / length) for count in counts.values()
-    )
-
 
 def looks_like_placeholder(value: str) -> bool:
     """True when a value is obviously a stand-in rather than a real credential."""
@@ -194,7 +190,7 @@ def scan_line(
             continue
         if allow_examples and allowlist.is_known_example(value):
             continue
-        if shannon_entropy(value) < ENTROPY_FLOOR:
+        if not is_high_entropy(value):
             continue
         yield Finding(
             rule_id="SEC100",

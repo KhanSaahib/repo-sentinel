@@ -21,8 +21,12 @@ outcome than a feature nobody wanted.
       (`--write-baseline` / `--baseline`). Entries are keyed by rule, path and
       redacted evidence rather than line number, so unrelated edits do not
       invalidate the file; entries that match nothing are reported, not dropped
-- [ ] Track the entropy floor separately per rule; 3.2 is too low for base64
-      blobs and too high for short hex tokens
+- [x] Track the entropy floor separately per rule; 3.2 is too low for base64
+      blobs and too high for short hex tokens. Landed as a floor per *character
+      class* rather than per rule id: SEC100 is the only entropy-gated rule, and
+      the variance that mattered was in the candidate's own alphabet. The floor
+      is now a fraction of `log2(min(alphabet size, length))`, fitted per class
+      against simulated random draws
 - [ ] Detect secrets in `.env`, `.npmrc`, `.pypirc` and `docker-compose.yml`
       value positions, where there is no quoted assignment to match
 - [ ] More provider rules: Azure storage keys, GCP service account JSON,

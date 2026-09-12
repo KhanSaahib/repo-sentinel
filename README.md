@@ -107,9 +107,43 @@ and never closed. See [Suppressing a false positive](#suppressing-a-false-positi
 SEC001–SEC010 match on documented token structure, so they are high confidence.
 SEC100 is the heuristic one: it fires only when a variable named like a
 credential (`password`, `api_key`, `client_secret`, …) is assigned a quoted
-string of at least 12 characters that clears a Shannon-entropy floor of 3.2 and
-does not look like a placeholder. `your-password-here`, `${DB_PASSWORD}`,
+string of at least 12 characters that does not look like a placeholder and is
+random enough for its own alphabet. `your-password-here`, `${DB_PASSWORD}`,
 `xxxxxxxx` and friends are filtered out.
+
+#### The entropy floor
+
+"Random enough" cannot be one number. Shannon entropy is measured *per
+character*, so it is capped at `log2(min(alphabet size, length))` — a hex string
+can never exceed 4 bits however unguessable it is, and a 12-character value can
+never exceed 3.58. A single floor is therefore too high at one end of the range
+and too low at the other, which is exactly what the old 3.2-bit floor was:
+
+| Value | Bits | Old floor of 3.2 | Now |
+| --- | --- | --- | --- |
+| random 16-char hex token | 3.21 on average | missed about half of them | reported |
+| random 32-char base64 token | 4.56 on average | reported | reported |
+| `/var/run/secrets/app/token` | 3.50 | reported | quiet |
+| `2026-09-12T14:32:07.512Z` | 3.54 | reported | quiet |
+| `database_connection_password` | 3.66 | reported | quiet |
+
+So the floor is derived per character class instead, as a fraction of the best
+score that class and length could reach:
+
+| Class | Alphabet | Fraction required |
+| --- | --- | --- |
+| hex — single-case `0-9a-f` | 16 | 0.65 |
+| base64 — `A-Za-z0-9+/=_-`, mixing at least two of upper, lower and digits | 64 | 0.82 |
+| mixed — anything with punctuation, spaces or a single character class | 95 | 0.85 |
+
+The fractions come from simulating 20,000 uniformly random strings per alphabet
+and length and taking roughly the 1st percentile, so a genuinely random
+credential clears its own floor about 99% of the time. Hex sits low because its
+ceiling is low and the real signal is that a long single-case hex string was
+assigned to a credential-shaped name at all. A hyphenated English phrase is sent
+to `mixed` rather than `base64` even though it uses no character outside the
+base64url alphabet, because a phrase is not drawing from 64 symbols and should
+not be measured as though it were.
 
 Every reported value is redacted to its first and last four characters. Findings
 end up in CI logs and issue threads, so the scanner must never be the thing that
