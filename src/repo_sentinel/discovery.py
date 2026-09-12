@@ -124,8 +124,14 @@ def walk(
     stacks: dict[str, GitIgnoreStack] = {root: GitIgnoreStack()}
 
     def note(error: OSError) -> None:
-        if unreadable is not None:
-            unreadable.append(_relative_dir(str(error.filename or root), root).rstrip("/"))
+        # The failure can be the root itself, whose path relative to the root
+        # is the empty string. Reporting a run as "1 path could not be opened,
+        # starting with ''" is worse than saying nothing, so the root is named
+        # as it was given.
+        if unreadable is None:
+            return
+        failed = str(error.filename or root)
+        unreadable.append(_relative_dir(failed, root).rstrip("/") or failed)
 
     for dirpath, dirnames, filenames in os.walk(root, onerror=note):
         stack = stacks.pop(dirpath, GitIgnoreStack())

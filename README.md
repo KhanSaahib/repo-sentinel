@@ -70,7 +70,7 @@ repo-sentinel scan . --prune-baseline         # drop entries that match nothing
 
 repo-sentinel scan . --disable K8S004         # switch off a rule or family
 repo-sentinel scan . --quiet                  # just the summary line
-repo-sentinel scan . --sort path              # read a report, rather than triage it
+repo-sentinel scan . --sort path              # group by file, to read rather than triage
 git diff --name-only origin/main | repo-sentinel scan . --paths-from -
 ```
 

@@ -392,6 +392,28 @@ class TestRunSummary(unittest.TestCase):
         self.assertIn("Scanned 0 files", output)
         self.assertIn("could not be opened", output)
 
+    def test_a_path_that_does_not_exist_is_an_error_not_a_clean_scan(self):
+        with tempfile.TemporaryDirectory() as root:
+            code, output = run(["scan", os.path.join(root, "nope")])
+        self.assertEqual(code, 2)
+        self.assertNotIn("No findings", output)
+
+    def test_a_root_that_cannot_be_read_is_named_by_the_path_given(self):
+        import stat
+
+        with tempfile.TemporaryDirectory() as root:
+            locked = os.path.join(root, "locked")
+            os.makedirs(locked)
+            os.chmod(locked, 0)
+            try:
+                _, output = run(["scan", locked])
+            finally:
+                os.chmod(locked, stat.S_IRWXU)
+        # The root's path relative to itself is the empty string, which would
+        # otherwise be reported as "starting with ''".
+        self.assertNotIn("starting with ''", output)
+        self.assertIn("locked", output)
+
     def test_an_empty_scan_says_so_rather_than_looking_clean(self):
         with tempfile.TemporaryDirectory() as root:
             _, output = run(["scan", root])

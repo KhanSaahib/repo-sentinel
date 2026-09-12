@@ -46,6 +46,43 @@ class TestText(unittest.TestCase):
         self.assertIn("\033", report.format_text([CRITICAL], colour=True))
 
 
+class TestTextGroupedByFile(unittest.TestCase):
+    SECOND = Finding(
+        rule_id="SEC002",
+        severity=Severity.HIGH,
+        title="A second finding in the same file",
+        path="terraform/main.tf",
+        line=40,
+        evidence="AKIA****XXXX",
+    )
+
+    def grouped(self, findings):
+        return report.format_text(findings, colour=False, by_file=True)
+
+    def test_the_path_is_printed_once_for_all_of_its_findings(self):
+        text = self.grouped([CRITICAL, self.SECOND])
+        self.assertEqual(text.count("terraform/main.tf"), 1)
+        self.assertIn("line 14", text)
+        self.assertIn("line 40", text)
+
+    def test_each_file_still_gets_its_own_heading(self):
+        text = self.grouped([CRITICAL, GUESS])
+        self.assertIn("terraform/main.tf", text)
+        self.assertIn("app.py", text)
+
+    def test_the_finding_says_as_much_as_it_does_ungrouped(self):
+        text = self.grouped([CRITICAL])
+        self.assertIn("AWS access key id", text)
+        self.assertIn("evidence: AKIA****LM3D", text)
+        self.assertIn("fix: Deactivate the key in IAM.", text)
+
+    def test_a_guess_still_admits_to_being_one(self):
+        self.assertIn("(medium confidence)", self.grouped([GUESS]))
+
+    def test_a_clean_run_reads_the_same_either_way(self):
+        self.assertEqual(self.grouped([]), report.format_text([], colour=False))
+
+
 class TestJson(unittest.TestCase):
     def test_every_finding_carries_a_fingerprint_and_confidence(self):
         payload = json.loads(report.format_json([CRITICAL, GUESS], version="0.2.0"))

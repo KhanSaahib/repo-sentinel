@@ -149,6 +149,11 @@ repository the tool can read at all: it grew from two file formats to six.
 - A **YAML subset reader** and an **HCL block reader**, both standard library
   only, both explicit about what they do not parse.
 
+- **`--sort path` groups the text report by file**: the path is printed once
+  and its findings sit under it. Sorting by path means reading a report rather
+  than triaging one, and repeating the path on every line pushes the part that
+  differs off to the right.
+
 - **A CWE identifier per rule**, surfaced in `rules --format json` and in the
   SARIF tags. Five CI systems share CWE-78; "unpinned" is CWE-1357 whether it
   is an action, an orb, a base image or a dependency.
@@ -164,6 +169,15 @@ repository the tool can read at all: it grew from two file formats to six.
 
 ### Fixed
 
+- **A path that does not exist scanned clean.** `repo-sentinel scan tests/fixtues`
+  walked nothing, found nothing and said "no findings" -- the one answer this
+  tool must never give for a tree it did not read. It is an error now.
+- **A tree that could not be opened said nothing about it.** The count of
+  unreadable paths was attached only to the line reporting how many files were
+  scanned, and a locked directory scans zero files: the run that most needed
+  the warning was the one that did not print it. An unreadable root is also
+  named by the path given rather than by its path relative to itself, which is
+  the empty string.
 - **The YAML reader kept trailing comments inside values.** `privileged: true
   # a note` was not `true`, so the rule reading it quietly found nothing --
   the worst way for a scanner to be wrong, and invisible from the output. Every

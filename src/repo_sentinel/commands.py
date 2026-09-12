@@ -84,6 +84,13 @@ def _apply_disabled(
 
 
 def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
+    # A path that is not there is a typo, not a clean repository. Scanning it
+    # would print "no findings", which is the one answer this tool must never
+    # give for a tree it did not read.
+    if not os.path.exists(args.path):
+        print(f"repo-sentinel: no such file or directory: {args.path}", file=sys.stderr)
+        return EXIT_ERROR
+
     try:
         min_severity = Severity.parse(args.min_severity)
         min_confidence = Confidence.parse(args.min_confidence)
@@ -166,7 +173,9 @@ def _render(
     colour = not args.no_color and args.output is None and sys.stdout.isatty()
     if args.quiet:
         return report.format_summary(findings, notes=notes)
-    return report.format_text(findings, colour=colour, notes=notes)
+    return report.format_text(
+        findings, colour=colour, notes=notes, by_file=args.sort == "path"
+    )
 
 
 def _listed_paths(source: "str | None") -> "list[str] | None":

@@ -33,6 +33,7 @@ _COLOURS = {
 }
 _RESET = "\033[0m"
 _DIM = "\033[2m"
+_BOLD = "\033[1m"
 
 #: SARIF has three levels where this tool has four; criticals and highs both
 #: have to fail a review, so both map to "error".
@@ -66,26 +67,71 @@ def summarise(findings: Sequence[Finding]) -> str:
     return f"{len(findings)} finding(s): {breakdown}"
 
 
+def _severity_label(finding: Finding, *, colour: bool) -> str:
+    label = finding.severity.value.upper()
+    return f"{_COLOURS[finding.severity]}{label}{_RESET}" if colour else label
+
+
+def _confidence_note(finding: Finding, *, colour: bool) -> str:
+    """The parenthetical that says a rule is guessing, or nothing if it is not."""
+    if finding.confidence >= Confidence.HIGH:
+        return ""
+    marker = f"({finding.confidence.value} confidence)"
+    return f"  {_DIM}{marker}{_RESET}" if colour else f"  {marker}"
+
+
+def _body(finding: Finding, indent: str) -> "list[str]":
+    lines = [f"{indent}{finding.title}"]
+    if finding.evidence:
+        lines.append(f"{indent}evidence: {finding.evidence}")
+    if finding.remediation:
+        lines.append(f"{indent}fix: {finding.remediation}")
+    return lines
+
+
 def format_text(
-    findings: Sequence[Finding], *, colour: bool, notes: Sequence[str] = ()
+    findings: Sequence[Finding],
+    *,
+    colour: bool,
+    notes: Sequence[str] = (),
+    by_file: bool = False,
 ) -> str:
-    """Human-readable output. ``notes`` are appended after the summary line."""
+    """Human-readable output. ``notes`` are appended after the summary line.
+
+    With ``by_file`` the path is printed once and its findings sit under it.
+    That is what sorting by path is *for*: a report read file by file, where
+    repeating ``src/app.py`` eleven times pushes the part that differs off to
+    the right. Worst-first output stays flat, because there the path is the
+    thing that changes on every line.
+    """
     lines: list[str] = []
-    for finding in findings:
-        label = finding.severity.value.upper()
-        if colour:
-            label = f"{_COLOURS[finding.severity]}{label}{_RESET}"
-        header = f"{label} {finding.rule_id}  {finding.path}:{finding.line}"
-        if finding.confidence < Confidence.HIGH:
-            marker = f"({finding.confidence.value} confidence)"
-            header += f"  {_DIM}{marker}{_RESET}" if colour else f"  {marker}"
-        lines.append(header)
-        lines.append(f"    {finding.title}")
-        if finding.evidence:
-            lines.append(f"    evidence: {finding.evidence}")
-        if finding.remediation:
-            lines.append(f"    fix: {finding.remediation}")
-        lines.append("")
+    if by_file:
+        current = None
+        for finding in findings:
+            if finding.path != current:
+                if current is not None:
+                    lines.append("")
+                current = finding.path
+                path = f"{_BOLD}{finding.path}{_RESET}" if colour else finding.path
+                lines.append(path)
+            header = (
+                f"  {_severity_label(finding, colour=colour)} {finding.rule_id}"
+                f"  line {finding.line}{_confidence_note(finding, colour=colour)}"
+            )
+            lines.append(header)
+            lines.extend(_body(finding, "      "))
+        if findings:
+            lines.append("")
+    else:
+        for finding in findings:
+            header = (
+                f"{_severity_label(finding, colour=colour)} {finding.rule_id}"
+                f"  {finding.path}:{finding.line}"
+                f"{_confidence_note(finding, colour=colour)}"
+            )
+            lines.append(header)
+            lines.extend(_body(finding, "    "))
+            lines.append("")
 
     lines.append(summarise(findings) if findings else _CLEAN)
     lines.extend(notes)
