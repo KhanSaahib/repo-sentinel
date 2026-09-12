@@ -291,6 +291,11 @@ Resources:
   AdminRole:
     Type: AWS::IAM::Role
     Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: sts:AssumeRole
       Policies:
         - PolicyDocument:
             Statement:

@@ -184,6 +184,46 @@ class TestPolicies(unittest.TestCase):
         self.assertEqual(scan(text), [])
 
 
+class TestPublicPrincipals(unittest.TestCase):
+    """CF006: the other half of CF004, in AWS's other vocabulary."""
+
+    def trust(self, body):
+        return template(
+            "  Role:\n    Type: AWS::IAM::Role\n    Properties:\n"
+            "      AssumeRolePolicyDocument:\n        Statement:\n" + body
+        )
+
+    def test_a_wildcard_principal(self):
+        text = self.trust('          - Effect: Allow\n            Principal: "*"\n')
+        findings = [f for f in scan(text) if f.rule_id == "CF006"]
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].severity, Severity.HIGH)
+
+    def test_the_aws_spelling(self):
+        text = self.trust(
+            '          - Effect: Allow\n            Principal:\n              AWS: "*"\n'
+        )
+        self.assertIn("CF006", rule_ids(scan(text)))
+
+    def test_a_service_principal_is_a_named_principal(self):
+        text = self.trust(
+            "          - Effect: Allow\n            Principal:\n"
+            "              Service: lambda.amazonaws.com\n"
+        )
+        self.assertNotIn("CF006", rule_ids(scan(text)))
+
+    def test_a_named_account_is_not_reported(self):
+        text = self.trust(
+            "          - Effect: Allow\n            Principal:\n"
+            '              AWS: "arn:aws:iam::123456789012:root"\n'
+        )
+        self.assertNotIn("CF006", rule_ids(scan(text)))
+
+    def test_a_deny_statement_is_not_a_grant(self):
+        text = self.trust('          - Effect: Deny\n            Principal: "*"\n')
+        self.assertNotIn("CF006", rule_ids(scan(text)))
+
+
 class TestSuppression(unittest.TestCase):
     def test_line_marker(self):
         text = template(

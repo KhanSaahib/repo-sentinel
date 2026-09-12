@@ -569,6 +569,7 @@ belong to, including inside a `block`.
 | CF003 | Encryption at rest explicitly switched off | medium |
 | CF004 | Policy allows every action on every resource | high |
 | CF005 | Managed database given a public endpoint | high |
+| CF006 | Policy names every principal, or every account | high |
 
 These are the Terraform rules in AWS's other vocabulary. The mistakes do not
 care which tool describes them -- a security group admitting `0.0.0.0/0` to
@@ -581,6 +582,11 @@ nodes -- so the rules never learn which they are looking at. Intrinsic
 functions come through as text, which is the behaviour worth having: `CidrIp:
 !Ref AllowedRange` is decided at deploy time, so no rule draws a conclusion
 from it.
+
+CF006 is TF008 in the other vocabulary, and exists for the same reason the
+whole CloudFormation family does: the mistakes are identical and the spelling
+is not. `Principal: "*"` and `Principal: {AWS: "*"}` are both anybody; a
+Service principal is a named one, and is how half of AWS works.
 
 ## Kubernetes
 

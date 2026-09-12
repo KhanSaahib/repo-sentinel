@@ -201,6 +201,7 @@ RULES: "dict[str, Rule]" = _rules(
     ("CF003", "cfn-encryption-disabled", "Encryption at rest explicitly switched off", Severity.MEDIUM),
     ("CF004", "cfn-wildcard-policy", "Policy allows every action on every resource", Severity.HIGH),
     ("CF005", "cfn-public-database", "Managed database given a public endpoint", Severity.HIGH),
+    ("CF006", "cfn-public-principal", "Policy names every principal, or every account", Severity.HIGH),
     ("K8S001", "privileged-container", "Container runs privileged", Severity.CRITICAL),
     ("K8S002", "host-path-mount", "Volume mounts a path from the node", Severity.CRITICAL),
     ("K8S003", "host-namespace", "Pod shares a namespace with the node", Severity.HIGH),
@@ -297,7 +298,7 @@ _claim(
     "SH003",
 )
 # Improper access control: something reachable that should not be.
-_claim("CWE-284", "TF001", "TF005", "TF008", "CF001", "CF005", "DC005", "K8S011")
+_claim("CWE-284", "TF001", "TF005", "TF008", "CF001", "CF005", "CF006", "DC005", "K8S011")
 # Missing encryption of data at rest.
 _claim("CWE-311", "TF003", "TF006", "CF003")
 # Exposure of a resource to the wrong control sphere.

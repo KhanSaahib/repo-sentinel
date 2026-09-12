@@ -180,7 +180,7 @@ last of them is the first that reads code rather than configuration.
   of every credential the repository holds. Medium confidence when the call is
   pinned to a SHA, which at least fixes the code that will read them.
 
-- **TF008**: a policy that names every principal. TF004 says the principal may
+- **TF008 and CF006**: a policy that names every principal. TF004 says the principal may
   do anything; this says anybody may be the principal -- `identifiers = ["*"]`,
   or `"Principal": "*"` in a JSON policy. On a role's trust policy that is any
   AWS account assuming the role. Found one in terragoat's Elasticsearch module

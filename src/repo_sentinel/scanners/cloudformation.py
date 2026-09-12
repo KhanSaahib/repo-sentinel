@@ -240,6 +240,45 @@ def _check_wildcard_policy(path: str, name: str, kind: str, resource: "yamlish.N
             )
 
 
+def _check_public_principal(
+    path: str, name: str, kind: str, resource: "yamlish.Node"
+) -> "Iterator[Finding]":
+    """CF006: a policy statement that names every principal.
+
+    The other half of CF004, in AWS's other vocabulary: that rule says the
+    principal may do anything, this one says anybody may be the principal.
+    ``Principal: "*"`` and ``Principal: {AWS: "*"}`` are the two spellings; a
+    Service principal is a named one and is how half of AWS works.
+    """
+    for key, node in resource.walk():
+        if key != "Statement":
+            continue
+        for statement in _entries(node) or [node]:
+            if not statement.is_map:
+                continue
+            if _text(statement.get("Effect")) not in ("Allow", ""):
+                continue
+            principal = statement.get("Principal")
+            if principal is None:
+                continue
+            if not (_wildcard(principal) or _wildcard(principal.get("AWS"))):
+                continue
+            yield Finding(
+                rule_id="CF006",
+                severity=Severity.HIGH,
+                title=f"{kind or 'Policy'} {name!r} allows any principal",
+                path=path,
+                line=principal.line,
+                evidence="Principal: '*'",
+                remediation=(
+                    "Anybody is the principal here: on a role's trust policy "
+                    "that is any AWS account assuming the role, and on a "
+                    "bucket or key policy it is any account using it. Name the "
+                    "accounts, or add a Condition that narrows it."
+                ),
+            )
+
+
 def _wildcard(node: "yamlish.Node | None") -> bool:
     """True when a policy field is ``*``, written as a scalar or a list."""
     if node is None:
@@ -256,6 +295,7 @@ _RULES = (
     _check_encryption,
     _check_public_database,
     _check_wildcard_policy,
+    _check_public_principal,
 )
 
 
