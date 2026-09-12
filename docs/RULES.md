@@ -240,6 +240,7 @@ in the text.
 | WF008 | `workflow_run` checking out untrusted code | critical |
 | WF009 | Checkout leaves a usable token in `.git/config` | high |
 | WF010 | Secret written to a job output or environment | high |
+| WF011 | Every secret passed to a workflow in another repository | high |
 
 WF003 is the script-injection class: `${{ github.event.issue.title }}` inside a
 `run:` step is substituted into the shell command *before* the shell runs, so an
@@ -271,6 +272,16 @@ influenced. Reporting every checkout in the world would get the rule switched
 off. WF010 catches a secret written to `$GITHUB_OUTPUT` or `$GITHUB_ENV`, where
 it outlives the step, reaches later jobs and calling workflows, and stops being
 covered by log masking the moment it is transformed.
+
+WF011 is about `secrets: inherit` on a reusable workflow call. There is no way
+to inherit *some* secrets: the callee receives the whole store, including the
+credentials it has nothing to do with. Calling a workflow in your own repository
+that way is a convenience, and the rule stays quiet about it. Calling one in
+somebody else's repository that way is a standing grant of every credential the
+repository holds, redeemable whenever that repository changes -- so the rule is
+scoped to the cross-repository case, and drops to medium confidence when the
+call is pinned to a commit SHA, which at least fixes the code that will read
+them.
 
 Workflow checks are pattern-based rather than YAML-aware, a deliberate
 consequence of the zero-dependency rule. What the scanner does parse is

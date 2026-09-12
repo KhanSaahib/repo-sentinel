@@ -45,6 +45,10 @@ _PERSIST_CREDENTIALS = re.compile(r"^\s*persist-credentials:\s*(?P<value>\S+)")
 _EXPORTS = re.compile(r"\$GITHUB_OUTPUT|\$GITHUB_ENV|::set-output|::set-env")
 _BLOCK_KEY = re.compile(r"^(?P<indent>\s+)(?P<name>[A-Za-z_][\w-]*):\s*(?P<inline>.*)$")
 _STEP_START = re.compile(r"^(?P<indent>\s*)-\s+\S")
+#: A reusable workflow call sits directly under the job, with no list dash:
+#: a step's ``uses:`` is a different thing entirely.
+_JOB_USES = re.compile(r"^\s*uses:\s*['\"]?(?P<ref>[^\s'\"#]+)")
+_SECRETS_INHERIT = re.compile(r"^\s*secrets:\s*inherit\s*$")
 
 #: Action owners whose code already runs with the repository's own trust.
 #: Everything else is a third party, however popular.
@@ -529,6 +533,54 @@ def _check_exported_secrets(path: str, lines: list[str]) -> Iterator[Finding]:
         )
 
 
+def _check_inherited_secrets(path: str, jobs: list[Job]) -> Iterator[Finding]:
+    """WF011: every secret in the repository handed to another repository.
+
+    ``secrets: inherit`` on a reusable workflow call passes the whole secret
+    store, not the secrets the callee declares -- there is no way to inherit
+    some of them. Pointed at a workflow in the same repository that is a
+    convenience; pointed at somebody else's repository it is a standing grant
+    of every credential the repository holds, redeemable whenever that
+    repository changes.
+
+    Asked per job, because the call and the ``secrets:`` key are siblings
+    under the same job and neither line means anything without the other.
+    """
+    for job in jobs:
+        called = None
+        inherits = False
+        for number, text in job.body:
+            if _indent_of(text) != job.indent + 2:
+                continue  # a step's uses:, or a key of one
+            match = _JOB_USES.match(text)
+            if match is not None:
+                called = (number, match.group("ref"))
+            elif _SECRETS_INHERIT.match(text):
+                inherits = True
+        if called is None or not inherits:
+            continue
+        number, ref = called
+        if _LOCAL_ACTION.match(ref):
+            continue  # same repository: the secrets are already there
+        _, _, version = ref.partition("@")
+        pinned = bool(_SHA_PIN.match(version))
+        yield Finding(
+            rule_id="WF011",
+            severity=Severity.HIGH,
+            title=f"Job {job.name!r} passes every secret to {ref.split('@')[0]!r}",
+            path=path,
+            line=number,
+            evidence=f"uses: {ref} with secrets: inherit",
+            remediation=(
+                "inherit passes the whole secret store, including the secrets "
+                "this workflow has nothing to do with. Name the ones the "
+                "called workflow declares instead -- 'secrets:' followed by "
+                "each one -- so the grant is as small as the job."
+            ),
+            confidence=Confidence.MEDIUM if pinned else Confidence.HIGH,
+        )
+
+
 def scan_workflow(
     path: str, text: str, marks: "suppression.Suppressions | None" = None
 ) -> list[Finding]:
@@ -555,6 +607,7 @@ def scan_workflow(
         *_check_secret_handoff(path, jobs),
         *_check_persisted_credentials(path, lines, jobs),
         *_check_exported_secrets(path, lines),
+        *_check_inherited_secrets(path, jobs),
     ]
     return marks.filter_findings(findings)
 

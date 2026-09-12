@@ -149,6 +149,12 @@ repository the tool can read at all: it grew from two file formats to six.
 - A **YAML subset reader** and an **HCL block reader**, both standard library
   only, both explicit about what they do not parse.
 
+- **WF011**: a reusable workflow in another repository called with
+  `secrets: inherit`. There is no way to inherit *some* secrets -- the callee
+  receives the whole store -- so the cross-repository form is a standing grant
+  of every credential the repository holds. Medium confidence when the call is
+  pinned to a SHA, which at least fixes the code that will read them.
+
 - **`--sort path` groups the text report by file**: the path is printed once
   and its findings sit under it. Sorting by path means reading a report rather
   than triaging one, and repeating the path on every line pushes the part that

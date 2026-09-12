@@ -127,6 +127,9 @@ jobs:
     runs-on: [self-hosted, linux]
     steps:
       - run: make audit
+  release:
+    uses: some-vendor/pipelines/.github/workflows/release.yml@main
+    secrets: inherit
 """
 
 DOCKERFILE = """FROM golang:1.22 AS build

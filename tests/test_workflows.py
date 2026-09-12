@@ -401,5 +401,54 @@ class TestExportedSecrets(unittest.TestCase):
         self.assertEqual(rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)), set())
 
 
+class TestInheritedSecrets(unittest.TestCase):
+    """WF011: secrets: inherit on a call to somebody else's workflow."""
+
+    def scan(self, body):
+        return workflows.scan_workflow(".github/workflows/a.yml", workflow(body))
+
+    def call(self, ref, secrets="    secrets: inherit\n"):
+        return (
+            "jobs:\n"
+            "  release:\n"
+            "    permissions:\n      contents: read\n"
+            f"    uses: {ref}\n" + secrets
+        )
+
+    def test_a_call_to_another_repository_hands_over_everything(self):
+        findings = self.scan(self.call("vendor/pipe/.github/workflows/r.yml@main"))
+        finding = next(f for f in findings if f.rule_id == "WF011")
+        self.assertEqual(finding.severity, Severity.HIGH)
+        self.assertIn("vendor/pipe", finding.title)
+
+    def test_a_call_within_this_repository_is_not_a_finding(self):
+        self.assertNotIn("WF011", rule_ids(self.scan(self.call("./.github/workflows/r.yml"))))
+
+    def test_naming_the_secrets_is_the_fix_and_is_not_reported(self):
+        body = self.call(
+            "vendor/pipe/.github/workflows/r.yml@main",
+            secrets="    secrets:\n      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}\n",
+        )
+        self.assertNotIn("WF011", rule_ids(self.scan(body)))
+
+    def test_a_pinned_call_is_still_reported_but_less_certainly(self):
+        pinned = self.scan(self.call(f"vendor/pipe/.github/workflows/r.yml@{SHA}"))
+        mutable = self.scan(self.call("vendor/pipe/.github/workflows/r.yml@main"))
+        pinned_finding = next(f for f in pinned if f.rule_id == "WF011")
+        mutable_finding = next(f for f in mutable if f.rule_id == "WF011")
+        self.assertLess(pinned_finding.confidence, mutable_finding.confidence)
+
+    def test_a_step_that_inherits_nothing_is_not_confused_for_a_call(self):
+        body = (
+            "jobs:\n"
+            "  build:\n"
+            "    permissions:\n      contents: read\n"
+            "    steps:\n"
+            f"      - uses: vendor/action@{SHA}\n"
+            "      - run: echo secrets: inherit\n"
+        )
+        self.assertNotIn("WF011", rule_ids(self.scan(body)))
+
+
 if __name__ == "__main__":
     unittest.main()

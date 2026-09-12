@@ -119,6 +119,7 @@ RULES: "dict[str, Rule]" = _rules(
     ("WF008", "workflow-run-checkout", "workflow_run checking out untrusted code", Severity.CRITICAL),
     ("WF009", "persisted-credentials", "Checkout leaves a usable token in .git/config", Severity.HIGH),
     ("WF010", "secret-exported", "Secret written to a job output or environment", Severity.HIGH),
+    ("WF011", "secrets-inherited-offsite", "Every secret passed to a workflow in another repository", Severity.HIGH),
     ("GL001", "floating-job-image", "Pipeline image tag can point elsewhere tomorrow", Severity.MEDIUM),
     ("GL002", "gitlab-script-injection", "Outsider-supplied variable interpolated into a script", Severity.CRITICAL),
     ("GL003", "gitlab-pipe-to-shell", "Job pipes a download into a shell", Severity.HIGH),
@@ -259,7 +260,7 @@ _claim("CWE-284", "TF001", "TF005", "CF001", "CF005", "DC005", "K8S011")
 # Missing encryption of data at rest.
 _claim("CWE-311", "TF003", "TF006", "CF003")
 # Exposure of a resource to the wrong control sphere.
-_claim("CWE-668", "K8S002", "K8S003", "DC002", "DC003", "WF006", "AZ002")
+_claim("CWE-668", "K8S002", "K8S003", "DC002", "DC003", "WF006", "WF011", "AZ002")
 # Inclusion of functionality from an untrusted control sphere.
 _claim("CWE-829", "WF004", "WF007", "WF008")
 # Insufficiently protected credentials, and credentials written to a log.
