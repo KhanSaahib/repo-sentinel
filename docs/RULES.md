@@ -799,10 +799,30 @@ its templates, and a handful of those carry their meaning with them.
 it is written, because that is the only thing a chart can do with a key of that
 name. Six settings are read this way -- privileged, allowPrivilegeEscalation,
 added capabilities, an Unconfined seccomp profile, the three host namespaces,
-and a hostPath volume -- all at medium confidence, since the chart *should*
-pass them through and this reader has not read the template that does. A
-`hostPath` block with no `path` in it is a configuration section rather than a
-volume: Dagger's chart has one whose keys are `dataVolume` and `runVolume`.
+and a hostPath volume. A `hostPath` block with no `path` in it is a
+configuration section rather than a volume: Dagger's chart has one whose keys
+are `dataVolume` and `runVolume`.
+
+Whether a setting in the file reaches a container is a question the chart's own
+templates answer, so they are read too -- everything under `templates/`,
+`_helpers.tpl` included -- for the value paths they name. Three outcomes:
+
+| the templates | confidence | what it means |
+|---|---|---|
+| name this path, or one above or below it | **high** | the chart ships this setting |
+| were read and name nothing near it | **low** | most likely a value the chart stopped using |
+| could not be read, or dump `.Values` whole | **medium** | the answer this rule gave before it read any templates |
+
+`{{ toYaml .Values }}` reaches everything and names nothing, so a chart that
+does it gets the medium answer rather than a blanket high one. Two kinds of key
+are nobody's to answer for and keep medium as well: a top-level key naming a
+dependency in `Chart.yaml`, by name or by alias, which is how an umbrella chart
+configures a subchart whose templates it does not contain; and `global`, which
+Helm hands to every subchart by definition.
+
+Low is still reported rather than dropped. A value the templates do not mention
+is usually dead, but a parent chart's values file can supply the same key, and
+"usually" is not a reason to go quiet.
 
 A `kustomization.yaml` is read for the manifests it patches in. An overlay
 exists to change what the base said, and what it changes is often the security

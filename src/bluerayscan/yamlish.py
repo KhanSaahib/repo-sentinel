@@ -96,12 +96,28 @@ class Node:
         sequence element. Rules use it to ask "is there a ``securityContext``
         anywhere in here" without knowing the shape of the document above it.
         """
-        for key, child in self.items():
+        for _, key, child in self.walk_paths():
             yield key, child
-            yield from child.walk()
+
+    def walk_paths(
+        self, prefix: "tuple[str, ...]" = ()
+    ) -> "Iterator[tuple[tuple[str, ...], str, Node]]":
+        """:meth:`walk`, with the mapping keys that lead to each node.
+
+        Yields ``(path, key, node)`` in the same order as :meth:`walk`. A
+        sequence element does not extend the path: nothing addresses a list
+        element by its index in the places this is used -- a Helm template
+        reaches one with ``range``, which names the list rather than the
+        element -- so an element carries its parent's path, which is the one
+        anybody asking where a value lives would have to write.
+        """
+        for key, child in self.items():
+            path = prefix + (key,)
+            yield path, key, child
+            yield from child.walk_paths(path)
         for child in self.entries():
-            yield "", child
-            yield from child.walk()
+            yield prefix, "", child
+            yield from child.walk_paths(prefix)
 
 
 #: A Go template action: ``{{ .Values.image }}``, ``{{- if .Values.rbac }}``.
