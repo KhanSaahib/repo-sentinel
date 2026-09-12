@@ -241,6 +241,12 @@ def scan_name(path: str, text: "str | None" = None) -> "Iterator[Finding]":
                 "purpose, which is why nobody remembers it is there. Rotate "
                 "what it contains, remove it, and add it to .gitignore."
             ),
+            # Weighed like its siblings: a state file under testdata/ is a
+            # fixture, and a project that tests infrastructure tooling has
+            # hundreds. Terraform's own repository has a hundred and
+            # sixty-two. Still reported, because a real state file does end up
+            # in a test directory, and that one is worth the look.
+            confidence=Confidence.LOW if _in_a_test_tree(normalised) else Confidence.HIGH,
         )
         return
 
@@ -257,6 +263,7 @@ def scan_name(path: str, text: "str | None" = None) -> "Iterator[Finding]":
                 "passed on a command line. Remove it, and rotate anything the "
                 "commands in it used."
             ),
+            confidence=Confidence.LOW if _in_a_test_tree(normalised) else Confidence.HIGH,
         )
         return
 

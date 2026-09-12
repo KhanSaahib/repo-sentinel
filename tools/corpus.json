@@ -101,6 +101,18 @@
       "for": "a PHP skeleton: small, and should stay silent"
     },
     {
+      "name": "cargo",
+      "url": "https://github.com/rust-lang/cargo",
+      "commit": "7941be6fb416b4cd9666aef7b858dfea25587a8c",
+      "for": "Rust, and a test suite full of fixture manifests"
+    },
+    {
+      "name": "terraform",
+      "url": "https://github.com/hashicorp/terraform",
+      "commit": "05cecbb315e87abc2c2bdb182963dd8e36d574fb",
+      "for": "the tool the TF rules describe: state files and certificates by the hundred"
+    },
+    {
       "name": "terragoat",
       "url": "https://github.com/bridgecrewio/terragoat",
       "commit": "729f8da62c6a85ce4af5ad3d123de97776d954c4",

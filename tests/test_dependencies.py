@@ -273,6 +273,11 @@ class TestTomlManifests(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertIn("'shared'", findings[0].title)
 
+    def test_a_fixture_url_is_not_a_source(self):
+        # Cargo's own test suite writes this a dozen times.
+        text = '[dependencies]\nhelper = { git = "[ROOTURL]/git-package", version = "0.3" }\n'
+        self.assertNotIn("SC003", rule_ids(scan("Cargo.toml", text)))
+
     def test_an_inline_git_dependency_pinned_to_a_revision(self):
         text = (
             "[dependencies]\n"

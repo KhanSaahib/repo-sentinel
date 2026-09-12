@@ -284,18 +284,22 @@ def _check_toml(path: str, kind: str, text: str) -> "Iterator[Finding]":
     yield from flush()
 
 
+_INLINE_GIT = re.compile(r"""\bgit\s*=\s*['"](?P<url>[^'"]*)['"]""")
+
+
 def _inline_git_dependency(
     path: str, kind: str, number: int, key: str, raw: str
 ) -> "Finding | None":
     """``foo = { git = "...", branch = "main" }``, all on one line."""
     value = raw.strip()
-    if not value.startswith("{") or "git" not in value:
+    if not value.startswith("{"):
         return None
     if re.search(r"\b(?:rev|tag)\s*=", value):
         return None
-    if not re.search(r"\bgit\s*=", value):
+    match = _INLINE_GIT.search(value)
+    if match is None:
         return None
-    return _moving_source(path, key, number, value)
+    return _moving_source(path, key, number, value, match.group("url"))
 
 
 def _toml_git_dependency(
@@ -306,10 +310,21 @@ def _toml_git_dependency(
         return None
     line, url = pending["git"]
     name = section.rsplit(".", 1)[-1] if section else "dependency"
-    return _moving_source(path, name, line, f"git = {url}")
+    return _moving_source(path, name, line, f"git = {url}", url)
 
 
-def _moving_source(path: str, name: str, line: int, evidence: str) -> Finding:
+#: A URL a test fixture stands in for: "[ROOTURL]/git-package" is what Cargo's
+#: own test suite writes, and it is not a source anybody fetches from.
+_PLACEHOLDER_URL = re.compile(r"[\[<{]|\$\{?\w|^\w+$")
+
+
+def _moving_source(
+    path: str, name: str, line: int, evidence: str, url: str = ""
+) -> "Finding | None":
+    # A fixture's URL is a stand-in rather than a source: Cargo's own test
+    # suite writes git = "[ROOTURL]/git-package" a dozen times.
+    if url and _PLACEHOLDER_URL.search(url):
+        return None
     return Finding(
         rule_id="SC003",
         severity=Severity.MEDIUM,
@@ -347,7 +362,12 @@ def _check_gemfile_dependencies(path: str, text: str) -> "Iterator[Finding]":
         rest = entry.group("rest")
         if not _GEM_SOURCE.search(rest) or _GEM_PINNED.search(rest):
             continue
-        yield _moving_source(path, entry.group("name"), number, line.strip())
+        source = re.search(r"""(?:git|github|gist|bitbucket)\s*:\s*['"]([^'"]*)['"]""", rest)
+        finding = _moving_source(
+            path, entry.group("name"), number, line.strip(), source.group(1) if source else ""
+        )
+        if finding is not None:
+            yield finding
 
 
 def _check_verification(path: str, kind: str, text: str) -> "Iterator[Finding]":

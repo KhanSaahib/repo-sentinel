@@ -191,6 +191,12 @@ last of them is the first that reads code rather than configuration.
   `git` dependency carries a `rev` or a `tag`; without one it installs whatever
   the default branch holds at build time. No TOML parser behind it -- `tomllib`
   arrived in 3.11 and this runs on 3.9.
+- **FN004 is weighed in a fixture tree**, like the rest of its family: a
+  `.tfstate` under `testdata/` is a fixture, and Terraform's own repository has
+  162 of them. Still reported, because a real state file does end up in a test
+  directory. Terraform at `--min-confidence medium`: 180 findings → 17.
+- **A fixture's URL is not a package source.** `git = "[ROOTURL]/git-package"`
+  is what Cargo's test suite writes, eleven times.
 - **SH004**: a password handed to a command as an argument. `curl -u
   admin:hunter2`, `mysql -phunter2`, `sshpass -p`, `PGPASSWORD=`. Two problems
   in one line: the credential is in the file, and it is in the process table of
