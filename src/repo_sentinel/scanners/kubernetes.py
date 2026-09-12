@@ -167,7 +167,11 @@ def _check_host_paths(path: str, document: "yamlish.Node") -> "Iterator[Finding]
         yield Finding(
             rule_id="K8S002",
             severity=Severity.CRITICAL if critical else Severity.HIGH,
-            title=f"{_describe(document)} mounts host path {mounted or 'unnamed'}",
+            title=(
+                f"{_describe(document)} mounts host path {mounted}"
+                if mounted
+                else f"{_describe(document)} mounts a path from the node"
+            ),
             path=path,
             line=node.line,
             evidence=f"hostPath: {mounted}" if mounted else "hostPath volume",

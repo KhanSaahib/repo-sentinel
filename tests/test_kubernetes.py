@@ -183,6 +183,19 @@ class TestConfinement(unittest.TestCase):
         self.assertNotIn("K8S012", rule_ids(scan(text)))
 
 
+class TestHostPathTitles(unittest.TestCase):
+    def test_a_named_path_is_named(self):
+        text = pod(spec_body="  volumes:\n    - hostPath:\n        path: /var/lib\n")
+        finding = next(f for f in scan(text) if f.rule_id == "K8S002")
+        self.assertIn("/var/lib", finding.title)
+
+    def test_a_path_the_reader_could_not_see_reads_as_a_sentence(self):
+        # "mounts host path unnamed" is not a sentence anybody wrote.
+        text = pod(spec_body="  volumes:\n    - hostPath:\n        type: Directory\n")
+        finding = next(f for f in scan(text) if f.rule_id == "K8S002")
+        self.assertIn("mounts a path from the node", finding.title)
+
+
 class TestUsersAndLimits(unittest.TestCase):
     def test_explicit_root(self):
         self.assertIn("K8S005", rule_ids(scan(pod("      securityContext:\n        runAsUser: 0\n"))))
