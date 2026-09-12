@@ -180,6 +180,12 @@ last of them is the first that reads code rather than configuration.
   of every credential the repository holds. Medium confidence when the call is
   pinned to a SHA, which at least fixes the code that will read them.
 
+- **`pyproject.toml` and `Cargo.toml` are read**, by table rather than by line:
+  a URL in `[[tool.poetry.source]]` or `[source.mirror]` is a package source
+  and one in `[project.urls]` is a link in a README. SC003 asks there whether a
+  `git` dependency carries a `rev` or a `tag`; without one it installs whatever
+  the default branch holds at build time. No TOML parser behind it -- `tomllib`
+  arrived in 3.11 and this runs on 3.9.
 - **K8S012**: seccomp or AppArmor switched off by name -- `seccompProfile:
   Unconfined`, or the AppArmor annotation set to `unconfined`. Neither changes
   behaviour on a cluster with no Pod Security Standard, which is the reason the

@@ -225,10 +225,16 @@ install` is enough to execute them, on every machine and every CI runner. The
 same command inside `build` is a different proposition and is not reported.
 
 Covered: `package.json`, `composer.json`, `.npmrc`, `requirements*.txt`,
-`pip.conf`, `Gemfile`, `pom.xml`. SC001 reads the JSON manifests structurally,
-because there the field is available and it decides: `publishConfig.registry`
-is somewhere packages come from, and `repository`, `homepage` and `bugs` are
-metadata npm has never downloaded anything from. The checks are shallow on purpose -- this is not a resolver, and it
+`pip.conf`, `Gemfile`, `pom.xml`, `pyproject.toml`, `Cargo.toml`. SC001 reads
+the JSON manifests structurally, because there the field is available and it
+decides: `publishConfig.registry` is somewhere packages come from, and
+`repository`, `homepage` and `bugs` are metadata npm has never downloaded
+anything from. The two TOML manifests are read by table for the same reason --
+a URL in `[[tool.poetry.source]]` is a package source and one in
+`[project.urls]` is a link in a README -- with no TOML parser behind it, since
+`tomllib` arrived in 3.11 and this runs on 3.9. In those two, SC003 asks
+whether a `git` dependency carries a `rev` or a `tag`: without one it installs
+whatever the default branch holds at build time. The checks are shallow on purpose -- this is not a resolver, and it
 does not know what a version means -- because these four mistakes are visible
 in the text.
 
