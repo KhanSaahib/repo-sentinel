@@ -48,6 +48,32 @@ class TestActionPinning(unittest.TestCase):
         )
         self.assertIn("WF001", rule_ids(findings))
 
+    def test_a_third_party_tag_outweighs_a_first_party_one(self):
+        def severity(ref):
+            findings = workflows.scan_workflow(
+                ".github/workflows/ci.yml",
+                workflow(
+                    "permissions:\n  contents: read\njobs:\n  build:\n    steps:\n"
+                    f"      - uses: {ref}\n"
+                ),
+            )
+            return next(f for f in findings if f.rule_id == "WF001").severity
+
+        # Somebody else's action moving under you is the rule; GitHub moving
+        # GitHub, on a runner GitHub gave you, is the smaller half of it.
+        self.assertGreater(severity("vendor/deploy@v2"), severity("actions/checkout@v4"))
+        self.assertEqual(severity("actions/checkout@v4"), Severity.LOW)
+
+    def test_an_action_with_no_version_at_all_is_still_reported(self):
+        findings = workflows.scan_workflow(
+            ".github/workflows/ci.yml",
+            workflow(
+                "permissions:\n  contents: read\njobs:\n  build:\n    steps:\n"
+                "      - uses: vendor/deploy\n"
+            ),
+        )
+        self.assertIn("WF001", rule_ids(findings))
+
     def test_accepts_a_sha_pin(self):
         findings = workflows.scan_workflow(
             ".github/workflows/ci.yml",

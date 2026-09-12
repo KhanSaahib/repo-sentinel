@@ -236,7 +236,7 @@ in the text.
 
 | Rule | Finds | Severity |
 | --- | --- | --- |
-| WF001 | Action pinned to a mutable tag, or not pinned at all | medium |
+| WF001 | Action pinned to a mutable tag, or not pinned at all | medium for a third party, low for `actions/` and `github/` |
 | WF002 | Job inherits the default `GITHUB_TOKEN` permissions | medium |
 | WF003 | Attacker-controlled context interpolated into a `run:` block | critical |
 | WF004 | `pull_request_target` checking out untrusted code | critical |
@@ -248,6 +248,14 @@ in the text.
 | WF010 | Secret written to a job output or environment | high |
 | WF011 | Every secret passed to a workflow in another repository | high |
 | WF012 | Composite action interpolates an input into a shell command | medium |
+
+WF001 grades itself by who can move the reference. A tag on somebody else's
+action is code you do not control changing under you, which is the rule; a tag
+on `actions/checkout` is GitHub changing GitHub, on a runner GitHub already
+gave you, and that one is reported at low. Both are still reported -- pinning
+everything is the advice, and an organisation that pins one and not the other
+has decided rather than forgotten -- but a workflow with eleven first-party
+tags in it should not read like eleven problems.
 
 WF003 is the script-injection class: `${{ github.event.issue.title }}` inside a
 `run:` step is substituted into the shell command *before* the shell runs, so an

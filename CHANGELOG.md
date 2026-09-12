@@ -180,6 +180,10 @@ last of them is the first that reads code rather than configuration.
   of every credential the repository holds. Medium confidence when the call is
   pinned to a SHA, which at least fixes the code that will read them.
 
+- **WF001 grades itself by who can move the tag.** Somebody else's action
+  changing under you is the rule; `actions/checkout@v4` is GitHub changing
+  GitHub on a runner GitHub gave you, and is reported at low. Dagger at
+  `--min-severity medium`: 122 findings → 98; Discourse 161 → 127.
 - **`init` knows five CI systems, not two.** The snippet it prints is for the
   one the repository already has -- Azure, CircleCI and Jenkins included, each
   wired to draw the JUnit report. Suggesting GitHub Actions to a project that

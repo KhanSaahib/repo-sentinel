@@ -227,7 +227,16 @@ def _action_owner(ref: str) -> str:
 
 
 def _check_action_pinning(path: str, lines: list[str]) -> Iterator[Finding]:
-    """WF001: an action referenced by anything a third party can move."""
+    """WF001: an action referenced by anything a third party can move.
+
+    Graded by who can move it. A tag on somebody else's action is code you do
+    not control changing under you, which is the whole rule; a tag on
+    ``actions/checkout`` is GitHub changing GitHub, on the runner GitHub
+    already gave you. Still reported -- pinning everything is the advice, and
+    an organisation that pins one and not the other has decided rather than
+    forgotten -- but not at the same weight, because a workflow file with
+    eleven of these teaches people to skip the eleven.
+    """
     for number, line in enumerate(lines, start=1):
         match = _USES.match(line)
         if not match:
@@ -236,10 +245,18 @@ def _check_action_pinning(path: str, lines: list[str]) -> Iterator[Finding]:
         if _LOCAL_ACTION.match(ref):
             continue
         _, _, version = ref.partition("@")
+        first_party = _action_owner(ref) in _FIRST_PARTY_OWNERS
+        severity = Severity.LOW if first_party else Severity.MEDIUM
+        whose = (
+            "GitHub can move this tag; everything else about the runner is "
+            "already theirs, so this is the smaller half of the rule. "
+            if first_party
+            else "Tags can be moved to point at new code, by whoever owns it. "
+        )
         if not version:
             yield Finding(
                 rule_id="WF001",
-                severity=Severity.MEDIUM,
+                severity=severity,
                 title=f"Action {ref!r} has no version reference",
                 path=path,
                 line=number,
@@ -249,14 +266,14 @@ def _check_action_pinning(path: str, lines: list[str]) -> Iterator[Finding]:
         elif not _SHA_PIN.match(version):
             yield Finding(
                 rule_id="WF001",
-                severity=Severity.MEDIUM,
+                severity=severity,
                 title=f"Action {ref!r} is pinned to a mutable tag",
                 path=path,
                 line=number,
                 evidence=line.strip(),
                 remediation=(
-                    "Tags can be moved to point at new code. Pin to a full commit "
-                    "SHA and let Dependabot propose upgrades."
+                    whose + "Pin to a full commit SHA and let Dependabot "
+                    "propose upgrades."
                 ),
             )
 
