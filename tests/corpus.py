@@ -394,10 +394,17 @@ JENKINSFILE = """pipeline {
 }
 """
 
+#: The "user:password" half is assembled rather than written out, for the same
+#: reason the provider-shaped fixtures are: a contiguous literal is what a
+#: credential scanner reads, and a fixture that makes somebody else's tool
+#: report a leak has cost a person an afternoon for nothing. The scanned text
+#: is identical either way, which is the only part SH004 sees.
+_CURL_CREDENTIAL = "deploy:" + "Qq7Zx9Lm" + "2Pv4Rt8W"
+
 SHELL_SCRIPT = """#!/usr/bin/env bash
 set -euo pipefail
 
-curl -u deploy:Qq7Zx9Lm2Pv4Rt8W https://api.example.invalid/release
+curl -u """ + _CURL_CREDENTIAL + """ https://api.example.invalid/release
 curl -sSL https://get.example.invalid/install.sh | sudo bash
 wget --no-check-certificate https://example.invalid/pkg.tar.gz
 chmod -R 777 /opt/app
