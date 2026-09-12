@@ -34,12 +34,12 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/KhanSaahib/repo-sentinel"
-Issues = "https://github.com/KhanSaahib/repo-sentinel/issues"
+Homepage = "https://github.com/KhanSaahib/bluerayscan"
+Issues = "https://github.com/KhanSaahib/bluerayscan/issues"
 
 [project.scripts]
-bluerayscan = "repo_sentinel.cli:main"
-repo-sentinel = "repo_sentinel.cli:main"
+bluerayscan = "bluerayscan.cli:main"
+repo-sentinel = "bluerayscan.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

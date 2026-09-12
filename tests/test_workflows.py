@@ -1,8 +1,8 @@
 import textwrap
 import unittest
 
-from repo_sentinel.findings import Severity
-from repo_sentinel.scanners import workflows
+from bluerayscan.findings import Severity
+from bluerayscan.scanners import workflows
 
 SHA = "11bd71901bbe5b1630ceea73d27597364c9af683"
 
@@ -626,7 +626,7 @@ class TestCompositeActions(unittest.TestCase):
         self.assertEqual(workflows.scan_action("action.yml", text), [])
 
     def test_a_whole_file_marker_silences_an_action(self):
-        text = workflow("# repo-sentinel: ignore-file\n" + self.ACTION + "    - uses: v/a@v1\n")
+        text = workflow("# bluerayscan: ignore-file\n" + self.ACTION + "    - uses: v/a@v1\n")
         self.assertEqual(workflows.scan_action("action.yml", text), [])
 
     def test_scan_files_picks_up_actions_as_well_as_workflows(self):

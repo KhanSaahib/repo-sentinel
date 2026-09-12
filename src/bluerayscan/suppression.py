@@ -9,7 +9,10 @@ Three scopes, in increasing blast radius:
 
 Each of the three can name the rules it means, in brackets::
 
-    image: nginx:latest  # repo-sentinel: ignore[K8S008]
+    image: nginx:latest  # bluerayscan: ignore[K8S008]
+
+The former ``repo-sentinel: ignore`` spelling remains valid indefinitely so a
+rename cannot silently reactivate findings that a project already reviewed.
 
 An unqualified marker silences everything at that place, which is the blunt
 form and usually not what someone wants: a line exempted for one rule stays
@@ -41,6 +44,7 @@ from .findings import Finding, Severity
 
 __all__ = [
     "FILE_MARKER_MAX_LINE",
+    "LEGACY_LINE_MARKER",
     "LINE_MARKER",
     "UNTERMINATED_RULE_ID",
     "NONE",
@@ -52,7 +56,8 @@ __all__ = [
 ]
 
 #: The plain one-line form, quoted back at users in remediation text.
-LINE_MARKER = "repo-sentinel: ignore"
+LINE_MARKER = "bluerayscan: ignore"
+LEGACY_LINE_MARKER = "repo-sentinel: ignore"
 
 #: How far into a file a file-level directive is still honoured. Twenty lines
 #: clears a licence header and a module docstring without reaching the prose of
@@ -67,7 +72,7 @@ UNTERMINATED_RULE_ID = "SEC900"
 # trailing lookahead makes a mistyped directive ("ignore-fil") match nothing at
 # all, so a typo fails towards reporting rather than towards silence.
 _MARKER = re.compile(
-    r"repo-sentinel:[ \t]*ignore(?P<scope>-file|-start|-end)?"
+    r"(?:bluerayscan|repo-sentinel):[ \t]*ignore(?P<scope>-file|-start|-end)?"
     r"(?:\[(?P<rules>[^\]]*)\])?(?![\w-])"
 )
 
@@ -92,7 +97,7 @@ def marker(line: str) -> "tuple[str, frozenset] | None":
     # Every line of every file passes through here twice, and almost none of
     # them carry a directive. A substring test is an order of magnitude cheaper
     # than the pattern, and the pattern cannot match without it.
-    if "repo-sentinel" not in line:
+    if "bluerayscan" not in line and "repo-sentinel" not in line:
         return None
     match = _MARKER.search(line)
     if match is None:

@@ -27,7 +27,8 @@ from . import gitignore, rules
 from collections.abc import Iterable, Sequence
 
 #: Looked for beside the scanned tree when ``--config`` is not given.
-DEFAULT_PATH = ".repo-sentinel.json"
+DEFAULT_PATH = ".bluerayscan.json"
+LEGACY_PATH = ".repo-sentinel.json"
 
 #: Recognised keys, each mapping to the ``scan`` argument it supplies.
 #: Anything else is a typo, and a typo in a security tool's configuration
@@ -55,8 +56,12 @@ def find(root: str, explicit: "str | None") -> "str | None":
     """The config file to use: the one named, or the one beside the tree."""
     if explicit is not None:
         return explicit
-    candidate = os.path.join(root if os.path.isdir(root) else os.path.dirname(root) or ".", DEFAULT_PATH)
-    return candidate if os.path.isfile(candidate) else None
+    directory = root if os.path.isdir(root) else os.path.dirname(root) or "."
+    for name in (DEFAULT_PATH, LEGACY_PATH):
+        candidate = os.path.join(directory, name)
+        if os.path.isfile(candidate):
+            return candidate
+    return None
 
 
 def load(path: str) -> dict:
@@ -162,7 +167,7 @@ def path_scopes(settings: dict) -> "list[PathScope]":
 def disabled_matcher(patterns: 'Iterable[str]'):
     """The predicate for rules a project has switched off.
 
-    The syntax is :func:`repo_sentinel.rules.matcher`'s, shared with the
+    The syntax is :func:`bluerayscan.rules.matcher`'s, shared with the
     suppression markers, so that naming a rule means the same thing in a config
     file and in a comment.
     """

@@ -7,9 +7,9 @@ import tempfile
 import unittest
 
 import fixtures
-from repo_sentinel import cli
-from repo_sentinel.discovery import iter_files
-from repo_sentinel.findings import Severity
+from bluerayscan import cli
+from bluerayscan.discovery import iter_files
+from bluerayscan.findings import Severity
 
 
 @contextlib.contextmanager
@@ -162,14 +162,14 @@ class TestFileSizeLimit(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             self.repository(root)
             with open(
-                os.path.join(root, ".repo-sentinel.json"), "w", encoding="utf-8"
+                os.path.join(root, ".bluerayscan.json"), "w", encoding="utf-8"
             ) as handle:
                 handle.write('{"max_file_size": "4M"}')
             _, output = run(["scan", root])
         self.assertNotIn("larger than the size limit", output)
 
     def test_every_spelling_of_a_size(self):
-        from repo_sentinel.commands import _file_size_limit
+        from bluerayscan.commands import _file_size_limit
 
         self.assertEqual(_file_size_limit("1024"), 1024)
         self.assertEqual(_file_size_limit("2M"), 2 * 1024 * 1024)
@@ -238,28 +238,33 @@ class TestJsonScanFacts(unittest.TestCase):
     def test_it_counts_the_suppression_markers(self):
         with tempfile.TemporaryDirectory() as root:
             with open(os.path.join(root, "app.py"), "w", encoding="utf-8") as handle:
-                handle.write(f'K = "{fixtures.REALISTIC_AWS_KEY_ID}"  # repo-sentinel: ignore\n')
+                handle.write(f'K = "{fixtures.REALISTIC_AWS_KEY_ID}"  # bluerayscan: ignore\n')
             payload = self.scan(root)
         self.assertEqual(payload["scan"]["suppressed_lines"], 1)
         self.assertEqual(payload["finding_count"], 0)
 
 
 class TestModuleEntryPoint(unittest.TestCase):
-    """``python -m repo_sentinel`` is how the README says to run it."""
+    """``python -m bluerayscan`` is how the README says to run it."""
 
     def test_the_module_runs_the_cli_and_exits_with_its_code(self):
         import runpy
 
         argv = sys.argv
-        sys.argv = ["repo-sentinel", "rules", "SEC001"]
+        sys.argv = ["bluerayscan", "rules", "SEC001"]
         stdout = io.StringIO()
         try:
             with contextlib.redirect_stdout(stdout), self.assertRaises(SystemExit) as caught:
-                runpy.run_module("repo_sentinel", run_name="__main__")
+                runpy.run_module("bluerayscan", run_name="__main__")
         finally:
             sys.argv = argv
         self.assertEqual(caught.exception.code, 0)
         self.assertIn("SEC001", stdout.getvalue())
+
+    def test_the_legacy_import_package_still_resolves_submodules(self):
+        import repo_sentinel.cli as legacy_cli
+
+        self.assertEqual(legacy_cli.build_parser().prog, "bluerayscan")
 
 
 class TestFailThreshold(unittest.TestCase):
@@ -279,7 +284,7 @@ class TestFailThreshold(unittest.TestCase):
     def test_a_config_file_can_ask_for_it_too(self):
         with sample_repo() as root:
             with open(
-                os.path.join(root, ".repo-sentinel.json"), "w", encoding="utf-8"
+                os.path.join(root, ".bluerayscan.json"), "w", encoding="utf-8"
             ) as handle:
                 handle.write('{"fail_on": "none"}')
             code, output = run(["scan", root])
@@ -311,14 +316,14 @@ class TestInit(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             self.repository(root)
             code, output = run(["init", root])
-            config_path = os.path.join(root, ".repo-sentinel.json")
+            config_path = os.path.join(root, ".bluerayscan.json")
             with open(config_path, encoding="utf-8") as handle:
                 settings = json.load(handle)
         self.assertEqual(code, cli.EXIT_OK)
         self.assertEqual(settings["fail_on"], "high")
-        self.assertEqual(settings["baseline"], ".repo-sentinel-baseline.json")
-        self.assertIn("repo-sentinel", output)
-        self.assertIn("uses: KhanSaahib/repo-sentinel", output)
+        self.assertEqual(settings["baseline"], ".bluerayscan-baseline.json")
+        self.assertIn("bluerayscan", output)
+        self.assertIn("uses: KhanSaahib/bluerayscan", output)
 
     def test_the_repository_is_green_immediately_afterwards(self):
         # The point of the baseline is that the first pipeline run passes and
@@ -334,39 +339,39 @@ class TestInit(unittest.TestCase):
             with open(os.path.join(root, "README.md"), "w", encoding="utf-8") as handle:
                 handle.write("# nothing\n")
             run(["init", root])
-            self.assertTrue(os.path.exists(os.path.join(root, ".repo-sentinel.json")))
-            self.assertFalse(os.path.exists(os.path.join(root, ".repo-sentinel-baseline.json")))
+            self.assertTrue(os.path.exists(os.path.join(root, ".bluerayscan.json")))
+            self.assertFalse(os.path.exists(os.path.join(root, ".bluerayscan-baseline.json")))
 
     def test_existing_files_are_left_alone(self):
         with tempfile.TemporaryDirectory() as root:
             self.repository(root)
-            with open(os.path.join(root, ".repo-sentinel.json"), "w", encoding="utf-8") as handle:
+            with open(os.path.join(root, ".bluerayscan.json"), "w", encoding="utf-8") as handle:
                 handle.write('{"fail_on": "critical"}')
             _, output = run(["init", root])
-            with open(os.path.join(root, ".repo-sentinel.json"), encoding="utf-8") as handle:
+            with open(os.path.join(root, ".bluerayscan.json"), encoding="utf-8") as handle:
                 self.assertEqual(json.load(handle)["fail_on"], "critical")
         self.assertIn("exists already", output)
 
     def test_force_overwrites(self):
         with tempfile.TemporaryDirectory() as root:
             self.repository(root)
-            with open(os.path.join(root, ".repo-sentinel.json"), "w", encoding="utf-8") as handle:
+            with open(os.path.join(root, ".bluerayscan.json"), "w", encoding="utf-8") as handle:
                 handle.write('{"fail_on": "critical"}')
             run(["init", root, "--force"])
-            with open(os.path.join(root, ".repo-sentinel.json"), encoding="utf-8") as handle:
+            with open(os.path.join(root, ".bluerayscan.json"), encoding="utf-8") as handle:
                 self.assertEqual(json.load(handle)["fail_on"], "high")
 
     def test_no_baseline_records_nothing(self):
         with tempfile.TemporaryDirectory() as root:
             self.repository(root)
             run(["init", root, "--no-baseline"])
-            self.assertFalse(os.path.exists(os.path.join(root, ".repo-sentinel-baseline.json")))
+            self.assertFalse(os.path.exists(os.path.join(root, ".bluerayscan-baseline.json")))
 
     def test_a_snippet_for_each_ci_system_the_tool_can_read(self):
         wanted = {
             "azure-pipelines.yml": "PublishTestResults",
             os.path.join(".circleci", "config.yml"): "store_test_results",
-            "Jenkinsfile": "junit 'repo-sentinel.xml'",
+            "Jenkinsfile": "junit 'bluerayscan.xml'",
         }
         for marker, expected in wanted.items():
             with self.subTest(marker=marker), tempfile.TemporaryDirectory() as root:
@@ -392,7 +397,7 @@ class TestInit(unittest.TestCase):
             _, output = run(["init", root])
         self.assertIn("Most of it is:", output)
         self.assertIn("SEC001", output)
-        self.assertIn("repo-sentinel rules <id>", output)
+        self.assertIn("bluerayscan rules <id>", output)
 
     def test_one_rule_alone_needs_no_breakdown(self):
         with tempfile.TemporaryDirectory() as root:
@@ -457,7 +462,7 @@ class TestMarkdownOutput(unittest.TestCase):
         with sample_repo() as root:
             code, output = run(["scan", root, "--format", "markdown"])
         self.assertEqual(code, cli.EXIT_FINDINGS)
-        self.assertIn("### repo-sentinel:", output)
+        self.assertIn("### bluerayscan:", output)
         self.assertIn("| --- |", output)
 
 
@@ -702,7 +707,7 @@ class TestSuppressionVisibility(unittest.TestCase):
 
     def repository(self, root):
         with open(os.path.join(root, "Dockerfile"), "w", encoding="utf-8") as handle:
-            handle.write("FROM debian:latest  # repo-sentinel: ignore\nUSER app\n")
+            handle.write("FROM debian:latest  # bluerayscan: ignore\nUSER app\n")
 
     def test_the_markers_are_counted_even_when_obeyed(self):
         with tempfile.TemporaryDirectory() as root:

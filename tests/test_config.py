@@ -5,7 +5,7 @@ import os
 import tempfile
 import unittest
 
-from repo_sentinel import cli, config
+from bluerayscan import cli, config
 
 
 def write(root, payload):
@@ -64,6 +64,13 @@ class TestLoading(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             self.assertIsNone(config.find(root, None))
             path = write(root, {})
+            self.assertEqual(config.find(root, None), path)
+
+    def test_the_legacy_config_name_is_still_discovered(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = os.path.join(root, config.LEGACY_PATH)
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("{}")
             self.assertEqual(config.find(root, None), path)
 
 

@@ -1,6 +1,5 @@
-"""Allow ``python -m repo_sentinel``."""
+"""Keep ``python -m repo_sentinel`` working after the rename."""
 
-from .cli import main
+from bluerayscan.cli import main
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+raise SystemExit(main())

@@ -6,9 +6,9 @@ import tempfile
 import unittest
 
 import fixtures
-from repo_sentinel import cli
-from repo_sentinel.discovery import iter_files
-from repo_sentinel.gitignore import GitIgnoreFile, GitIgnoreStack
+from bluerayscan import cli
+from bluerayscan.discovery import iter_files
+from bluerayscan.gitignore import GitIgnoreFile, GitIgnoreStack
 
 
 def stack_for(*lines, base=""):

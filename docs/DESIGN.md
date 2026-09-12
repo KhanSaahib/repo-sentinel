@@ -183,7 +183,7 @@ you forgot.
 ## Suppression and configuration
 
 Three scopes of marker -- line, block, file -- each able to name the rules it
-means (`# repo-sentinel: ignore[K8S008]`). A configuration file supplies
+means (`# bluerayscan: ignore[K8S008]`). A configuration file supplies
 defaults, including rules disabled globally or under a glob.
 
 Two invariants hold across all of it:

@@ -177,7 +177,7 @@ def _count_markers(text: str) -> int:
     worse than no count. The substring test in front skips the whole per-line
     pass for the files that have no marker at all, which is almost all of them.
     """
-    if "repo-sentinel" not in text:
+    if "bluerayscan" not in text and "repo-sentinel" not in text:
         return 0
     return sum(1 for line in text.splitlines() if suppression.marker(line) is not None)
 

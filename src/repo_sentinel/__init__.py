@@ -1,5 +1,7 @@
-"""BlueRayScan: audit a repository for leaked secrets and insecure configuration."""
+"""Compatibility import for the former :mod:`repo_sentinel` package name."""
 
-__version__ = "0.3.0"
+from bluerayscan import __path__ as _bluerayscan_path
+from bluerayscan import __version__
 
+__path__ = _bluerayscan_path
 __all__ = ["__version__"]

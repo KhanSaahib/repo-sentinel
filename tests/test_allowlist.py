@@ -3,7 +3,7 @@ import json
 import unittest
 
 import fixtures
-from repo_sentinel.scanners import allowlist, secrets
+from bluerayscan.scanners import allowlist, secrets
 
 
 def jwt(header, payload, signature="c2lnbmF0dXJl"):

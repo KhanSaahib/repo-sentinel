@@ -184,7 +184,7 @@ _RULES = (
         # The rule's own advice names the thing it looks for, which is the
         # ordinary reason a scanner reports itself. Marked rather than
         # reworded: the sentence is clearer with the variable in it.
-        "NODE_TLS_REJECT_UNAUTHORIZED=0 disables verification for every "  # repo-sentinel: ignore[AP001]
+        "NODE_TLS_REJECT_UNAUTHORIZED=0 disables verification for every "  # bluerayscan: ignore[AP001]
         "connection the process makes, not the one that was failing. Node "
         "prints a warning about this for a reason.",
         hints=("node_tls_reject_unauthorized",),
@@ -234,7 +234,7 @@ _RULES = (
         "YAML is parsed into arbitrary Python objects",
         # The advice names the call, which is the ordinary reason a scanner
         # reports itself.
-        "yaml.load() without a Loader builds whatever the document names, "  # repo-sentinel: ignore[AP004]
+        "yaml.load() without a Loader builds whatever the document names, "  # bluerayscan: ignore[AP004]
         "which is remote code execution if the document came from anywhere "
         "but this repository. yaml.safe_load() is the same call without that.",
         Confidence.MEDIUM,

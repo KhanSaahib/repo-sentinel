@@ -9,10 +9,10 @@ labels: bug
 
 **What you ran**
 ```
-repo-sentinel scan ...
+bluerayscan scan ...
 ```
 
-**Version** <!-- repo-sentinel --version, or the commit -->
+**Version** <!-- bluerayscan --version, or the commit -->
 
 **Python version and platform**
 

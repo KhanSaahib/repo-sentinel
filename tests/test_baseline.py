@@ -5,8 +5,8 @@ import os
 import tempfile
 import unittest
 
-from repo_sentinel import baseline
-from repo_sentinel.findings import Finding, Severity
+from bluerayscan import baseline
+from bluerayscan.findings import Finding, Severity
 
 
 def finding(rule_id="SEC001", path="app.py", line=3, evidence="AKIA****LM3D"):

@@ -17,4 +17,4 @@ whether a heuristic survives contact with somebody else's code.
 
 - [ ] `PYTHONPATH=src python -m unittest discover -s tests`
 - [ ] `python3 tools/coverage.py`
-- [ ] The tool still reports nothing on itself: `repo-sentinel scan . --exclude tests`
+- [ ] The tool still reports nothing on itself: `bluerayscan scan . --exclude tests`

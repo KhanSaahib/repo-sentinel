@@ -8,10 +8,10 @@ would suppress itself the moment anyone pointed the scanner at it.
 import unittest
 
 import fixtures
-from repo_sentinel import suppression
-from repo_sentinel.scanners import secrets, workflows
+from bluerayscan import suppression
+from bluerayscan.scanners import secrets, workflows
 
-_MARK = "repo-sentinel:"
+_MARK = "bluerayscan:"
 LINE = f"# {_MARK} ignore"
 FILE = f"# {_MARK} ignore-file"
 START = f"# {_MARK} ignore-start"
@@ -44,6 +44,11 @@ class TestMarkerScope(unittest.TestCase):
     def test_optional_whitespace_after_the_colon(self):
         self.assertEqual(suppression.marker_scope(f"#{_MARK}ignore"), "line")
         self.assertEqual(suppression.marker_scope(f"#{_MARK}\tignore-start"), "start")
+
+    def test_the_legacy_project_name_remains_valid(self):
+        self.assertEqual(
+            suppression.marker_scope("# repo-sentinel: ignore[SEC001]"), "line"
+        )
 
 
 class TestParse(unittest.TestCase):
@@ -153,37 +158,37 @@ class TestRuleScopedMarkers(unittest.TestCase):
     """A marker that names its rules keeps the exemption as narrow as its reason."""
 
     def test_a_named_rule_is_suppressed_and_others_are_not(self):
-        marks = suppression.parse("x = 1  # repo-sentinel: ignore[SEC100]\n")
+        marks = suppression.parse("x = 1  # bluerayscan: ignore[SEC100]\n")
         self.assertTrue(marks.suppresses(1, "SEC100"))
         self.assertFalse(marks.suppresses(1, "SEC001"))
 
     def test_several_rules_can_be_named(self):
-        marks = suppression.parse("x = 1  # repo-sentinel: ignore[SEC100, DK002]\n")
+        marks = suppression.parse("x = 1  # bluerayscan: ignore[SEC100, DK002]\n")
         self.assertTrue(marks.suppresses(1, "DK002"))
         self.assertTrue(marks.suppresses(1, "SEC100"))
         self.assertFalse(marks.suppresses(1, "WF001"))
 
     def test_a_family_prefix_works(self):
-        marks = suppression.parse("x = 1  # repo-sentinel: ignore[K8S*]\n")
+        marks = suppression.parse("x = 1  # bluerayscan: ignore[K8S*]\n")
         self.assertTrue(marks.suppresses(1, "K8S004"))
         self.assertFalse(marks.suppresses(1, "SEC001"))
 
     def test_an_unqualified_marker_still_silences_everything(self):
-        marks = suppression.parse("x = 1  # repo-sentinel: ignore\n")
+        marks = suppression.parse("x = 1  # bluerayscan: ignore\n")
         self.assertTrue(marks.suppresses(1))
         self.assertTrue(marks.suppresses(1, "SEC001"))
 
     def test_a_qualified_marker_does_not_answer_an_unqualified_question(self):
         # "Is this line exempt from everything?" cannot be answered yes by a
         # marker that named one rule.
-        marks = suppression.parse("x = 1  # repo-sentinel: ignore[SEC100]\n")
+        marks = suppression.parse("x = 1  # bluerayscan: ignore[SEC100]\n")
         self.assertFalse(marks.suppresses(1))
 
     def test_a_scoped_block_covers_its_range_for_that_rule_only(self):
         text = (
-            "# repo-sentinel: ignore-start[SEC100]\n"
+            "# bluerayscan: ignore-start[SEC100]\n"
             "a = 1\n"
-            "# repo-sentinel: ignore-end\n"
+            "# bluerayscan: ignore-end\n"
             "b = 2\n"
         )
         marks = suppression.parse(text)
@@ -192,15 +197,15 @@ class TestRuleScopedMarkers(unittest.TestCase):
         self.assertFalse(marks.suppresses(4, "SEC100"))
 
     def test_a_scoped_file_marker_covers_every_line_for_that_rule(self):
-        marks = suppression.parse("# repo-sentinel: ignore-file[DK002]\nFROM debian\n")
+        marks = suppression.parse("# bluerayscan: ignore-file[DK002]\nFROM debian\n")
         self.assertFalse(marks.whole_file)
         self.assertTrue(marks.suppresses(99, "DK002"))
         self.assertFalse(marks.suppresses(99, "DK001"))
 
     def test_findings_are_filtered_by_rule(self):
-        from repo_sentinel.findings import Finding, Severity
+        from bluerayscan.findings import Finding, Severity
 
-        marks = suppression.parse("x = 1  # repo-sentinel: ignore[SEC100]\n")
+        marks = suppression.parse("x = 1  # bluerayscan: ignore[SEC100]\n")
         findings = [
             Finding("SEC100", Severity.HIGH, "t", "a.py", 1),
             Finding("SEC001", Severity.CRITICAL, "t", "a.py", 1),
@@ -210,7 +215,7 @@ class TestRuleScopedMarkers(unittest.TestCase):
         )
 
     def test_a_mistyped_scope_still_matches_nothing(self):
-        self.assertIsNone(suppression.marker("x = 1  # repo-sentinel: ignore-fil[SEC001]"))
+        self.assertIsNone(suppression.marker("x = 1  # bluerayscan: ignore-fil[SEC001]"))
 
 
 if __name__ == "__main__":

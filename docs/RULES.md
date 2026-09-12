@@ -1,7 +1,7 @@
 # Rules
 
-Every check repo-sentinel makes, what it is looking for, and why that thing is
-worth a build failure. `repo-sentinel rules` prints the same list from the tool
+Every check bluerayscan makes, what it is looking for, and why that thing is
+worth a build failure. `bluerayscan rules` prints the same list from the tool
 itself, with `--format json` if you want to diff it between releases.
 
 The test suite asserts that this file, the rule catalogue in `rules.py` and the
@@ -11,7 +11,7 @@ For what the severity and confidence columns mean, see
 [Severity and confidence](../README.md#severity-and-confidence) in the README.
 
 Every rule also names the weakness it reports, as a CWE identifier:
-`repo-sentinel rules --format json` carries it, and the SARIF output puts it in
+`bluerayscan rules --format json` carries it, and the SARIF output puts it in
 each rule's tags so the Security tab can group by it. It is a claim rather than
 a decoration -- five CI systems share CWE-78, and "unpinned" is CWE-1357
 whether it is an action, an orb, a base image or a dependency. SEC900 has no
@@ -163,7 +163,7 @@ test that once talked to a real service.
 That is a deliberate trade and it has a cost: a project whose tests need TLS
 commits a key per case, and Spring Boot has a hundred and twenty-six of them.
 They are real private keys, so SEC004 says so; what makes that liveable is the
-baseline -- `repo-sentinel init` records them once and every later run is about
+baseline -- `bluerayscan init` records them once and every later run is about
 new ones -- or a per-path rule in the config, which is the honest way to say
 "not here":
 

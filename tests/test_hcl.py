@@ -2,7 +2,7 @@
 
 import unittest
 
-from repo_sentinel import hcl
+from bluerayscan import hcl
 
 
 class TestStripping(unittest.TestCase):

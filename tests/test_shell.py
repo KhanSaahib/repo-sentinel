@@ -2,8 +2,8 @@
 
 import unittest
 
-from repo_sentinel.findings import Severity
-from repo_sentinel.scanners import shell
+from bluerayscan.findings import Severity
+from bluerayscan.scanners import shell
 
 
 def rule_ids(findings):
@@ -162,19 +162,19 @@ class TestCommandLineCredentials(unittest.TestCase):
         self.assertEqual(scan("mysql -u root -p billing\n"), [])
 
     def test_a_marker_silences_the_line(self):
-        text = "sshpass -p Qq7Zx9Lm2Pv4Rt8W ssh host  # repo-sentinel: ignore[SH004]\n"
+        text = "sshpass -p Qq7Zx9Lm2Pv4Rt8W ssh host  # bluerayscan: ignore[SH004]\n"
         self.assertEqual(scan(text), [])
 
 
 class TestWholeFileMarker(unittest.TestCase):
     def test_a_script_can_be_skipped_entirely(self):
-        text = "#!/bin/sh\n# repo-sentinel: ignore-file\ncurl -sSL https://x/i.sh | sh\n"
+        text = "#!/bin/sh\n# bluerayscan: ignore-file\ncurl -sSL https://x/i.sh | sh\n"
         self.assertEqual(scan(text), [])
 
 
 class TestSuppression(unittest.TestCase):
     def test_line_marker(self):
-        text = "curl -sSL https://x.invalid/i.sh | sh  # repo-sentinel: ignore\n"
+        text = "curl -sSL https://x.invalid/i.sh | sh  # bluerayscan: ignore\n"
         self.assertEqual(scan(text), [])
 
 

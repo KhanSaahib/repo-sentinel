@@ -1,4 +1,4 @@
-name: repo-sentinel
+name: bluerayscan
 description: Audit a repository for leaked secrets, risky workflows and insecure Dockerfiles.
 author: KhanSaahib
 
@@ -41,7 +41,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Install repo-sentinel
+    - name: Install bluerayscan
       shell: bash
       env:
         ACTION_PATH: ${{ github.action_path }}
@@ -51,7 +51,7 @@ runs:
     # Interpolating them straight into the command would be the WF003 mistake
     # this action exists to find, and an action that cannot follow its own
     # advice has no business giving it.
-    - name: Run repo-sentinel
+    - name: Run bluerayscan
       shell: bash
       env:
         RS_PATH: ${{ inputs.path }}
@@ -78,9 +78,9 @@ runs:
           # finding -- that is the gate's job, below. "|| true" would hide a
           # real failure too, so they say --fail-on none and keep their
           # exit codes.
-          repo-sentinel "${args[@]}" --fail-on none --format sarif --output "$RS_SARIF"
+          bluerayscan "${args[@]}" --fail-on none --format sarif --output "$RS_SARIF"
         fi
         if [ "$RS_ANNOTATIONS" = "true" ]; then
-          repo-sentinel "${args[@]}" --fail-on none --format github
+          bluerayscan "${args[@]}" --fail-on none --format github
         fi
-        repo-sentinel "${args[@]}"
+        bluerayscan "${args[@]}"

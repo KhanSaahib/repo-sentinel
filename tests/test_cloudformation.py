@@ -2,8 +2,8 @@
 
 import unittest
 
-from repo_sentinel.findings import Severity
-from repo_sentinel.scanners import cloudformation
+from bluerayscan.findings import Severity
+from bluerayscan.scanners import cloudformation
 
 
 def rule_ids(findings):
@@ -228,7 +228,7 @@ class TestSuppression(unittest.TestCase):
     def test_line_marker(self):
         text = template(
             "  B:\n    Type: AWS::S3::Bucket\n    Properties:\n"
-            "      AccessControl: PublicRead  # repo-sentinel: ignore\n"
+            "      AccessControl: PublicRead  # bluerayscan: ignore\n"
         )
         self.assertEqual(scan(text), [])
 

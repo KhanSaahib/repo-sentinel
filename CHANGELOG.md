@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to repo-sentinel. This project follows [semantic
+All notable changes to BlueRayScan. This project follows [semantic
 versioning](https://semver.org/); until 1.0 the minor number carries breaking
 changes.
 
@@ -12,7 +12,7 @@ last of them is the first that reads code rather than configuration.
 
 The PyPI distribution and primary executable are now named `bluerayscan`.
 `repo-sentinel` remains available as a compatibility command, and the Python
-import package remains `repo_sentinel`.
+import package remains `bluerayscan`.
 
 ### Added
 

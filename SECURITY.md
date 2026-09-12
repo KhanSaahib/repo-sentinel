@@ -7,7 +7,7 @@ This project is pre-1.0. Only the latest commit on `main` is supported.
 ## Reporting a vulnerability
 
 Please report vulnerabilities privately through
-[GitHub Security Advisories](https://github.com/KhanSaahib/repo-sentinel/security/advisories/new)
+[GitHub Security Advisories](https://github.com/KhanSaahib/bluerayscan/security/advisories/new)
 rather than opening a public issue.
 
 Include what you can: affected version or commit, reproduction steps, and what
@@ -17,7 +17,7 @@ Please do not test against systems you do not own.
 
 ## Threat model
 
-repo-sentinel reads files and writes a report. It makes no network calls, runs
+bluerayscan reads files and writes a report. It makes no network calls, runs
 no code it finds, and has no runtime dependencies. The realistic risks are:
 
 - **Leaking through the report.** Findings are pasted into CI logs and issues.

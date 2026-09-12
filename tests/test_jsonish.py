@@ -2,7 +2,7 @@
 
 import unittest
 
-from repo_sentinel import jsonish
+from bluerayscan import jsonish
 
 
 class TestParsing(unittest.TestCase):
