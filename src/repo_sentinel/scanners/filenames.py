@@ -69,6 +69,18 @@ _ALWAYS_CREDENTIALS = {
     "kubeconfig": "cluster credentials",
 }
 
+#: Password managers, by the extension of the file they keep everything in.
+#: Encrypted, which is why this is not critical -- and offline, which is why it
+#: is not low: a committed vault is an unlimited number of guesses at one
+#: master password, with every credential the owner has behind it.
+_PASSWORD_DATABASES = {
+    ".kdbx": "every password its owner keeps, behind one master password",
+    ".kdb": "every password its owner keeps, behind one master password",
+    ".psafe3": "every password its owner keeps, behind one master password",
+    ".opvault": "a 1Password vault",
+    ".agilekeychain": "a 1Password keychain",
+}
+
 #: Files that often hold a credential and just as often hold configuration.
 #: An .npmrc saying "ignore-scripts=true" is not a leak; a committed .env of
 #: documented defaults is a template. For these the contents decide, and the
@@ -244,6 +256,27 @@ def scan_name(path: str, text: "str | None" = None) -> "Iterator[Finding]":
                 "A shell or client history includes every password that was "
                 "passed on a command line. Remove it, and rotate anything the "
                 "commands in it used."
+            ),
+        )
+        return
+
+    vault = next(
+        (what for suffix, what in _PASSWORD_DATABASES.items() if lowered.endswith(suffix)),
+        None,
+    )
+    if vault is not None:
+        yield Finding(
+            rule_id="FN003",
+            severity=Severity.HIGH,
+            title=f"{name} is a password database, holding {vault}",
+            path=normalised,
+            line=1,
+            evidence=f"file named {name!r}",
+            remediation=(
+                "The file is encrypted, and committing it turns one master "
+                "password into the only thing between a reader and everything "
+                "in it -- with unlimited offline guesses. Remove it, rotate "
+                "what it held, and keep the vault out of version control."
             ),
         )
         return

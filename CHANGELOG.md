@@ -189,6 +189,10 @@ last of them is the first that reads code rather than configuration.
   `git` dependency carries a `rev` or a `tag`; without one it installs whatever
   the default branch holds at build time. No TOML parser behind it -- `tomllib`
   arrived in 3.11 and this runs on 3.9.
+- **A committed password database is a finding on its name**: `.kdbx`,
+  `.kdb`, `.psafe3`, `.opvault`, `.agilekeychain`. Encrypted, so not critical;
+  offline once committed, so not low -- unlimited guesses at one master
+  password, with everything its owner keeps behind it.
 - **A chart's values file is read**, where a `Chart.yaml` sits beside it.
   `privileged: true` under a `securityContext` means the same thing in values
   as in a manifest, and that is where most Kubernetes settings actually live --

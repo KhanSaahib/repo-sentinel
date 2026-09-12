@@ -199,7 +199,7 @@ auditing what the scanner chose not to tell you.
 | --- | --- | --- |
 | FN001 | A file that is private key material by name | critical for `id_rsa`, high for a keystore |
 | FN002 | A key-shaped file nothing could read | medium |
-| FN003 | A file whose purpose is to hold a credential | medium |
+| FN003 | A file whose purpose is to hold a credential | medium, high for a password database |
 | FN004 | A file that records secrets as a side effect | critical for Terraform state |
 
 Every other rule here reads text, which makes them all blind to the files that
@@ -221,6 +221,11 @@ the finding. `.npmrc`, `.pypirc`, `.env` and `terraform.tfvars` are judged on
 what is in them: an `.npmrc` saying `ignore-scripts=true` is not a leak, and a
 committed `.env` of documented defaults is a template. Both of those were real
 false positives, measured against a public repository of Compose examples.
+
+A password database -- `.kdbx`, `.psafe3`, a 1Password vault -- is the same rule
+at high severity. The file is encrypted, which is why it is not critical, and
+it is offline once committed, which is why it is not low: unlimited guesses at
+one master password, with every credential its owner has behind it.
 
 Files under `fixtures/` or `testdata/` are reported at low confidence rather
 than not at all. And `.example`, `.sample`, `.template` and `.dist` suffixes are

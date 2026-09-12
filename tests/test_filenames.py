@@ -85,6 +85,24 @@ class TestCredentialFiles(unittest.TestCase):
                 self.assertEqual(scan(name, self.SECRET), [])
 
 
+class TestPasswordDatabases(unittest.TestCase):
+    """A committed vault is one master password away from everything."""
+
+    def test_a_keepass_database_is_reported_by_name(self):
+        findings = scan("ops/secrets.kdbx")
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].rule_id, "FN003")
+        self.assertEqual(findings[0].severity, Severity.HIGH)
+
+    def test_the_other_vault_formats(self):
+        for path in ("team.psafe3", "personal.opvault", "old.agilekeychain", "legacy.kdb"):
+            with self.subTest(path=path):
+                self.assertIn("FN003", rule_ids(scan(path)))
+
+    def test_a_file_that_merely_mentions_one_is_not_one(self):
+        self.assertEqual(scan("docs/how-we-use-keepass.md", "kdbx files stay out\n"), [])
+
+
 class TestByproducts(unittest.TestCase):
     """Files that hold secrets as a side effect of what they are."""
 
