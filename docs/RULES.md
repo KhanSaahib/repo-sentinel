@@ -507,6 +507,7 @@ appears", which is a smaller claim than "this code verifies certificates".
 | TF005 | Managed database given a public endpoint | high |
 | TF006 | Terraform state stored without encryption | medium |
 | TF007 | Service accepts unencrypted connections | high |
+| TF008 | Policy names every principal, or every account | high |
 
 These read block structure rather than lines, through a small HCL reader that
 knows a line ending in `{` opens a block and that braces inside strings,
@@ -526,6 +527,14 @@ What none of this can do is evaluate Terraform. A CIDR arriving through a
 variable, a `for_each` over a map of rules, a module whose defaults live
 somewhere else: all invisible. A clean report means the literal, obvious form
 of each mistake is absent.
+
+TF008 is TF004's other half. TF004 says the principal may do anything; TF008
+says anybody may be the principal -- `identifiers = ["*"]`, or `"Principal":
+"*"` in a JSON policy. On a role's trust policy that is any AWS account
+assuming the role; on a bucket or a key policy it is any account using it. Both
+spellings are read, and the JSON one is reported at medium confidence for the
+same reason TF004's is: it is matched on the raw text of a heredoc the parser
+deliberately did not enter.
 
 ## Ansible
 

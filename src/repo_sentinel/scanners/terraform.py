@@ -449,6 +449,67 @@ def _check_wildcard_policy(path: str, block: "hcl.Block") -> "Iterator[Finding]"
             )
 
 
+def _check_public_principal(path: str, block: "hcl.Block") -> "Iterator[Finding]":
+    """TF008: a policy that names everybody as the principal.
+
+    ``principals { type = "AWS" identifiers = ["*"] }`` in an Allow statement
+    is a different mistake from TF004's wildcard action: that one says the
+    principal may do anything, this one says anybody may be the principal. On
+    a role's trust policy it means any AWS account can assume the role; on a
+    bucket or a key policy it means any AWS account can use it.
+    """
+    for statement in block.walk():
+        effect = (statement.attribute("effect") or (0, '"Allow"'))[1].strip('"')
+        if effect.lower() != "allow":
+            continue
+        for principals in statement.blocks("principals"):
+            identifiers = principals.attribute("identifiers")
+            if identifiers is None or "*" not in _strings(identifiers[1]):
+                continue
+            kind = (principals.attribute("type") or (0, '"AWS"'))[1].strip('"')
+            yield Finding(
+                rule_id="TF008",
+                severity=Severity.HIGH,
+                title=f"{block.label()} allows any {kind} principal",
+                path=path,
+                line=identifiers[0],
+                evidence=f'type = "{kind}", identifiers = ["*"]',
+                remediation=(
+                    "Anybody is the principal here: on a role's trust policy "
+                    "that is any AWS account assuming the role, and on a "
+                    "bucket or key policy it is any account using it. Name the "
+                    "accounts, or add a condition that narrows it -- an "
+                    "aws:PrincipalOrgID or a source account."
+                ),
+            )
+
+
+_JSON_PUBLIC_PRINCIPAL = re.compile(
+    r'"Principal"\s*:\s*(?:"\*"|\{\s*"AWS"\s*:\s*(?:"\*"|\[\s*"\*"\s*\])\s*\})',
+    re.IGNORECASE,
+)
+
+
+def _check_json_principals(path: str, text: str) -> "Iterator[Finding]":
+    """TF008 again, for the policies written as JSON inside a heredoc."""
+    for match in _JSON_PUBLIC_PRINCIPAL.finditer(text):
+        line = text.count("\n", 0, match.start()) + 1
+        yield Finding(
+            rule_id="TF008",
+            severity=Severity.HIGH,
+            title="Inline policy allows any principal",
+            path=path,
+            line=line,
+            evidence='"Principal": "*"',
+            remediation=(
+                "Anybody is the principal here. Name the accounts, or add a "
+                "condition that narrows it. A trust policy written this way "
+                "lets any AWS account assume the role."
+            ),
+            confidence=Confidence.MEDIUM,
+        )
+
+
 _JSON_WILDCARD = re.compile(
     r'"Action"\s*:\s*(?:"\*"|\[\s*"\*"\s*\])(?P<gap>[^{}]*?)"Resource"\s*:\s*(?:"\*"|\[\s*"\*"\s*\])',
     re.IGNORECASE | re.DOTALL,
@@ -528,8 +589,10 @@ def scan_terraform(
         findings.extend(_check_transport(path, block))
         findings.extend(_check_public_database(path, block))
         findings.extend(_check_wildcard_policy(path, block))
+        findings.extend(_check_public_principal(path, block))
 
     findings.extend(_check_json_policies(path, text))
+    findings.extend(_check_json_principals(path, text))
     return marks.filter_findings(findings)
 
 

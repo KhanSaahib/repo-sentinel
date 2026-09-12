@@ -311,6 +311,81 @@ class TestPolicies(unittest.TestCase):
         self.assertEqual(findings[0].line, 4)
 
 
+class TestPublicPrincipals(unittest.TestCase):
+    """TF008: anybody may be the principal, which is not TF004's question."""
+
+    def document(self, statement):
+        return 'data "aws_iam_policy_document" "trust" {\n' + statement + "}\n"
+
+    def test_a_wildcard_principal_is_reported(self):
+        findings = scan(
+            self.document(
+                "  statement {\n"
+                '    actions = ["sts:AssumeRole"]\n'
+                "    principals {\n"
+                '      type        = "AWS"\n'
+                '      identifiers = ["*"]\n'
+                "    }\n"
+                "  }\n"
+            )
+        )
+        finding = next(f for f in findings if f.rule_id == "TF008")
+        self.assertEqual(finding.severity, Severity.HIGH)
+        self.assertIn("AWS", finding.title)
+
+    def test_a_named_account_is_not_reported(self):
+        findings = scan(
+            self.document(
+                "  statement {\n"
+                "    principals {\n"
+                '      type        = "AWS"\n'
+                '      identifiers = ["arn:aws:iam::123456789012:root"]\n'
+                "    }\n"
+                "  }\n"
+            )
+        )
+        self.assertNotIn("TF008", rule_ids(findings))
+
+    def test_a_deny_statement_is_not_a_grant(self):
+        findings = scan(
+            self.document(
+                "  statement {\n"
+                '    effect = "Deny"\n'
+                "    principals {\n"
+                '      type        = "AWS"\n'
+                '      identifiers = ["*"]\n'
+                "    }\n"
+                "  }\n"
+            )
+        )
+        self.assertNotIn("TF008", rule_ids(findings))
+
+    def test_the_json_spelling_inside_a_heredoc(self):
+        text = (
+            'resource "aws_iam_role" "runner" {\n'
+            "  assume_role_policy = <<EOF\n"
+            '{"Statement": [{"Effect": "Allow", "Principal": {"AWS": "*"},\n'
+            '  "Action": "sts:AssumeRole"}]}\n'
+            "EOF\n"
+            "}\n"
+        )
+        findings = [f for f in scan(text) if f.rule_id == "TF008"]
+        self.assertEqual(len(findings), 1)
+        self.assertLess(findings[0].confidence, findings[0].confidence.HIGH)
+
+    def test_a_service_principal_is_still_named(self):
+        # "Principal": {"Service": "lambda.amazonaws.com"} is how half of AWS
+        # works, and is not anybody.
+        text = (
+            'resource "aws_iam_role" "runner" {\n'
+            "  assume_role_policy = <<EOF\n"
+            '{"Statement": [{"Principal": {"Service": "lambda.amazonaws.com"}}]}\n'
+            "EOF\n"
+            "}\n"
+        )
+        self.assertNotIn("TF008", rule_ids(scan(text)))
+
+
 class TestDatabasesAndState(unittest.TestCase):
     def test_public_database(self):
         self.assertIn(

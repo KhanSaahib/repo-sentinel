@@ -178,6 +178,16 @@ data "aws_iam_policy_document" "admin" {
     resources = ["*"]
   }
 }
+
+data "aws_iam_policy_document" "trust" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
+  }
+}
 """
 
 MANIFEST_FILE = """apiVersion: apps/v1
