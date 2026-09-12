@@ -40,11 +40,14 @@ cd repo-sentinel
 pip install .
 ```
 
-Or from a tag, without a checkout:
+Or straight from the repository, without a checkout:
 
 ```bash
-pip install git+https://github.com/KhanSaahib/repo-sentinel@v0.3.0
+pip install git+https://github.com/KhanSaahib/repo-sentinel@main
 ```
+
+Once a release is tagged, `@v0.3.0` works the same way and is the better
+choice: a tag is a decision, and `main` is whatever was merged this morning.
 
 Or run it straight from a checkout, with no install at all:
 
