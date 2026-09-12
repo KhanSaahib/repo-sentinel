@@ -89,6 +89,7 @@ better outcome than a feature nobody wanted.
 - [x] Issue templates, CONTRIBUTING.md, SECURITY.md
 - [x] Benchmark against large repositories: the Python standard library went
       5.1s → 1.3s, Prometheus a five-minute timeout → 3.7s
-- [ ] A fixed corpus of real repositories pinned by commit, so a heuristic
-      change can be measured rather than argued about
+- [x] A fixed corpus of real repositories pinned by commit, so a heuristic
+      change can be measured rather than argued about (`tools/corpus.json`,
+      `measure.py --fetch/--save/--compare`)
 - [ ] Enable CodeQL default setup and branch protection on `main`

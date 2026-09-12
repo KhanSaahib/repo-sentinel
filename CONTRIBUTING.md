@@ -110,13 +110,24 @@ Before changing a heuristic, point the tool at a few trees and read every
 finding:
 
 ```bash
-python3 tools/measure.py --sample 3 ~/corpora/*
+python3 tools/measure.py --fetch ~/corpora            # the pinned corpus
+python3 tools/measure.py --corpus ~/corpora --save before.json
+# ...change the heuristic...
+python3 tools/measure.py --corpus ~/corpora --compare before.json
 ```
 
-`tools/measure.py` lists the corpus it was written for -- a Compose examples
-repository, Prometheus, a Helm chart monorepo, a Terraform module, and two
-deliberately vulnerable repositories that measure the other direction: what the
-rules fail to notice.
+`tools/corpus.json` is the corpus, pinned to the commit each repository was
+measured at, with a line saying what each is there for: a clean Go repository
+as the false-positive floor, a Ruby monolith with a translated interface, an
+OAuth implementation whose constants are named after passwords, a Helm chart,
+a Django codebase, and two deliberately vulnerable repositories that measure
+the other direction -- what the rules fail to notice.
+
+Pinning is what makes the comparison mean something. A filter that removes
+1,400 findings and costs nothing is a different thing from one that removes
+1,400 findings and takes a real one with it, and a total hides the difference.
+Add a repository to the corpus when it teaches you something the others do not,
+and pin it to the commit you read.
 
 Every false positive fixed this way is worth a line in the commit message
 saying which repository produced it and what the value actually was. "A YAML
