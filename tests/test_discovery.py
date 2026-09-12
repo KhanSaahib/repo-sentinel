@@ -48,6 +48,10 @@ class TestWalk(unittest.TestCase):
 class TestUnreadablePaths(unittest.TestCase):
     """Skipped either way; the question is whether anybody is told."""
 
+    @unittest.skipIf(
+        os.name == "nt",
+        "Windows ignores a directory mode of 0, so there is nothing to be denied",
+    )
     def test_a_directory_that_cannot_be_opened_is_reported(self):
         import stat
 

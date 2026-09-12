@@ -374,6 +374,10 @@ class TestRunSummary(unittest.TestCase):
             _, output = run(["scan", root])
         self.assertIn("file(s) in", output)
 
+    @unittest.skipIf(
+        os.name == "nt",
+        "Windows ignores a directory mode of 0, so there is nothing to be denied",
+    )
     def test_a_directory_that_could_not_be_read_is_named(self):
         import stat
 
@@ -398,6 +402,10 @@ class TestRunSummary(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertNotIn("No findings", output)
 
+    @unittest.skipIf(
+        os.name == "nt",
+        "Windows ignores a directory mode of 0, so there is nothing to be denied",
+    )
     def test_a_root_that_cannot_be_read_is_named_by_the_path_given(self):
         import stat
 
