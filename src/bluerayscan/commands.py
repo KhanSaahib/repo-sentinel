@@ -579,6 +579,19 @@ def init_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
                 f"Recorded {len(at_or_above)} finding(s) in "
                 f"{baseline_module.DEFAULT_PATH}. It is a list of debts: shrink it."
             )
+            # A baseline makes what is already committed invisible, which is
+            # what it is for and also its one danger: a credential in the
+            # working tree is usually in history too, and one that is in
+            # history is public whatever the working tree says later. This is
+            # the moment to say so -- the person running init is the person
+            # who has not looked yet.
+            if any(finding.rule_id.startswith("SEC") for finding in at_or_above):
+                print(
+                    "\nSome of those are credentials. A baseline hides them from "
+                    "the pipeline; it does not take them back. Check whether they "
+                    "are already public:\n\n"
+                    "  git log -p --date=iso | bluerayscan history"
+                )
 
     if os.path.exists(config_path) and not args.force:
         print(f"{config_module.DEFAULT_PATH} exists already; left alone.")
