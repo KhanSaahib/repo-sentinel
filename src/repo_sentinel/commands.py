@@ -263,9 +263,10 @@ def _write_baseline(path: str, findings: "list[Finding]") -> int:
     return EXIT_OK
 
 
-#: Both snippets use a git reference rather than a package index, because that
-#: is what actually works today, and both say to pin -- a tool whose own
-#: getting-started copy trips WF001 has a credibility problem.
+#: Every snippet uses a git reference rather than a package index, because that
+#: is what actually works today, and the ones that call an action say to pin --
+#: a tool whose own getting-started copy trips WF001 has a credibility problem.
+#: Four of the five ask for JUnit, because those four CI systems draw it.
 _ACTIONS_SNIPPET = """\
 # .github/workflows/repo-sentinel.yml
 name: repo-sentinel
@@ -295,6 +296,76 @@ repo-sentinel:
     reports:
       junit: repo-sentinel.xml
 """
+
+_INSTALL = "pip install git+https://github.com/KhanSaahib/repo-sentinel@main"
+
+_AZURE_SNIPPET = f"""\
+# azure-pipelines.yml
+steps:
+  - script: |
+      {_INSTALL}
+      repo-sentinel scan . --format junit --output repo-sentinel.xml
+    displayName: repo-sentinel
+  - task: PublishTestResults@2
+    condition: always()
+    inputs:
+      testResultsFiles: repo-sentinel.xml
+"""
+
+_CIRCLECI_SNIPPET = f"""\
+# .circleci/config.yml
+jobs:
+  repo-sentinel:
+    docker:
+      - image: cimg/python:3.13
+    steps:
+      - checkout
+      - run: {_INSTALL}
+      - run: mkdir -p test-results
+      - run: repo-sentinel scan . --format junit --output test-results/repo-sentinel.xml
+      - store_test_results:
+          path: test-results
+"""
+
+_JENKINS_SNIPPET = f"""\
+// Jenkinsfile
+stage('repo-sentinel') {{
+  steps {{
+    sh '{_INSTALL}'
+    sh 'repo-sentinel scan . --format junit --output repo-sentinel.xml'
+  }}
+  post {{
+    always {{
+      junit 'repo-sentinel.xml'
+    }}
+  }}
+}}
+"""
+
+#: Which file says a repository uses which CI, worst-guess last. GitHub is at
+#: the end because .github/ exists in repositories that run their pipelines
+#: somewhere else entirely, and because it is the fallback anyway.
+_CI_SYSTEMS = (
+    (os.path.join(".github", "workflows"), _ACTIONS_SNIPPET),
+    (".gitlab-ci.yml", _GITLAB_SNIPPET),
+    ("azure-pipelines.yml", _AZURE_SNIPPET),
+    (os.path.join(".circleci", "config.yml"), _CIRCLECI_SNIPPET),
+    ("Jenkinsfile", _JENKINS_SNIPPET),
+)
+
+
+def _ci_snippet(root: str) -> str:
+    """The snippet for the CI system this repository already has.
+
+    Suggesting GitHub Actions to a project that runs GitLab is how a
+    getting-started section gets skipped. GitHub wins a tie only because it is
+    also the fallback: a repository with both has a .github directory that may
+    hold nothing but issue templates.
+    """
+    for marker, snippet in _CI_SYSTEMS:
+        if os.path.exists(os.path.join(root, marker)):
+            return snippet
+    return _ACTIONS_SNIPPET
 
 
 def init_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
@@ -346,15 +417,8 @@ def init_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
         print(f"Wrote {config_module.DEFAULT_PATH}.")
 
     print("\nAdd this to your pipeline:\n")
-    print(_GITLAB_SNIPPET if _uses_gitlab(root) else _ACTIONS_SNIPPET)
+    print(_ci_snippet(root))
     return EXIT_OK
-
-
-def _uses_gitlab(root: str) -> bool:
-    """Suggest the CI system the repository already has, not the popular one."""
-    return os.path.exists(os.path.join(root, ".gitlab-ci.yml")) and not os.path.isdir(
-        os.path.join(root, ".github", "workflows")
-    )
 
 
 def rules_command(args: argparse.Namespace) -> int:

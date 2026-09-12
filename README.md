@@ -41,7 +41,9 @@ repo-sentinel init .
 That scans the repository, tells you what is in it, records the findings at or
 above `high` as a baseline so your first pipeline run is green, writes a
 `.repo-sentinel.json`, and prints the CI snippet for whichever CI system the
-repository already has. Nothing is overwritten without `--force`.
+repository already has -- GitHub Actions, GitLab, Azure Pipelines, CircleCI or
+Jenkins, the last four wired to draw the report rather than print it. Nothing
+is overwritten without `--force`.
 
 Then, day to day:
 

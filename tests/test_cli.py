@@ -196,6 +196,22 @@ class TestInit(unittest.TestCase):
             run(["init", root, "--no-baseline"])
             self.assertFalse(os.path.exists(os.path.join(root, ".repo-sentinel-baseline.json")))
 
+    def test_a_snippet_for_each_ci_system_the_tool_can_read(self):
+        wanted = {
+            "azure-pipelines.yml": "PublishTestResults",
+            os.path.join(".circleci", "config.yml"): "store_test_results",
+            "Jenkinsfile": "junit 'repo-sentinel.xml'",
+        }
+        for marker, expected in wanted.items():
+            with self.subTest(marker=marker), tempfile.TemporaryDirectory() as root:
+                self.repository(root)
+                target = os.path.join(root, marker)
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                with open(target, "w", encoding="utf-8") as handle:
+                    handle.write("# pipeline\n")
+                _, output = run(["init", root])
+                self.assertIn(expected, output)
+
     def test_the_snippet_matches_the_ci_system_the_repository_has(self):
         with tempfile.TemporaryDirectory() as root:
             self.repository(root)

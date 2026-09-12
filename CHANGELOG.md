@@ -180,6 +180,10 @@ last of them is the first that reads code rather than configuration.
   of every credential the repository holds. Medium confidence when the call is
   pinned to a SHA, which at least fixes the code that will read them.
 
+- **`init` knows five CI systems, not two.** The snippet it prints is for the
+  one the repository already has -- Azure, CircleCI and Jenkins included, each
+  wired to draw the JUnit report. Suggesting GitHub Actions to a project that
+  runs GitLab is how a getting-started section gets skipped.
 - **`--format junit`**, which GitLab, Azure Pipelines and Jenkins all render
   natively as a list of failures with a message and a body. SARIF is the better
   format and GitHub is the only place it goes; this is for the other three, and
