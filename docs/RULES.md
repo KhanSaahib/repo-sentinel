@@ -69,6 +69,13 @@ a weakness in anybody's software.
 | SEC045 | JFrog Artifactory token | critical | high |
 | SEC046 | Terraform Cloud API token | critical | high |
 | SEC047 | Firebase Cloud Messaging server key | high | high |
+| SEC048 | HashiCorp Vault service token | critical | high |
+| SEC049 | Supabase service role key | critical | high |
+| SEC050 | PlanetScale database token | critical | high |
+| SEC051 | Tailscale auth key | critical | high |
+| SEC052 | Sentry authentication token | high | high |
+| SEC053 | Groq API key | high | high |
+| SEC054 | Replicate API token | high | high |
 | SEC100 | High-entropy value in a quoted assignment | high | medium |
 | SEC101 | High-entropy value in an unquoted config value | high | medium |
 | SEC900 | Suppression block opened and never closed | medium | high |
@@ -76,7 +83,7 @@ a weakness in anybody's software.
 SEC900 is not a class of secret; it reports a suppression block that was opened
 and never closed. See [Suppressing a false positive](#suppressing-a-false-positive).
 
-SEC001–SEC047 match on documented token structure. A token to a secrets
+SEC001–SEC054 match on documented token structure. A token to a secrets
 manager (SEC028) is rated as what it opens rather than as one credential, and
 a payment token (SEC034) as what it can move, and a Terraform Cloud token
 (SEC046) as the state it can read -- which holds every secret a plan touched. Two of them are looser than
@@ -114,8 +121,10 @@ SEC100 and SEC101 are the heuristics. They fire when a name that promises a
 credential (`password`, `api_key`, `client_secret`, …) is assigned a value that
 looks generated rather than written. SEC100 reads quoted assignments in source
 code; SEC101 reads the formats that write credentials bare — `.env`, `.npmrc`,
-`.pypirc`, INI files, YAML — where there is no quoting to key on, and where the
-file's own syntax has to stand in for it.
+`.pypirc`, INI files, YAML, a crontab, and a systemd unit — where there is no
+quoting to key on, and where the file's own syntax has to stand in for it. A
+unit wraps its assignment in one of its own (`Environment=DB_PASSWORD=…`), and
+the name that matters is the inner one.
 
 One consequence worth knowing: a real `.env` is usually git-ignored, so SEC101
 will not see it unless you pass `--no-gitignore`. Where it earns its keep by
@@ -135,7 +144,11 @@ A finding is weighed by where it was made, and the two places are weighed
 differently because the mistakes people make in them differ.
 
 In **documentation** (`docs/`, `*.md`, `*.rst`) every secret finding drops one
-step of confidence, documented token shapes included. A credential written into
+step of confidence, documented token shapes included. A file whose *name* says
+template -- `.env.example`, `config.sample.yml`, `values.template.yaml`,
+`app.conf.dist` -- is documentation with a different extension and is weighed
+the same way: it exists to be copied and filled in. n8n's says
+`sk-ant-api03-REPLACE_ME`. A credential written into
 prose is usually an example, which is what prose is for: Grafana's own manual
 contains two dozen service account tokens and not one of them is real. Nothing
 is silenced -- a live key does get pasted into a README -- but
@@ -146,6 +159,17 @@ rules that were already guessing drop. Entropy is worth less there because
 invented credentials are the point of a fixture. A documented token shape is
 not worth less, because the classic way a real key reaches a repository is a
 test that once talked to a real service.
+
+That is a deliberate trade and it has a cost: a project whose tests need TLS
+commits a key per case, and Spring Boot has a hundred and twenty-six of them.
+They are real private keys, so SEC004 says so; what makes that liveable is the
+baseline -- `repo-sentinel init` records them once and every later run is about
+new ones -- or a per-path rule in the config, which is the honest way to say
+"not here":
+
+```json
+{ "paths": { "**/src/test/resources/**": { "disable": ["SEC004"] } } }
+```
 
 Entropy is measured on ASCII only. Credentials travel through headers, URLs
 and environment variables that are ASCII, and text in another script is not --
@@ -473,10 +497,19 @@ helper function, or a shared library, is invisible to it.
 | SH001 | Script downloads code and runs it in one step | high |
 | SH002 | Script disables certificate verification | medium |
 | SH003 | Script makes something world-writable | medium |
+| SH004 | Password handed to a command as an argument | high |
 
 Every other family finds `curl \| sh` inside something -- a Dockerfile, a
 pipeline, a package manifest. This one finds it where it usually lives: in the
 script those things point at, which nobody re-reads once it works.
+
+SH004 is two problems in one line. `curl -u admin:hunter2`, `mysql -phunter2`,
+`sshpass -p hunter2`, `PGPASSWORD=hunter2 psql`: the credential is in the file,
+which is this scanner's usual business, and it is also in the process table of
+whichever machine runs the script, where every other user on that machine can
+read it while it runs. Each of these tools documents a file or an environment
+variable to use instead, which is why the flag exists to be found. A value that
+arrives at run time is not a leak, so anything interpolated is skipped.
 
 Files are recognised by extension, by name (`Makefile`), or by shebang, which
 matters because a setup script with no extension is still a shell script and is
@@ -492,6 +525,9 @@ somebody's note about the thing they decided not to do.
 | AP001 | Certificate verification switched off in code | high |
 | AP002 | Web framework debug mode enabled | medium |
 | AP003 | Credential generated by a predictable random source | high |
+| AP004 | Untrusted data deserialised into objects | high |
+| AP005 | Password hashed with a digest built for speed | medium |
+| AP006 | Shell command built from an interpolated value | critical for a request, otherwise high |
 
 Every other family reads configuration. This one reads code, which is a
 different proposition: configuration says what a system *is*, and code says
@@ -521,6 +557,41 @@ picks a colour far more often than it picks a token, so the rule fires only
 where the *name* promises a credential -- `token`, `secret`, `otp`, `salt`,
 `session_id`, `reset_code`. Given a few outputs from these generators, the rest
 follow.
+
+AP004 is two idioms with one meaning. `yaml.load()` without a `Loader` builds
+whatever the document names, which is remote code execution if the document
+came from anywhere but the repository -- PyYAML made `SafeLoader` the default
+in 6.0, so a call written the old way is either old or deliberate. PHP's
+`unserialize()` on a superglobal is the same thing without the ambiguity: the
+request chooses which classes are built and which destructors run.
+
+AP005 is a password put through a digest built for speed, which is the whole
+attack -- a stolen table of MD5 or SHA-256 password hashes is a few hours of
+guessing. It fires only where the argument is named like a password, because
+`sha256(file_bytes)` is a checksum and nobody's problem.
+
+Medium confidence, because the idiom has two legitimate homes and the reader
+has to tell them apart: checking a password against a breach list uses
+`sha1(password)` because that is what the Have I Been Pwned API takes, and a
+compatibility hasher reproduces whatever the system being migrated from used.
+Measured across nineteen repositories, the rule fired three times and every one
+of those was one of these two -- which is still three pieces of password
+handling worth a reader's attention.
+
+AP006 is the injection class again, in the language rather than the pipeline.
+PHP's superglobals make it unambiguous -- `system("ls " . $_GET["dir"])` has the
+request inside the command line, and that is critical. The other two are shapes
+rather than proofs: a `subprocess` call with `shell=True` and an interpolated
+string, and Node's `exec()` with a template literal in it. Both are reported at
+medium confidence and high severity, because the value being interpolated may
+well be a constant -- and the fix is the same either way, which is to stop using
+a shell: pass a list of arguments, or call `execFile`.
+
+Measured on n8n, that shape appears thirty-seven times, mostly a branch name or
+a process id going into a build script. None of those is exploitable today and
+every one of them is one refactor away from taking a value from somewhere else,
+which is exactly what medium confidence is for: `--min-confidence high` does not
+show them, and a review reading everything does.
 
 A finding in a fixture tree drops a step of confidence, for the same reason the
 secrets rules do it: a test that talks to a server with a self-signed

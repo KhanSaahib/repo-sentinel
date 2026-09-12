@@ -112,6 +112,52 @@ class TestPermissions(unittest.TestCase):
                 self.assertEqual(scan(line + "\n"), [])
 
 
+class TestCommandLineCredentials(unittest.TestCase):
+    """SH004: a password in the file, and in the process table besides."""
+
+    def test_every_tool_the_rule_knows(self):
+        for command in (
+            "curl -u deploy:Qq7Zx9Lm2Pv4Rt8W https://api.internal/release",
+            "curl --user=deploy:Qq7Zx9Lm2Pv4Rt8W https://api.internal/release",
+            "wget --password=Qq7Zx9Lm2Pv4Rt8W https://api.internal/file",
+            "sshpass -p Qq7Zx9Lm2Pv4Rt8W ssh deploy@host",
+            "mysql -uroot -pQq7Zx9Lm2Pv4Rt8W billing",
+            "PGPASSWORD=Qq7Zx9Lm2Pv4Rt8W psql -h db -U app",
+        ):
+            with self.subTest(command=command):
+                findings = [f for f in scan(command + "\n") if f.rule_id == "SH004"]
+                self.assertEqual(len(findings), 1, command)
+                self.assertEqual(findings[0].severity, Severity.HIGH)
+
+    def test_the_value_is_redacted_in_the_report(self):
+        finding = next(
+            f for f in scan("sshpass -p Qq7Zx9Lm2Pv4Rt8W ssh host\n") if f.rule_id == "SH004"
+        )
+        self.assertNotIn("Zx9Lm2Pv4Rt", finding.evidence)
+        self.assertIn("*", finding.evidence)
+
+    def test_a_value_that_arrives_at_run_time_is_not_a_leak(self):
+        for command in (
+            'curl -u "$USER:$PASSWORD" https://api.internal/release',
+            "curl --user ci:${CI_TOKEN} https://api.internal/release",
+            "sshpass -p $DEPLOY_PASSWORD ssh host",
+            "PGPASSWORD=$(vault read -field=password secret/db) psql",
+        ):
+            with self.subTest(command=command):
+                self.assertNotIn("SH004", rule_ids(scan(command + "\n")))
+
+    def test_a_commented_out_command_is_a_note(self):
+        self.assertEqual(scan("# sshpass -p Qq7Zx9Lm2Pv4Rt8W ssh host\n"), [])
+
+    def test_a_flag_that_is_not_a_password(self):
+        # mysql -p with nothing after it prompts, which is the fix.
+        self.assertEqual(scan("mysql -u root -p billing\n"), [])
+
+    def test_a_marker_silences_the_line(self):
+        text = "sshpass -p Qq7Zx9Lm2Pv4Rt8W ssh host  # repo-sentinel: ignore[SH004]\n"
+        self.assertEqual(scan(text), [])
+
+
 class TestSuppression(unittest.TestCase):
     def test_line_marker(self):
         text = "curl -sSL https://x.invalid/i.sh | sh  # repo-sentinel: ignore\n"

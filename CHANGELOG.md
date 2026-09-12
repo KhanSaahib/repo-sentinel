@@ -12,17 +12,19 @@ last of them is the first that reads code rather than configuration.
 
 ### Added
 
-- **Terraform** (TF001–TF006): security groups open to the internet, public
+- **Terraform** (TF001–TF008): security groups open to the internet, public
   storage, encryption switched off, wildcard IAM policies, public database
   endpoints, and unencrypted remote state. Built on a small HCL reader that
   knows blocks, so `cidr_blocks` in an `egress` block is correctly not a
   finding and `encrypted = false` in a `root_block_device` is reported where it
   actually sits.
-- **Kubernetes** (K8S001–K8S008): privileged containers, host namespaces,
+- **Kubernetes** (K8S001–K8S012): privileged containers, host namespaces,
   hostPath mounts, capabilities added after the drop, declared root, absent
-  resource limits, floating image tags, and credentials inside `Secret`
-  manifests -- decoded from base64 and identified by the secret rules.
-  Manifests are recognised by content (`apiVersion` plus `kind`), not by path.
+  resource limits, floating image tags, credentials inside `Secret` manifests
+  -- decoded from base64 and identified by the secret rules -- RBAC wildcards,
+  bindings to everybody, host ports, and confinement switched off by name.
+  Manifests are recognised by content (`apiVersion` plus `kind`), not by path,
+  and a chart's values are read where a `Chart.yaml` sits beside them.
 - **Docker Compose** (DC001–DC006): privileged services, bind mounts that grant
   the host, shared host namespaces, confinement removed, sensitive ports
   published on every interface, and floating image tags.
@@ -104,7 +106,7 @@ last of them is the first that reads code rather than configuration.
   Ansible's idioms make most "insecure" patterns ambiguous and these three are
   wrong wherever they appear. Playbooks are recognised by vocabulary, and
   findings name the task they belong to, including inside a `block`.
-- **CloudFormation** (CF001–CF005): open security groups, public buckets,
+- **CloudFormation** (CF001–CF006): open security groups, public buckets,
   encryption switched off, wildcard policies, public databases. The Terraform
   rules in AWS's other vocabulary, since the mistakes do not care which tool
   describes them. Both YAML and JSON templates, through readers that produce
@@ -189,6 +191,46 @@ last of them is the first that reads code rather than configuration.
   `git` dependency carries a `rev` or a `tag`; without one it installs whatever
   the default branch holds at build time. No TOML parser behind it -- `tomllib`
   arrived in 3.11 and this runs on 3.9.
+- **FN004 is weighed in a fixture tree**, like the rest of its family: a
+  `.tfstate` under `testdata/` is a fixture, and Terraform's own repository has
+  162 of them. Still reported, because a real state file does end up in a test
+  directory. Terraform at `--min-confidence medium`: 180 findings → 17.
+- **A fixture's URL is not a package source.** `git = "[ROOTURL]/git-package"`
+  is what Cargo's test suite writes, eleven times.
+- **AP006**: a shell command built from an interpolated value. PHP's
+  superglobals make it unambiguous and critical -- the request is inside the
+  command line -- while a Python call with `shell=True` and an f-string, or
+  Node's `exec()` with a template literal, are shapes rather than proofs and
+  say so in their confidence. The fix is the same either way: stop using a
+  shell.
+- **AP004 and AP005**: untrusted data deserialised into objects
+  (`yaml.load()` without a `Loader`, PHP's `unserialize()` on a superglobal),
+  and a password put through a digest built for speed. The second is medium
+  confidence because the idiom has two legitimate homes -- a breach-list check
+  and a compatibility hasher -- and across nineteen repositories it found three
+  instances, all of which were one of those two and all of which are password
+  handling worth reading.
+- **SH004**: a password handed to a command as an argument. `curl -u
+  admin:hunter2`, `mysql -phunter2`, `sshpass -p`, `PGPASSWORD=`. Two problems
+  in one line: the credential is in the file, and it is in the process table of
+  whichever machine runs the script, where every other user can read it. A value
+  that arrives at run time is not a leak, so anything interpolated is skipped.
+- **A systemd unit and a crontab are value-position formats.** A unit is an
+  INI file that runs as root, and the place a credential lands in one is
+  `Environment=DB_PASSWORD=…` -- an assignment wrapped in an assignment, where
+  the name that matters is the inner one.
+- **A `.example` file is weighed like documentation.** A file whose name says
+  template exists to be copied and filled in, and it is where a placeholder
+  lives. Weakened, not silenced: a real key does get left in the file people
+  copy.
+- **A `classpath:` reference is not a private key.** Spring configuration says
+  where a key file is -- `private-key: classpath:server.key` -- and spring-boot
+  writes that a dozen times.
+- **Seven token shapes from the last two years** (SEC048–SEC054): HashiCorp
+  Vault service tokens, Supabase service role keys, PlanetScale database
+  tokens, Tailscale auth keys, Sentry auth tokens, Groq and Replicate keys.
+  Four of them are critical because they reach the data or the network
+  directly; the rest are billed by the token.
 - **A committed password database is a finding on its name**: `.kdbx`,
   `.kdb`, `.psafe3`, `.opvault`, `.agilekeychain`. Encrypted, so not critical;
   offline once committed, so not low -- unlimited guesses at one master
@@ -268,6 +310,10 @@ last of them is the first that reads code rather than configuration.
   once per job. The fix is a single top-level block however many jobs there
   are; a file where some jobs are explicit and others are not is still reported
   per job, because there the fix genuinely is per job.
+- **Each application-code rule checks for its own word first.** A TypeScript
+  monorepo is mostly files that mention "debug" and nothing else, and running
+  the other thirteen patterns over each of them was the largest single cost in
+  a scan: n8n 82s → 57s, with the corpus reporting identical findings.
 - **A third gate in front of the entropy rules**: both need a name carrying
   one of a dozen credential words, and looking for the word first is far
   cheaper than running a pattern with a greedy class in front of its

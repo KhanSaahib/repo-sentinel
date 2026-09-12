@@ -154,11 +154,18 @@ _STRUCTURED = (
     # A query or selector expression: "type!=kubernetes.io/dockercfg,type!=x".
     # Comparison operators do not appear in credentials; they appear in filters.
     re.compile(r".*(?:!=|==|>=|<=).*$"),
-    # A reference to where the value lives, rather than the value: "env:NPM_TOKEN",
-    # "vault:secret/data/ci". The scheme-with-slashes form is already covered by
-    # the URL pattern above; this is the bare one, which CLI tools use precisely
-    # so that the credential does not appear in the command line.
-    re.compile(r"^(?:env|vault|secret|file|cmd|op|ssm|keyring):[\w./:@+-]+$", re.I),
+    # A reference to where the value lives, rather than the value:
+    # "env:NPM_TOKEN", "vault:secret/data/ci", "classpath:server.key". The
+    # scheme-with-slashes form is already covered by the URL pattern above;
+    # this is the bare one, which CLI tools use precisely so that the
+    # credential does not appear in the command line, and which Spring uses to
+    # say where a key file is -- private-key: classpath:test.key names a file,
+    # and spring-boot writes that a dozen times.
+    re.compile(
+        r"^(?:env|vault|secret|file|cmd|op|ssm|keyring|classpath|optional|"
+        r"resource|jar|bundle):[\w./:@+-]*$",
+        re.I,
+    ),
     # A quoted type expression carrying a union: "Secret | None",
     # "list[Secret] | None". Python annotations are strings wherever they are
     # forward references, and a generated client is thousands of them.

@@ -14,6 +14,45 @@ def scan(path, text):
     return appcode.scan_source(path, text)
 
 
+class TestHints(unittest.TestCase):
+    """A hint a rule's own match does not contain disables it, silently."""
+
+    CASES = {
+        "verify=False": "app.py",
+        "ssl._create_unverified_context()": "app.py",
+        "check_hostname=False": "app.py",
+        "rejectUnauthorized: false": "a.js",
+        "NODE_TLS_REJECT_UNAUTHORIZED=0": "a.js",
+        "InsecureSkipVerify: true": "main.go",
+        "curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);": "a.php",
+        "OpenSSL::SSL::VERIFY_NONE": "a.rb",
+        "DEBUG = True": "settings.py",
+        "app.run(debug=True)": "app.py",
+        "yaml.load(body)": "app.py",
+        'unserialize($_POST["x"])': "a.php",
+        "hashlib.md5(password)": "app.py",
+        'system("ls " . $_GET["d"]);': "a.php",
+        'subprocess.run(f"tar {name}", shell=True)': "app.py",
+        "exec(`git log ${branch}`)": "a.js",
+        "token = Math.random()": "a.js",
+    }
+
+    def test_every_rule_fires_on_a_line_carrying_its_own_shape(self):
+        # The gate rejects a file that mentions none of a rule's words, so a
+        # wrong word means the rule never runs and nothing says so.
+        fired = set()
+        for line, path in self.CASES.items():
+            findings = appcode.scan_source(path, line + "\n")
+            self.assertTrue(findings, line)
+            fired.update(finding.rule_id for finding in findings)
+        self.assertEqual(fired, {rule.rule_id for rule in appcode._RULES})
+
+    def test_every_rule_has_hints(self):
+        for rule in appcode._RULES:
+            with self.subTest(rule=rule.rule_id, pattern=rule.pattern.pattern[:40]):
+                self.assertTrue(rule.hints)
+
+
 class TestWhichFilesAreRead(unittest.TestCase):
     def test_the_languages_the_rules_know(self):
         for path in ("a.py", "a.js", "a.ts", "a.tsx", "a.go", "a.php", "a.rb"):
@@ -101,6 +140,75 @@ class TestPredictableCredentials(unittest.TestCase):
     def test_the_cryptographic_source_is_not_reported(self):
         text = "token = secrets.token_urlsafe(32)\n"
         self.assertEqual(scan("auth.py", text), [])
+
+
+class TestUnsafeDeserialisation(unittest.TestCase):
+    def test_yaml_load_without_a_loader(self):
+        findings = scan("app.py", "data = yaml.load(body)\n")
+        finding = next(f for f in findings if f.rule_id == "AP004")
+        self.assertEqual(finding.severity, Severity.HIGH)
+
+    def test_a_loader_makes_the_call_a_decision(self):
+        text = "data = yaml.load(body, Loader=yaml.SafeLoader)\n"
+        self.assertNotIn("AP004", rule_ids(scan("app.py", text)))
+
+    def test_safe_load_is_the_fix(self):
+        self.assertEqual(scan("app.py", "data = yaml.safe_load(body)\n"), [])
+
+    def test_php_unserialising_a_superglobal(self):
+        text = '$o = unserialize($_POST["data"]);\n'
+        self.assertIn("AP004", rule_ids(scan("index.php", text)))
+
+    def test_php_unserialising_something_it_wrote_itself(self):
+        text = "$o = unserialize($cached);\n"
+        self.assertNotIn("AP004", rule_ids(scan("index.php", text)))
+
+
+class TestPasswordHashing(unittest.TestCase):
+    def test_a_password_through_a_fast_digest(self):
+        for line in (
+            "digest = hashlib.md5(password.encode()).hexdigest()\n",
+            "$h = sha1($passwd);\n",
+            "const h = sha256(password)\n",
+        ):
+            with self.subTest(line=line.strip()):
+                path = "app.py" if "hashlib" in line else ("a.php" if "$" in line else "a.js")
+                self.assertIn("AP005", rule_ids(scan(path, line)))
+
+    def test_a_checksum_of_something_that_is_not_a_password(self):
+        self.assertEqual(scan("app.py", "digest = hashlib.sha256(file_bytes).hexdigest()\n"), [])
+
+    def test_a_slow_hash_is_the_fix(self):
+        self.assertEqual(scan("app.py", "digest = bcrypt.hashpw(password, salt)\n"), [])
+
+
+class TestShellFromInterpolation(unittest.TestCase):
+    """AP006: the injection class, in the language rather than the pipeline."""
+
+    def test_a_request_inside_a_php_command_is_critical(self):
+        findings = scan("index.php", 'system("ls " . $_GET["dir"]);\n')
+        finding = next(f for f in findings if f.rule_id == "AP006")
+        self.assertEqual(finding.severity, Severity.CRITICAL)
+
+    def test_a_fixed_php_command_is_not(self):
+        self.assertEqual(scan("index.php", 'system("ls /tmp");\n'), [])
+
+    def test_a_python_call_with_a_shell_and_an_f_string(self):
+        findings = scan("app.py", 'subprocess.run(f"tar -xf {name}", shell=True)\n')
+        finding = next(f for f in findings if f.rule_id == "AP006")
+        self.assertEqual(finding.confidence, Confidence.MEDIUM)
+
+    def test_a_list_of_arguments_is_the_fix(self):
+        self.assertEqual(scan("app.py", 'subprocess.run(["tar", "-xf", name])\n'), [])
+
+    def test_a_shell_with_nothing_interpolated_into_it(self):
+        self.assertEqual(scan("app.py", 'subprocess.run("ls -la", shell=True)\n'), [])
+
+    def test_node_exec_with_a_template_literal(self):
+        self.assertIn("AP006", rule_ids(scan("a.js", "exec(`git log ${branch}`)\n")))
+
+    def test_exec_file_takes_its_arguments_separately(self):
+        self.assertEqual(scan("a.js", 'execFile("git", ["log", branch])\n'), [])
 
 
 class TestFixtureTrees(unittest.TestCase):

@@ -56,6 +56,13 @@ class _Rule:
     title: str
     remediation: str
     confidence: Confidence = Confidence.HIGH
+    #: Literal substrings, at least one of which appears in every string this
+    #: pattern can match, tested case-insensitively. The point is the same as
+    #: the provider rules': running fourteen patterns over every source file in
+    #: a monorepo is most of what a scan of one costs, and a file that mentions
+    #: none of a rule's words cannot trip it. A wrong hint disables the rule
+    #: silently, which is what the corpus test is for.
+    hints: "tuple[str, ...]" = ()
 
 
 _VERIFICATION_OFF = (
@@ -97,6 +104,47 @@ _WEAK_RANDOM = (
     ),
 )
 
+#: PyYAML's load() without a Loader builds arbitrary Python objects, which is
+#: remote code execution wherever the document came from a request. Versions
+#: since 6.0 default to SafeLoader; a call with an explicit Loader is either
+#: safe or deliberate, and either way not this.
+_UNSAFE_YAML = re.compile(r"\byaml\.load\s*\((?![^)]*\bLoader\s*=)")
+#: PHP's unserialize() on a superglobal: the request decides which objects get
+#: built and which of their destructors run.
+_UNSAFE_UNSERIALIZE = re.compile(r"\bunserialize\s*\(\s*\$_(?:GET|POST|COOKIE|REQUEST)\b")
+
+#: A password put through a digest built for speed. Both of these are the
+#: whole attack: a stolen table of them is a few hours of guessing, and the
+#: fix is a function designed to be slow.
+_FAST_PASSWORD_HASH = re.compile(
+    r"""(?ix)
+    \b(?:hashlib\.)?(?P<digest>md5|sha1|sha256|sha512)\s*\(
+    [^)\n]{0,60}?
+    \b(?P<what>password|passwd|passphrase)\b
+    """
+)
+
+#: A shell command built out of something the process did not choose. PHP's
+#: superglobals are the unambiguous case -- the request is in the command --
+#: and the other two are the shapes that carry a value into a shell: a Python
+#: call with shell=True and an interpolated string, and Node's exec() with a
+#: template literal in it.
+_PHP_SHELL_FROM_REQUEST = re.compile(
+    r"\b(?:exec|shell_exec|system|passthru|popen|proc_open)\s*\("
+    r"[^)\n]{0,80}\$_(?:GET|POST|COOKIE|REQUEST)\b"
+)
+_PYTHON_SHELL_INTERPOLATION = re.compile(
+    r"""(?x)
+    \bsubprocess\.(?:run|call|check_call|check_output|Popen)\s*\(
+    (?=[^)\n]*\bshell\s*=\s*True)
+    [^)\n]*?
+    (?:f['\"]|\.format\s*\(|\s\+\s|%\s*[\w(])
+    """
+)
+_NODE_SHELL_INTERPOLATION = re.compile(
+    r"\b(?:child_process\.)?exec(?:Sync)?\s*\(\s*`[^`\n]*\$\{"
+)
+
 _RULES = (
     _Rule(
         "AP001", _VERIFICATION_OFF[0], _PYTHON, Severity.HIGH,
@@ -105,6 +153,7 @@ _RULES = (
         "anything on the path can answer instead. If the certificate is "
         "self-signed, trust that certificate -- pass its CA bundle to verify= "
         "-- rather than trusting whatever arrives.",
+        hints=("verify",),
     ),
     _Rule(
         "AP001", _VERIFICATION_OFF[1], _PYTHON, Severity.HIGH,
@@ -112,12 +161,14 @@ _RULES = (
         "_create_unverified_context() exists to make a failing connection "
         "work, and it works by accepting any certificate. Build the context "
         "with the CA that actually signs the endpoint.",
+        hints=("_create_unverified_context",),
     ),
     _Rule(
         "AP001", _VERIFICATION_OFF[2], _PYTHON, Severity.HIGH,
         "Hostname checking is switched off",
         "Without hostname checking a valid certificate for any host is "
         "accepted for this one, which is most of what a certificate is for.",
+        hints=("check_hostname",),
     ),
     _Rule(
         "AP001", _NODE_VERIFICATION_OFF[0], _JAVASCRIPT, Severity.HIGH,
@@ -125,6 +176,7 @@ _RULES = (
         "rejectUnauthorized: false accepts any certificate, including one "
         "minted by whatever is between this process and the endpoint. Pass "
         "the signing CA in ca: instead.",
+        hints=("rejectunauthorized",),
     ),
     _Rule(
         "AP001", _NODE_VERIFICATION_OFF[1], _ANY, Severity.HIGH,
@@ -135,12 +187,14 @@ _RULES = (
         "NODE_TLS_REJECT_UNAUTHORIZED=0 disables verification for every "  # repo-sentinel: ignore[AP001]
         "connection the process makes, not the one that was failing. Node "
         "prints a warning about this for a reason.",
+        hints=("node_tls_reject_unauthorized",),
     ),
     _Rule(
         "AP001", _GO_VERIFICATION_OFF[0], _GO, Severity.HIGH,
         "Certificate verification is switched off",
         "InsecureSkipVerify: true accepts any certificate. If the endpoint "
         "uses a private CA, put that CA in the RootCAs pool.",
+        hints=("insecureskipverify",),
     ),
     _Rule(
         "AP001", _PHP_VERIFICATION_OFF[0], _PHP, Severity.HIGH,
@@ -148,12 +202,14 @@ _RULES = (
         "Setting CURLOPT_SSL_VERIFYPEER or CURLOPT_SSL_VERIFYHOST to false "
         "accepts any certificate. Point CURLOPT_CAINFO at the right CA "
         "bundle instead.",
+        hints=("curlopt_ssl_verify",),
     ),
     _Rule(
         "AP001", _RUBY_VERIFICATION_OFF[0], _RUBY, Severity.HIGH,
         "Certificate verification is switched off",
         "VERIFY_NONE accepts any certificate. Set ca_file to the CA that "
         "signs the endpoint and leave the mode at VERIFY_PEER.",
+        hints=("verify_none",),
     ),
     _Rule(
         "AP002", _DEBUG_ON[0], _PYTHON, Severity.MEDIUM,
@@ -162,6 +218,7 @@ _RULES = (
         "and the settings of whichever request failed, to whoever made it "
         "fail. Read the value from the environment and default it to False.",
         Confidence.MEDIUM,
+        hints=("debug",),
     ),
     _Rule(
         "AP002", _DEBUG_ON[1], _PYTHON, Severity.MEDIUM,
@@ -170,6 +227,62 @@ _RULES = (
         "Take the flag from the environment, and serve production through a "
         "real WSGI server rather than this one.",
         Confidence.MEDIUM,
+        hints=("debug",),
+    ),
+    _Rule(
+        "AP004", _UNSAFE_YAML, _PYTHON, Severity.HIGH,
+        "YAML is parsed into arbitrary Python objects",
+        # The advice names the call, which is the ordinary reason a scanner
+        # reports itself.
+        "yaml.load() without a Loader builds whatever the document names, "  # repo-sentinel: ignore[AP004]
+        "which is remote code execution if the document came from anywhere "
+        "but this repository. yaml.safe_load() is the same call without that.",
+        Confidence.MEDIUM,
+        hints=("yaml.load",),
+    ),
+    _Rule(
+        "AP004", _UNSAFE_UNSERIALIZE, _PHP, Severity.HIGH,
+        "A request is deserialised into PHP objects",
+        "unserialize() on a superglobal lets the request choose which classes "
+        "are built and which destructors run. Use json_decode(), or pass "
+        "allowed_classes: false.",
+        hints=("unserialize",),
+    ),
+    _Rule(
+        "AP005", _FAST_PASSWORD_HASH, _PYTHON + _PHP + _RUBY + _JAVASCRIPT, Severity.MEDIUM,
+        "A password is hashed with a fast digest",
+        "These digests are built for speed, which is the whole attack: a "
+        "stolen table of them is a few hours of guessing. Use bcrypt, scrypt "
+        "or argon2 -- a function designed to be slow, with a per-password "
+        "salt it stores for you.",
+        Confidence.MEDIUM,
+        hints=("md5", "sha1", "sha256", "sha512"),
+    ),
+    _Rule(
+        "AP006", _PHP_SHELL_FROM_REQUEST, _PHP, Severity.CRITICAL,
+        "A request is interpolated into a shell command",
+        "The request chooses part of the command line, which is the whole of "
+        "command injection. Use escapeshellarg() if the value must be passed, "
+        "and prefer an argument list to a shell string.",
+        hints=("exec", "system", "passthru", "popen"),
+    ),
+    _Rule(
+        "AP006", _PYTHON_SHELL_INTERPOLATION, _PYTHON, Severity.HIGH,
+        "A shell command is built by interpolation",
+        "shell=True hands the string to a shell, which reads the parts that "
+        "came from elsewhere as syntax. Drop shell=True and pass a list of "
+        "arguments; the shell was doing nothing you needed.",
+        Confidence.MEDIUM,
+        hints=("subprocess",),
+    ),
+    _Rule(
+        "AP006", _NODE_SHELL_INTERPOLATION, _JAVASCRIPT, Severity.HIGH,
+        "A shell command is built from a template literal",
+        "exec() runs the string through a shell, which reads an interpolated "
+        "value as syntax. execFile() takes the command and its arguments "
+        "separately, which is the same call without the shell.",
+        Confidence.MEDIUM,
+        hints=("exec",),
     ),
     _Rule(
         "AP003", _WEAK_RANDOM[0], _ANY, Severity.HIGH,
@@ -179,6 +292,7 @@ _RULES = (
         "cryptographic source -- secrets in Python, crypto.randomBytes in "
         "Node, crypto/rand in Go.",
         Confidence.MEDIUM,
+        hints=("random", "rand(", "mt_rand"),
     ),
 )
 
@@ -187,7 +301,9 @@ _RULES = (
 #: a single pattern -- which is most files in most repositories.
 _HINTS = (
     "verif", "rejectunauthorized", "node_tls_reject", "check_hostname",
-    "debug", "random", "rand(", "mt_rand",
+    "debug", "random", "rand(", "mt_rand", "yaml.load", "unserialize",
+    "md5", "sha1", "sha256", "sha512", "exec", "system", "passthru",
+    "popen", "subprocess",
 )
 
 
@@ -229,6 +345,12 @@ def scan_source(
     findings: "list[Finding]" = []
     for rule in _RULES:
         if not _applies(rule, name):
+            continue
+        # The rule's own words, before the rule's own pattern. A TypeScript
+        # monorepo is mostly files that mention "debug" and nothing else, and
+        # running the other thirteen patterns over each of them was the
+        # largest single cost in a scan of one.
+        if rule.hints and not any(hint in lowered for hint in rule.hints):
             continue
         for match in rule.pattern.finditer(text):
             line = _line_of(text, match.start())

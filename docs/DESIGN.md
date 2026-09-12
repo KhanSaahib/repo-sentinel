@@ -147,6 +147,12 @@ of lines do not. The second is per rule: does the line contain any of the
 literals that rule's shape must include -- `AKIA`, `ghp_`, `xoxb-`? Nine of the
 remaining lines in ten do not.
 
+The application-code family has the same arrangement for the same reason: a
+TypeScript monorepo is mostly files that mention "debug" and nothing else, and
+running the other thirteen patterns over each of them was the single largest
+cost in a scan of one -- 82 seconds down to 57 on n8n once each rule checked
+for its own word first.
+
 The entropy rules have a gate of their own, and it is the same idea a third
 time: both ultimately need a name carrying one of a dozen words, so a flat
 alternation of those words runs first. It is cheap because there is nothing in

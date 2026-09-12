@@ -174,6 +174,21 @@ _PROSE_SUFFIXES = (".md", ".markdown", ".rst", ".adoc", ".asciidoc", ".txt")
 _PROSE_DIRECTORIES = frozenset({"docs", "doc", "documentation", "website", "site", "man"})
 
 
+#: Suffixes that mark a file as a documented shape rather than a real one:
+#: ".env.example", "config.sample.yml", "values.template.yaml". Either
+#: position counts, because both conventions are in use.
+EXAMPLE_MARKERS = (".example", ".sample", ".template", ".dist", ".tpl", ".defaults")
+
+
+def is_example_path(path: str) -> bool:
+    """True when a file's name says it is a template rather than the thing."""
+    name = path.replace("\\", "/").rsplit("/", 1)[-1].lower()
+    if name.endswith(EXAMPLE_MARKERS):
+        return True
+    middle = name.split(".")[1:-1]
+    return any(marker.strip(".") in middle for marker in EXAMPLE_MARKERS)
+
+
 def is_prose_path(path: str) -> bool:
     """True when a file is documentation rather than something that runs."""
     parts = path.replace("\\", "/").split("/")

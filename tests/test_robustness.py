@@ -13,6 +13,7 @@ unhandled index or an infinite loop, and where "degrades to silence" has to be
 true rather than intended.
 """
 
+import ast
 import json
 import random
 import re
@@ -323,19 +324,69 @@ class TestEntropyProperties(unittest.TestCase):
 
 
 class TestNoDynamicEvaluation(unittest.TestCase):
-    """SECURITY.md promises scanned content is never evaluated. Check it."""
+    """SECURITY.md promises scanned content is never evaluated. Check it.
 
-    FORBIDDEN = re.compile(r"\b(?:eval|exec|pickle|marshal|subprocess|os\.system|__import__)\b")
+    Read as code rather than as text. The rules that *look for* eval, exec and
+    subprocess have those words inside their patterns, and a grep cannot tell
+    a pattern from a call -- which is the same distinction between reading
+    lines and reading structure that the scanners themselves are built on.
+    """
 
-    def test_the_source_contains_no_dynamic_evaluation(self):
+    #: Names that run something the caller did not write out.
+    FORBIDDEN_CALLS = frozenset({"eval", "exec", "compile", "__import__"})
+    #: Modules that do it on the caller's behalf.
+    FORBIDDEN_IMPORTS = frozenset({"pickle", "marshal", "subprocess", "shelve", "dill"})
+    #: Attributes that reach a shell through a module that is allowed.
+    FORBIDDEN_ATTRIBUTES = frozenset({"system", "popen", "spawnl", "spawnv", "execv", "execl"})
+
+    def modules(self):
         source_root = Path(__file__).resolve().parents[1] / "src"
-        for module in sorted(source_root.rglob("*.py")):
-            text = module.read_text(encoding="utf-8")
-            for number, line in enumerate(text.splitlines(), start=1):
-                if line.lstrip().startswith("#"):
+        for path in sorted(source_root.rglob("*.py")):
+            yield path, ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+    def test_nothing_in_the_source_calls_an_evaluator(self):
+        for path, tree in self.modules():
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
                     continue
-                with self.subTest(module=module.name, line=number):
-                    self.assertIsNone(self.FORBIDDEN.search(line), line.strip())
+                # A bare name and an attribute are different questions:
+                # compile() is the builtin that turns text into code, and
+                # re.compile() is the one this whole tool is built on.
+                bare = getattr(node.func, "id", None)
+                attribute = getattr(node.func, "attr", None)
+                with self.subTest(module=path.name, line=node.lineno, call=bare or attribute):
+                    self.assertNotIn(bare, self.FORBIDDEN_CALLS)
+                    self.assertNotIn(attribute, self.FORBIDDEN_ATTRIBUTES)
+
+    def test_nothing_in_the_source_imports_one(self):
+        for path, tree in self.modules():
+            for node in ast.walk(tree):
+                names = []
+                if isinstance(node, ast.Import):
+                    names = [alias.name.split(".")[0] for alias in node.names]
+                elif isinstance(node, ast.ImportFrom):
+                    names = [(node.module or "").split(".")[0]]
+                for name in names:
+                    with self.subTest(module=path.name, line=node.lineno, imported=name):
+                        self.assertNotIn(name, self.FORBIDDEN_IMPORTS)
+
+    def test_the_check_would_notice(self):
+        # A test that can only pass is not a test. This is the shape it is
+        # looking for, parsed the same way.
+        tree = ast.parse("import subprocess\nsubprocess.run(['ls'])\neval('1')\n")
+        calls = [
+            getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+        ]
+        self.assertIn("eval", calls)
+        imports = [
+            alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Import)
+            for alias in node.names
+        ]
+        self.assertIn("subprocess", imports)
 
 
 if __name__ == "__main__":

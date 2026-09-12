@@ -103,8 +103,10 @@ def _pem_block_is_empty(match: "re.Match[str]") -> bool:
 #: host inside the match, and example.invalid is what a documentation host is
 #: called. The allowlist handles the vendor conventions built on that word.
 _INVENTED_WORDS = (
-    "changeme", "change_me", "placeholder", "yourkey", "your_key",
-    "youraccount", "fakekey", "dummykey", "redacted", "notarealkey", "xxxxxxxx",
+    "changeme", "change_me", "change-me", "replaceme", "replace_me",
+    "replace-me", "setme", "set_me", "putyour", "insertyour", "placeholder",
+    "yourkey", "your_key", "your-key", "youraccount", "fakekey", "dummykey",
+    "redacted", "notarealkey", "xxxxxxxx",
 )
 #: How long a run of consecutive characters has to be before it can only be
 #: somebody counting. Eight is already one chance in billions for a generated
@@ -517,6 +519,70 @@ RULES: tuple[ProviderRule, ...] = (
         re.compile(r"\bAAAA[A-Za-z0-9_-]{7}:APA91b[A-Za-z0-9_-]{130,}"),
         "Rotate it in the Firebase console; it can push notifications to every installed app.",
         hints=(":APA91b",),
+    ),
+    # The shapes that turn up in a repository written in the last two years.
+    # Every one of them is documented by its vendor, and all but the last two
+    # open something that costs money by the hour.
+    ProviderRule(
+        "SEC048",
+        "HashiCorp Vault service token",
+        Severity.CRITICAL,
+        re.compile(r"\bhv[sb]\.[A-Za-z0-9_-]{24,}"),
+        "Revoke it with 'vault token revoke'; it opens whatever its policy allows, "
+        "which for a service token is usually the application's whole secret path.",
+        hints=("hvs.", "hvb."),
+    ),
+    ProviderRule(
+        "SEC049",
+        "Supabase service role key",
+        Severity.CRITICAL,
+        re.compile(r"\bsbp_[A-Za-z0-9]{40,}\b"),
+        "Rotate it in the Supabase dashboard; the service role bypasses row level "
+        "security, so it reads and writes every row in the project.",
+        hints=("sbp_",),
+    ),
+    ProviderRule(
+        "SEC050",
+        "PlanetScale database token",
+        Severity.CRITICAL,
+        re.compile(r"\bpscale_(?:tkn|pw|oauth)_[A-Za-z0-9_.-]{32,}"),
+        "Delete it in the PlanetScale dashboard; a database password or service "
+        "token reaches the data itself.",
+        hints=("pscale_",),
+    ),
+    ProviderRule(
+        "SEC051",
+        "Tailscale auth key",
+        Severity.CRITICAL,
+        re.compile(r"\btskey-(?:auth|client|api)-[A-Za-z0-9]{10,}-[A-Za-z0-9]{10,}"),
+        "Revoke it in the Tailscale admin console; an auth key joins a machine to "
+        "the tailnet, which is inside every ACL written for it.",
+        hints=("tskey-",),
+    ),
+    ProviderRule(
+        "SEC052",
+        "Sentry authentication token",
+        Severity.HIGH,
+        re.compile(r"\bsntrys_[A-Za-z0-9+/=_.-]{40,}"),
+        "Revoke it in Sentry; an auth token can read every event in the "
+        "organisation, and events carry whatever the application logged.",
+        hints=("sntrys_",),
+    ),
+    ProviderRule(
+        "SEC053",
+        "Groq API key",
+        Severity.HIGH,
+        re.compile(r"\bgsk_[A-Za-z0-9]{48,}\b"),
+        "Revoke it in the Groq console; an inference key is billed by the token.",
+        hints=("gsk_",),
+    ),
+    ProviderRule(
+        "SEC054",
+        "Replicate API token",
+        Severity.HIGH,
+        re.compile(r"\br8_[A-Za-z0-9]{37,}\b"),
+        "Revoke it in the Replicate dashboard; it runs models billed by the second.",
+        hints=("r8_",),
     ),
 )
 

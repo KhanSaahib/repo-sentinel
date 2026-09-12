@@ -179,16 +179,16 @@ repo-sentinel scan . --no-gitignore
 
 ## What it checks
 
-One hundred and thirty-two rules across sixteen families. [docs/RULES.md](docs/RULES.md) is the
+One hundred and forty-three rules across sixteen families. [docs/RULES.md](docs/RULES.md) is the
 full list, with a paragraph on each family explaining what it is looking for
 and why; `repo-sentinel rules` prints the same catalogue from the tool.
 
 | Family | Rules | Looks at |
 | --- | --- | --- |
-| [Secrets](docs/RULES.md#secrets) | SEC001–SEC047, SEC100–SEC101 | Credentials in any text file, including inside base64 |
+| [Secrets](docs/RULES.md#secrets) | SEC001–SEC054, SEC100–SEC101 | Credentials in any text file, including inside base64 |
 | [File names](docs/RULES.md#file-names) | FN001–FN004 | Key material and credential files, which have no text to read |
-| [Shell scripts](docs/RULES.md#shell-scripts-and-makefiles) | SH001–SH003 | Where `curl \| sh` actually lives |
-| [Application code](docs/RULES.md#application-code) | AP001–AP003 | Verification off, debug on, predictable tokens |
+| [Shell scripts](docs/RULES.md#shell-scripts-and-makefiles) | SH001–SH004 | Where `curl \| sh` actually lives |
+| [Application code](docs/RULES.md#application-code) | AP001–AP006 | Verification off, debug on, predictable tokens, unsafe loads |
 | [Dependencies](docs/RULES.md#dependencies) | SC001–SC004 | Where the rest of the build comes from, in nine manifests |
 | [GitHub Actions](docs/RULES.md#github-actions-workflows) | WF001–WF012 | Script injection, token scope, privileged triggers |
 | [GitLab CI](docs/RULES.md#gitlab-ci) | GL001–GL004 | The same injection class, and debug tracing |
@@ -491,11 +491,13 @@ promise "this pulls nothing into your environment" should hold for the tests
 too, so a contributor with no network can still check the floor.
 
 The test suite includes a corpus that trips **every** rule in the catalogue, and
-asserts in three directions: no scanner may emit a rule the catalogue does not
-describe, no catalogue entry may describe a rule nothing can emit, and no rule
-may be missing from [docs/RULES.md](docs/RULES.md). Adding a rule without
-documenting it fails the build, and so does leaving an entry behind after
-deleting one.
+asserts in five directions: no scanner may emit a rule the catalogue does not
+describe, no catalogue entry may describe a rule nothing can emit, no rule may
+be missing from [docs/RULES.md](docs/RULES.md), no rule may be more severe in
+practice than the catalogue promises, and the severity in the documentation has
+to be the severity in the code. Adding a rule without documenting it fails the
+build, and so does leaving an entry behind after deleting one -- as does a
+number quoted in the README that the catalogue has moved past.
 
 [docs/DESIGN.md](docs/DESIGN.md) explains how the pieces fit and why they are
 shaped that way; [CONTRIBUTING.md](CONTRIBUTING.md) covers how a new rule earns

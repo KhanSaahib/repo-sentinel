@@ -74,6 +74,13 @@ SECRETS_FILE = "\n".join(
         'artifactory = "AKC' + 'p8' + _filler(64) + '"',
         'tfcloud = "' + _filler(14) + '.atlasv1.' + _filler(48) + '"',
         'fcm = "AAA' + 'A' + _filler(7) + ':APA91b' + _filler(136) + '"',
+        'vault = "hv' + 's.' + _filler(40) + '"',
+        'supabase = "sb' + 'p_' + _filler(40, "0a1b2c3d4e5f") + '"',
+        'planetscale = "pscale' + '_tkn_' + _filler(34) + '"',
+        'tailscale = "tsk' + 'ey-auth-' + _filler(12) + '-' + _filler(22) + '"',
+        'sentry_auth = "sntry' + 's_' + _filler(48) + '"',
+        'groq = "gs' + 'k_' + _filler(52) + '"',
+        'replicate = "r' + '8_' + _filler(40) + '"',
         'session_secret = "Qq7Zx9Lm2Pv4Rt8WcY6h"',
     )
 )
@@ -384,6 +391,7 @@ JENKINSFILE = """pipeline {
 SHELL_SCRIPT = """#!/usr/bin/env bash
 set -euo pipefail
 
+curl -u deploy:Qq7Zx9Lm2Pv4Rt8W https://api.example.invalid/release
 curl -sSL https://get.example.invalid/install.sh | sudo bash
 wget --no-check-certificate https://example.invalid/pkg.tar.gz
 chmod -R 777 /opt/app
@@ -401,8 +409,11 @@ runs:
       shell: bash
 """
 
-APPLICATION_CODE = """import random
+APPLICATION_CODE = """import hashlib
+import random
 import requests
+import subprocess
+import yaml
 
 DEBUG = True
 
@@ -414,6 +425,18 @@ def fetch(url):
 def issue():
     reset_token = random.choice("0123456789")
     return reset_token
+
+
+def load(body):
+    return yaml.load(body)
+
+
+def store(password):
+    return hashlib.md5(password.encode()).hexdigest()
+
+
+def unpack(name):
+    return subprocess.run(f"tar -xf {name}", shell=True)
 """
 
 #: ``(path, text)`` pairs, in the shape :func:`iter_files` yields.

@@ -132,6 +132,26 @@ class TestByproducts(unittest.TestCase):
                 self.assertEqual(scan(name, "x\n"), [])
 
 
+class TestFixtureTreesForByproducts(unittest.TestCase):
+    """A state file under testdata/ is a fixture, like its siblings' files."""
+
+    def test_a_state_file_in_a_test_tree_drops_a_step(self):
+        shipped = scan("infra/terraform.tfstate")[0]
+        fixture = scan("internal/providers/testdata/basic.tfstate")[0]
+        self.assertEqual(shipped.rule_id, "FN004")
+        self.assertLess(fixture.confidence, shipped.confidence)
+
+    def test_it_is_weakened_rather_than_dropped(self):
+        # Terraform's own repository has 162 of these. A real state file does
+        # end up in a test directory, and that one is worth the look.
+        self.assertIn("FN004", rule_ids(scan("internal/providers/testdata/basic.tfstate")))
+
+    def test_a_history_file_is_weighed_the_same_way(self):
+        shipped = scan(".bash_history")[0]
+        fixture = scan("spec/fixtures/.bash_history")[0]
+        self.assertLess(fixture.confidence, shipped.confidence)
+
+
 class TestSuppression(unittest.TestCase):
     """A file that can be read can carry a marker, like every other file."""
 

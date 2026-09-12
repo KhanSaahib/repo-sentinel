@@ -68,7 +68,14 @@ class TestInventedCredentials(unittest.TestCase):
         self.assertEqual(self.scan("xox" + "b-8403192576-abcdefghijklmnop"), set())
 
     def test_a_word_somebody_typed_is_nobody_key(self):
-        self.assertEqual(self.scan("sk-ant-api03-CHANGE_ME-0a1b0a1b0a1b"), set())
+        for value in (
+            "sk-ant-api03-CHANGE_ME-0a1b0a1b0a1b",
+            "sk-ant-api03-REPLACE_ME",
+            "sk-proj-SET_ME-0a1b0a1b0a1b",
+            "gh" + "p_PutYourTokenHere0a1b0a1b0a1b0a1b0a1b",
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(self.scan(value), set())
 
     def test_the_same_shape_with_generated_bytes_is_reported(self):
         self.assertIn("SEC001", self.scan("AKIA" + "ZZ7Q4TWFN2XKLM3D"))
@@ -237,6 +244,24 @@ class TestAdditionalProviders(unittest.TestCase):
             with self.subTest(rule=rule_id):
                 self.assertIn(rule_id, rule_ids(secrets.scan_text("app.py", f'k = "{value}"')))
 
+    def test_the_tokens_a_repository_written_this_year_leaks(self):
+        for rule_id, value in (
+            ("SEC048", "hv" + "s." + filler(40)),
+            ("SEC049", "sb" + "p_" + filler(40)),
+            ("SEC050", "pscale" + "_tkn_" + filler(34)),
+            ("SEC051", "tsk" + "ey-auth-" + filler(12) + "-" + filler(22)),
+            ("SEC052", "sntry" + "s_" + filler(48)),
+            ("SEC053", "gs" + "k_" + filler(52)),
+            ("SEC054", "r" + "8_" + filler(40)),
+        ):
+            with self.subTest(rule=rule_id):
+                self.assertIn(rule_id, rule_ids(secrets.scan_text("app.py", f'k = "{value}"')))
+
+    def test_the_new_prefixes_alone_are_not_tokens(self):
+        for prefix in ("hvs.", "sbp_", "pscale_tkn_", "tskey-auth-", "sntrys_", "gsk_", "r8_"):
+            with self.subTest(prefix=prefix):
+                self.assertEqual(secrets.scan_text("app.py", f'k = "{prefix}"'), [])
+
     def test_the_new_patterns_do_not_fire_on_their_own_prefixes(self):
         # "glpat-" and friends turn up in documentation about tokens far more
         # often than actual tokens do.
@@ -251,6 +276,39 @@ class TestAdditionalProviders(unittest.TestCase):
         findings = secrets.scan_text("t.py", 'sid = "S' + "K" + "0a1b" * 8 + '"')
         twilio = next(f for f in findings if f.rule_id == "SEC014")
         self.assertEqual(twilio.confidence, Confidence.MEDIUM)
+
+
+class TestTemplateFiles(unittest.TestCase):
+    """A file whose name says "template" is documentation with an extension."""
+
+    LINE = "API_TOKEN=Qq7Zx9Lm2Pv4Rt8WcY6h"
+
+    def test_an_example_file_is_weighed_like_prose(self):
+        real = secrets.scan_text(".env", self.LINE)[0]
+        template = secrets.scan_text(".env.example", self.LINE)[0]
+        self.assertLess(template.confidence, real.confidence)
+
+    def test_both_conventions_for_saying_so(self):
+        for path in (
+            ".env.example", "config.sample.yml", "values.template.yaml", "app.conf.dist",
+        ):
+            with self.subTest(path=path):
+                findings = secrets.scan_text(path, self.LINE)
+                self.assertEqual(findings[0].confidence, Confidence.LOW)
+
+    def test_a_template_is_read_as_the_format_it_will_become(self):
+        # "app.conf.dist" is a .conf file somebody is meant to copy, and the
+        # value-position rules only apply to formats they know.
+        from repo_sentinel.scanners.secrets import has_value_positions
+
+        for path in ("app.conf.dist", "settings.ini.template", ".env.example"):
+            with self.subTest(path=path):
+                self.assertTrue(has_value_positions(path))
+        self.assertFalse(has_value_positions("notes.md"))
+
+    def test_it_is_weakened_rather_than_silenced(self):
+        # A real key does get left in the file people copy.
+        self.assertIn("SEC101", rule_ids(secrets.scan_text(".env.example", self.LINE)))
 
 
 class TestFixtureTrees(unittest.TestCase):
@@ -394,6 +452,24 @@ class TestValuePositions(unittest.TestCase):
         findings = secrets.scan_text(".env", text)
         self.assertIn("SEC101", rule_ids(findings))
         self.assertNotIn("\\", findings[0].evidence)
+
+    def test_a_systemd_unit_is_a_value_position_format(self):
+        unit = (
+            "[Service]\nUser=app\n"
+            "Environment=DB_PASSWORD=Tv8nRw1YXk92mQp7Lz4T\n"
+            "ExecStart=/usr/bin/app\n"
+        )
+        findings = secrets.scan_text("deploy/app.service", unit)
+        self.assertIn("SEC101", rule_ids(findings))
+        self.assertIn("DB_PASSWORD", findings[0].title)
+
+    def test_a_quoted_systemd_environment_line(self):
+        unit = '[Service]\nEnvironment="API_TOKEN=Qq7Zx9Lm2Pv4Rt8WcY6h"\n'
+        self.assertIn("SEC101", rule_ids(secrets.scan_text("app.service", unit)))
+
+    def test_an_ordinary_unit_setting_says_nothing(self):
+        unit = "[Service]\nUser=app\nExecStart=/usr/bin/app --port 8080\nRestart=always\n"
+        self.assertEqual(secrets.scan_text("app.service", unit), [])
 
     def test_reports_a_compose_environment_value(self):
         text = "services:\n  db:\n    environment:\n      MYSQL_ROOT_PASSWORD: Qq7Zx9Lm2Pv4Rt8W\n"

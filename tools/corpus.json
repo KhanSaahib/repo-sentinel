@@ -77,6 +77,18 @@
       "for": "a large Django codebase"
     },
     {
+      "name": "jellyfin",
+      "url": "https://github.com/jellyfin/jellyfin",
+      "commit": "1d7b6d97844c8cc848ed3fb5c4b48bb9cdd5b139",
+      "for": "C# and .NET, which no rule reads directly"
+    },
+    {
+      "name": "spring-boot",
+      "url": "https://github.com/spring-projects/spring-boot",
+      "commit": "26b0e813b0b82e5683524d1ad817ca9b66228b4d",
+      "for": "Java at scale: classpath references, and test keys by the hundred"
+    },
+    {
       "name": "spring-petclinic",
       "url": "https://github.com/spring-projects/spring-petclinic",
       "commit": "818c4136ea971c21674525f9053de0d9c7ad8cfe",
@@ -87,6 +99,18 @@
       "url": "https://github.com/laravel/laravel",
       "commit": "aa0cf127fc365a56ee016867144ddffabc2290ae",
       "for": "a PHP skeleton: small, and should stay silent"
+    },
+    {
+      "name": "cargo",
+      "url": "https://github.com/rust-lang/cargo",
+      "commit": "7941be6fb416b4cd9666aef7b858dfea25587a8c",
+      "for": "Rust, and a test suite full of fixture manifests"
+    },
+    {
+      "name": "terraform",
+      "url": "https://github.com/hashicorp/terraform",
+      "commit": "05cecbb315e87abc2c2bdb182963dd8e36d574fb",
+      "for": "the tool the TF rules describe: state files and certificates by the hundred"
     },
     {
       "name": "terragoat",

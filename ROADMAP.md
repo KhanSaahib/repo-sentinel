@@ -61,13 +61,16 @@ better outcome than a feature nobody wanted.
 - [ ] Helm `values.yaml` read against its chart's templates, so a value that
       lands in a `securityContext` is judged as one
 - [ ] Kustomize overlays, where the patch and the base disagree
-- [ ] systemd units and cron files: the other two places a repository decides
-      what runs as root
-- [ ] More application-code idioms, now that AP001-AP003 have been measured
-      against fourteen repositories -- 49 findings, every one of them a real
-      instance of the idiom, and AP003 has yet to fire outside the corpus.
-      Candidates: shell execution built from a request, deserialisation of
-      untrusted input, a password hashed with a fast digest
+- [x] ~~systemd units and cron files as a family~~ -- they did not need one.
+      A unit is an INI file and a crontab is assignments, so both became
+      value-position formats for the rules that already read those
+- [x] More application-code idioms, measured against nineteen repositories:
+      AP004 (unsafe deserialisation), AP005 (a password through a fast digest)
+      and AP006 (a shell command built by interpolation). The family is six
+      rules and reads five languages
+- [ ] A seventh, if one earns it. The bar is an idiom with one meaning, read
+      only in the language where it has that meaning -- which is what keeps
+      this family three rules rather than thirty
 
 ## Output and integration
 

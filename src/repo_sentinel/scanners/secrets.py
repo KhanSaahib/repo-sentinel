@@ -108,13 +108,26 @@ _CREDENTIAL_WORD = re.compile(
     re.IGNORECASE,
 )
 
+#: systemd's way of setting one: ``Environment=NAME=value``, optionally
+#: quoted. The inner assignment is the one a rule cares about.
+_SYSTEMD_ENVIRONMENT = re.compile(r'^\s*Environment=(?:"|\')?', re.IGNORECASE)
+
 #: File formats that write credentials bare, without quotes.
 _VALUE_POSITION_NAMES = frozenset(
-    {".env", ".npmrc", ".pypirc", ".netrc", "_netrc", ".dockercfg", ".pgpass", ".my.cnf"}
+    {
+        ".env", ".npmrc", ".pypirc", ".netrc", "_netrc", ".dockercfg", ".pgpass",
+        ".my.cnf", "crontab",
+    }
 )
 #: TOML is absent on purpose: it requires quotes, so its credentials are
 #: already the quoted-assignment rule's business.
-_VALUE_POSITION_SUFFIXES = (".env", ".ini", ".cfg", ".conf", ".properties", ".yml", ".yaml")
+_VALUE_POSITION_SUFFIXES = (
+    ".env", ".ini", ".cfg", ".conf", ".properties", ".yml", ".yaml",
+    # A systemd unit is an INI file that runs as root, and the place a
+    # credential lands in one is Environment=DB_PASSWORD=... -- unquoted, in
+    # value position, exactly like the formats above.
+    ".service", ".timer", ".socket", ".mount", ".path", ".target",
+)
 
 
 def has_value_positions(path: str) -> bool:
@@ -126,6 +139,13 @@ def has_value_positions(path: str) -> bool:
     """
     name = posixpath.basename(path.replace("\\", "/"))
     lowered = name.lower()
+    # "app.conf.dist" is a .conf file somebody is meant to copy, and the
+    # format underneath decides how to read it. The marker is dropped, once:
+    # the answer for the template is the answer for the thing it becomes.
+    for marker in wellknown.EXAMPLE_MARKERS:
+        if lowered.endswith(marker):
+            lowered = lowered[: -len(marker)]
+            break
     if lowered in _VALUE_POSITION_NAMES or lowered.startswith(".env"):
         return True
     return lowered.endswith(_VALUE_POSITION_SUFFIXES)
@@ -235,13 +255,24 @@ def _scan_assignments(
             )
 
     if value_position:
+        # A systemd unit wraps the assignment in one of its own:
+        # Environment=DB_PASSWORD=... and Environment="DB_PASSWORD=...". The
+        # name that matters is the inner one, so the outer is stepped over --
+        # with its length kept, because the span is what stops two rules
+        # reporting the same value.
+        offset = 0
+        wrapper = _SYSTEMD_ENVIRONMENT.match(line)
+        if wrapper is not None:
+            offset = wrapper.end()
+            line = line[offset:].rstrip('"')
+
         bare = _BARE_ASSIGNMENT.match(line)
         if bare is not None and is_secret_name(bare.group("name")):
             candidates.append(
                 (
                     "SEC101",
                     bare.group("name"),
-                    bare.span("value"),
+                    (bare.start("value") + offset, bare.end("value") + offset),
                     _without_continuation(bare.group("value")),
                     Severity.HIGH,
                 )
@@ -431,7 +462,11 @@ def _weigh_for_context(path: str, findings: "list[Finding]") -> "list[Finding]":
     """
     if not findings:
         return findings
-    prose = wellknown.is_prose_path(path)
+    # A file whose name says "template" is documentation with a different
+    # extension: ".env.example" exists to be copied and filled in, and n8n's
+    # says sk-ant-api03-REPLACE_ME. The obvious placeholders are already
+    # filtered; this weighs the rest, because a real key does get left in one.
+    prose = wellknown.is_prose_path(path) or wellknown.is_example_path(path)
     fixtures = wellknown.is_test_path(path)
     if not (prose or fixtures):
         return findings
