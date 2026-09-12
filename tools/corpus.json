@@ -95,6 +95,12 @@
       "for": "a small Maven project: the false-positive floor for Java"
     },
     {
+      "name": "framework",
+      "url": "https://github.com/laravel/framework",
+      "commit": "22fb94b8c4f5c7dd13bf6cb65f688bca65ce7d99",
+      "for": "PHP at scale: a monorepo of thirty-seven packages, each with its own workflows"
+    },
+    {
       "name": "laravel",
       "url": "https://github.com/laravel/laravel",
       "commit": "aa0cf127fc365a56ee016867144ddffabc2290ae",
