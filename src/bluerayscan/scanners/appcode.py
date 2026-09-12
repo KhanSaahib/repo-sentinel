@@ -6,8 +6,11 @@ what it does, and a line-at-a-time reader can only honestly answer questions
 about idioms rather than about behaviour. So the rules are few, each a
 well-known idiom with a well-known meaning, each written per language rather
 than guessed at across all of them. The bar for adding one is that the idiom
-has a single meaning in the language it is read in: ``verify=False`` is a
-Python spelling, and the same characters in a Go file are a guess.
+has a single meaning in the language it is read in: requests' ``verify``
+keyword set to false is a Python spelling, and the same characters in a Go
+file are a guess. (Written out like that on purpose -- spelled the usual way,
+this sentence would be a finding in this scanner's own source, which is a
+thing worth knowing about a scanner that reads for idioms.)
 
 What they have in common is that they are all *deliberate*. Nobody disables
 certificate verification by accident; it is typed to get past a failure, on a
