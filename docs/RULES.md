@@ -154,6 +154,17 @@ invented credentials are the point of a fixture. A documented token shape is
 not worth less, because the classic way a real key reaches a repository is a
 test that once talked to a real service.
 
+That is a deliberate trade and it has a cost: a project whose tests need TLS
+commits a key per case, and Spring Boot has a hundred and twenty-six of them.
+They are real private keys, so SEC004 says so; what makes that liveable is the
+baseline -- `repo-sentinel init` records them once and every later run is about
+new ones -- or a per-path rule in the config, which is the honest way to say
+"not here":
+
+```json
+{ "paths": { "**/src/test/resources/**": { "disable": ["SEC004"] } } }
+```
+
 Entropy is measured on ASCII only. Credentials travel through headers, URLs
 and environment variables that are ASCII, and text in another script is not --
 its entropy per character is high because its alphabet is large, which has
