@@ -212,6 +212,20 @@ Placeholders are filtered before entropy is measured at all — `your-password-h
 credential: paths, URLs without a password in them, version constraints, dotted
 identifiers, timestamps.
 
+What the floor rejects was measured rather than assumed. Reporting values that
+miss it *narrowly* -- the obvious way to catch a real credential the floor
+misjudged -- produces 172 findings across the twenty-one pinned repositories
+even at a tenth of a bit, and exactly one of them is worth a reviewer's time.
+The rest are not literals at all: one variable assigned to another
+(`repoOpts.Repo.AzureServicePrincipalClientSecret`), a class name
+(`DiscourseAi::Tokenizer::GeminiTokenizer`), a Vault or Kubernetes reference
+(`$k8ssecret:clientsecret`). The floor's margin is the thing holding those
+back, which is an argument for it rather than against it.
+
+The question that idea was trying to answer -- *did you miss my secret?* -- has
+an answer that costs nothing: `bluerayscan explain VALUE --name NAME` prints
+these measurements for one value and says what would happen to it.
+
 Every reported value is redacted to its first and last four characters. Findings
 end up in CI logs and issue threads, so the scanner must never be the thing that
 leaks the credential it just found.

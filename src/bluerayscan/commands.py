@@ -20,6 +20,7 @@ from . import (
     __version__,
     baseline as baseline_module,
     config as config_module,
+    explain as explain_module,
     history,
     report,
     rules as rules_module,
@@ -240,6 +241,19 @@ def history_command(args: argparse.Namespace) -> int:
     if fail_on is not None and any(finding.severity >= fail_on for finding in findings):
         return EXIT_FINDINGS
     return EXIT_OK
+
+
+def explain_command(args: argparse.Namespace) -> int:
+    """Say what the heuristic rules make of one value.
+
+    Exit code follows the answer rather than the run: 1 when the value would
+    be reported, 0 when it would not, so a shell can ask the question without
+    reading the prose.
+    """
+    value = sys.stdin.readline() if args.value == "-" else args.value
+    answer = explain_module.explain(value, args.name)
+    print(answer.render())
+    return EXIT_FINDINGS if answer.reported else EXIT_OK
 
 
 def _history_stream(name: str) -> "tuple[TextIO, bool]":

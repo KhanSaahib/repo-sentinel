@@ -79,6 +79,7 @@ bluerayscan rules kubernetes                # ...or just that family
 bluerayscan rules WF011                     # one rule, explained in full
 bluerayscan init .                          # set a repository up
 git log -p | bluerayscan history            # what did history commit? (below)
+bluerayscan explain VALUE --name api_key    # why was it quiet about this? (below)
 
 bluerayscan scan . --format json            # machine-readable output
 bluerayscan scan . --format sarif --output results.sarif
@@ -186,6 +187,37 @@ What it reads is the lines each commit *added*, at the line numbers they
 landed on -- so a finding points at a real line of a real version of the file,
 and a multi-line value added in one commit still reads as one value. Lines a
 commit removed are not its news; lines it left alone are not either.
+
+## Why was it quiet about this?
+
+Silence is the one answer a scanner cannot distinguish from *there was nothing
+there*. For a value you have in your hand, `explain` prints the measurements
+the heuristic rules take and says what would happen to it:
+
+```
+$ bluerayscan explain 'Xk92mQp7Lz4TvB8nRw1Y' --name api_key
+Xk92************Rw1Y
+  length      20 characters (minimum 12)
+  alphabet    62 symbols (letters and digits)
+  entropy     4.32 bits per character
+  floor       3.24 bits -- 0.75 of the 4.32 a value this long over this alphabet could reach
+  shape       matches no documented token shape
+  name        'api_key' promises a credential: yes
+
+Reported: high-entropy value assigned to 'api_key' (SEC100 or SEC101, depending
+on whether it is quoted), at medium confidence.
+```
+
+`--name` matters as much as the value. The entropy rules ask about a value
+only where the name beside it promises a credential, so the same string
+assigned to `build_id` is a build id, and the command says so rather than
+leaving it a mystery. The value is redacted on the way out, like everything
+else this tool prints, and the exit code answers the question on its own: `1`
+if it would be reported, `0` if not.
+
+It takes `-` to read the value from standard input, which is the shape to
+reach for when the value is one you would rather not put in your shell
+history.
 
 ## Severity and confidence
 

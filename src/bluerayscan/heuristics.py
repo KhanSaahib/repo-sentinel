@@ -237,6 +237,31 @@ def alphabet_size(value: str) -> int:
     return 90
 
 
+#: What each class in :func:`alphabet_size` is called, in its order. The name
+#: and the number have to come from one decision: a caller that rebuilt these
+#: sets to name them got "aA1" as 16 symbols described as "letters and digits",
+#: because its hex set was lowercase only.
+_ALPHABET_NAMES = (
+    (set(string.digits), 10, "digits"),
+    (_HEX, 16, "hex"),
+    (set(string.ascii_lowercase + string.digits + "_-"), 38,
+     "lowercase, digits, dash and underscore"),
+    (set(string.ascii_uppercase + string.digits + "_-"), 38,
+     "uppercase, digits, dash and underscore"),
+    (_ALNUM, 62, "letters and digits"),
+    (_BASE64ISH, 68, "base64"),
+)
+
+
+def alphabet_name(value: str) -> str:
+    """What to call the alphabet :func:`alphabet_size` counted."""
+    chars = set(value)
+    for alphabet, _, name in _ALPHABET_NAMES:
+        if chars <= alphabet:
+            return name
+    return "mixed, including punctuation"
+
+
 def entropy_floor(value: str) -> float:
     """The entropy ``value`` must reach for its length and alphabet to look generated.
 
