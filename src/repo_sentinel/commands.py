@@ -150,7 +150,10 @@ def scan_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> i
     if args.sort == "path":
         findings.sort(key=lambda finding: (finding.path, finding.line, finding.rule_id))
 
-    if args.format in ("text", "markdown", "github"):
+    # Every format that carries prose gets the summary sentence. json and
+    # sarif carry the same facts as structure instead, which is what a machine
+    # can act on.
+    if args.format in ("text", "markdown", "github", "junit"):
         notes.append(_scan_note(result))
 
     exit_code = _emit(

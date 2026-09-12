@@ -204,6 +204,16 @@ class TestFileSizeLimit(unittest.TestCase):
         self.assertNotIn("size limit", output)
 
 
+class TestJunitOutput(unittest.TestCase):
+    def test_the_report_carries_the_scan_summary(self):
+        # The property is where a CI shows a note about the run, and the run
+        # saying how much it read is the note that matters.
+        with sample_repo() as root:
+            _, output = run(["scan", root, "--format", "junit"])
+        self.assertIn('name="note"', output)
+        self.assertIn("Scanned", output)
+
+
 class TestJsonScanFacts(unittest.TestCase):
     """A pipeline cannot read the summary sentence, so it gets the facts."""
 
