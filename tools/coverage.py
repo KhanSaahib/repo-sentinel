@@ -3,7 +3,7 @@
 
 A coverage tool is a strange thing to write when a good one exists. The reason
 is the same one that shapes the rest of this project: the promise is that
-running repo-sentinel pulls nothing into your environment, and that promise is
+running bluerayscan pulls nothing into your environment, and that promise is
 worth more than the fifty lines this costs. A contributor with no network, or
 with a policy about what may be installed to run a security tool's own tests,
 can still check the floor.

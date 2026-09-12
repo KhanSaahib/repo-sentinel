@@ -123,14 +123,14 @@ class Finding:
     #: What this finding is *about*, when two rules could legitimately find the
     #: same thing -- in practice, the redacted credential. Findings that carry
     #: the same subject at the same place are one problem reported twice, and
-    #: :func:`repo_sentinel.engine.collapse` keeps the best of them. An empty
+    #: :func:`bluerayscan.engine.collapse` keeps the best of them. An empty
     #: subject, which is the default, never collapses: two rules sharing a line
     #: by coincidence are two findings, and guessing otherwise loses one.
     subject: str = ""
     #: How many places in this file report the same subject. One credential
     #: pasted into a fixture six hundred times is one credential to rotate,
     #: and six hundred lines of report is nobody's idea of a finding.
-    #: :func:`repo_sentinel.engine.collapse` sets this; the finding itself
+    #: :func:`bluerayscan.engine.collapse` sets this; the finding itself
     #: points at the first occurrence.
     occurrences: int = 1
 

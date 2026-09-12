@@ -2,8 +2,8 @@
 
 import unittest
 
-from repo_sentinel.findings import Severity
-from repo_sentinel.scanners import azure
+from bluerayscan.findings import Severity
+from bluerayscan.scanners import azure
 
 
 def rule_ids(findings):
@@ -127,7 +127,7 @@ class TestContainersAndDebug(unittest.TestCase):
 
 class TestSuppression(unittest.TestCase):
     def test_line_marker(self):
-        text = pipeline('  - script: echo "$(Build.SourceVersionMessage)"  # repo-sentinel: ignore\n')
+        text = pipeline('  - script: echo "$(Build.SourceVersionMessage)"  # bluerayscan: ignore\n')
         self.assertEqual(scan(text), [])
 
 

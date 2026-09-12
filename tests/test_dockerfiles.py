@@ -2,8 +2,8 @@
 
 import unittest
 
-from repo_sentinel.findings import Severity
-from repo_sentinel.scanners import dockerfiles
+from bluerayscan.findings import Severity
+from bluerayscan.scanners import dockerfiles
 
 
 def rule_ids(findings):
@@ -124,14 +124,14 @@ class TestBakedCredentials(unittest.TestCase):
 
 class TestSuppression(unittest.TestCase):
     def test_file_marker_silences_the_dockerfile(self):
-        text = "# repo-sentinel: ignore-file\nFROM debian:latest\n"
+        text = "# bluerayscan: ignore-file\nFROM debian:latest\n"
         self.assertEqual(scan(text), [])
 
     def test_a_marker_on_a_from_line_does_not_break_the_instruction(self):
         # Docker has no inline comments, so the marker would otherwise become
         # part of the image reference and the rule would find nothing to report
         # -- suppression by accident rather than by decision.
-        text = "FROM debian:latest  # repo-sentinel: ignore\nUSER app\n"
+        text = "FROM debian:latest  # bluerayscan: ignore\nUSER app\n"
         self.assertEqual(scan(text), [])
         self.assertEqual(
             [f.rule_id for f in dockerfiles.scan_files([("Dockerfile", text)], honour_markers=False)],
@@ -141,7 +141,7 @@ class TestSuppression(unittest.TestCase):
     def test_line_marker_silences_one_instruction(self):
         text = (
             "FROM debian:12@sha256:" + "7" * 64 + "\n"
-            "ADD https://x/y.tgz /opt/  # repo-sentinel: ignore\n"
+            "ADD https://x/y.tgz /opt/  # bluerayscan: ignore\n"
             "USER app\n"
         )
         self.assertNotIn("DK005", rule_ids(scan(text)))

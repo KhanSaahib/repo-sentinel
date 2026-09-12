@@ -2,8 +2,8 @@
 
 import unittest
 
-from repo_sentinel.findings import Confidence, Severity
-from repo_sentinel.scanners import appcode
+from bluerayscan.findings import Confidence, Severity
+from bluerayscan.scanners import appcode
 
 
 def rule_ids(findings):
@@ -222,7 +222,7 @@ class TestFixtureTrees(unittest.TestCase):
     CODE = "cfg := &tls.Config{InsecureSkipVerify: true}\n"
 
     def weighed(self, path):
-        from repo_sentinel import engine
+        from bluerayscan import engine
 
         return engine._weigh_by_context(scan(path, self.CODE))
 
@@ -239,7 +239,7 @@ class TestFixtureTrees(unittest.TestCase):
 
 class TestSuppressionAndScope(unittest.TestCase):
     def test_a_marker_silences_the_line(self):
-        text = "requests.get(url, verify=False)  # repo-sentinel: ignore[AP001]\n"
+        text = "requests.get(url, verify=False)  # bluerayscan: ignore[AP001]\n"
         self.assertEqual(scan("app.py", text), [])
 
     def test_scan_files_filters_by_language(self):
@@ -251,7 +251,7 @@ class TestSuppressionAndScope(unittest.TestCase):
         self.assertEqual([finding.path for finding in findings], ["app.py"])
 
     def test_a_whole_file_marker_is_obeyed(self):
-        text = "# repo-sentinel: ignore-file\nrequests.get(url, verify=False)\n"
+        text = "# bluerayscan: ignore-file\nrequests.get(url, verify=False)\n"
         self.assertEqual(scan("app.py", text), [])
 
     def test_a_match_the_length_of_a_minified_line_is_not_reported(self):

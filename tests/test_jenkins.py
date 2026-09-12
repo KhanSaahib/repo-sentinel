@@ -2,8 +2,8 @@
 
 import unittest
 
-from repo_sentinel.findings import Severity
-from repo_sentinel.scanners import jenkins
+from bluerayscan.findings import Severity
+from bluerayscan.scanners import jenkins
 
 
 def rule_ids(findings):
@@ -92,7 +92,7 @@ class TestAgentsAndDownloads(unittest.TestCase):
 
 class TestSuppression(unittest.TestCase):
     def test_line_marker(self):
-        text = pipeline('        sh "echo ${env.BRANCH_NAME}"  // repo-sentinel: ignore\n')
+        text = pipeline('        sh "echo ${env.BRANCH_NAME}"  // bluerayscan: ignore\n')
         self.assertEqual(scan(text), [])
 
 

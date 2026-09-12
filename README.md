@@ -1,6 +1,6 @@
 # BlueRayScan
 
-[![CI](https://github.com/KhanSaahib/repo-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/KhanSaahib/repo-sentinel/actions/workflows/ci.yml)
+[![CI](https://github.com/KhanSaahib/bluerayscan/actions/workflows/ci.yml/badge.svg)](https://github.com/KhanSaahib/bluerayscan/actions/workflows/ci.yml)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/downloads/)
 [![No dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -35,21 +35,21 @@ kept as a compatibility alias.
 From a checkout:
 
 ```bash
-git clone https://github.com/KhanSaahib/repo-sentinel.git
-cd repo-sentinel
+git clone https://github.com/KhanSaahib/bluerayscan.git
+cd bluerayscan
 pip install .
 ```
 
 Or from a tag, without a checkout:
 
 ```bash
-pip install git+https://github.com/KhanSaahib/repo-sentinel@v0.3.0
+pip install git+https://github.com/KhanSaahib/bluerayscan@v0.3.0
 ```
 
 Or run it straight from a checkout, with no install at all:
 
 ```bash
-PYTHONPATH=src python -m repo_sentinel scan .
+PYTHONPATH=src python -m bluerayscan scan .
 ```
 
 ## Use
@@ -64,7 +64,7 @@ That scans the repository, tells you what is in it -- including which three
 rules are doing most of the talking, because a hundred findings that are all
 one rule is a decision to make once -- records the findings at or above `high`
 as a baseline so your first pipeline run is green, writes a
-`.repo-sentinel.json`, and prints the CI snippet for whichever CI system the
+`.bluerayscan.json`, and prints the CI snippet for whichever CI system the
 repository already has -- GitHub Actions, GitLab, Azure Pipelines, CircleCI or
 Jenkins, the last four wired to draw the report rather than print it. Nothing
 is overwritten without `--force`.
@@ -191,14 +191,14 @@ ignore rule is also the easiest way to hide something from this tool, whether by
 accident or on purpose. Audit what the scanner was told not to look at:
 
 ```bash
-repo-sentinel scan . --no-gitignore
+bluerayscan scan . --no-gitignore
 ```
 
 ## What it checks
 
 One hundred and forty-four rules across sixteen families. [docs/RULES.md](docs/RULES.md) is the
 full list, with a paragraph on each family explaining what it is looking for
-and why; `repo-sentinel rules` prints the same catalogue from the tool.
+and why; `bluerayscan rules` prints the same catalogue from the tool.
 
 | Family | Rules | Looks at |
 | --- | --- | --- |
@@ -242,7 +242,7 @@ so rather than implying coverage they do not have.
 
 Every project that adopts a scanner ends up with a preferred invocation. Putting
 it in a `Makefile` means the pre-commit hook, the pipeline and whoever runs the
-tool by hand all disagree. Put it in `.repo-sentinel.json` beside the tree
+tool by hand all disagree. Put it in `.bluerayscan.json` beside the tree
 instead:
 
 ```json
@@ -296,9 +296,9 @@ entire history at once, and a build that has been red since Tuesday tells nobody
 anything. Record what is already there, then fail only on what arrives after:
 
 ```bash
-repo-sentinel scan . --write-baseline      # writes .repo-sentinel-baseline.json
-git add .repo-sentinel-baseline.json
-repo-sentinel scan . --baseline            # exits 0; new findings still fail
+bluerayscan scan . --write-baseline      # writes .bluerayscan-baseline.json
+git add .bluerayscan-baseline.json
+bluerayscan scan . --baseline            # exits 0; new findings still fail
 ```
 
 Two properties make the file safe to commit. It never contains a secret —
@@ -349,7 +349,7 @@ The `fingerprint` is the same identity a baseline uses: a hash of the rule, the
 path and the already-redacted evidence, with no line number in it, so it
 survives reformatting and changes when the value does. Paths always use forward
 slashes, on every platform, so a report reads the same wherever it was
-produced. `repo-sentinel rules --format json` describes the rules themselves,
+produced. `bluerayscan rules --format json` describes the rules themselves,
 including the CWE each one reports and, for each family in the listing, what
 it reads and where it is written up -- so a consumer grouping by category need
 not invent a label the documentation does not use.
@@ -361,7 +361,7 @@ people arguing about the change are already looking:
 
 ```yaml
 - id: scan
-  run: repo-sentinel scan . --format markdown --output report.md --fail-on none
+  run: bluerayscan scan . --format markdown --output report.md --fail-on none
 - uses: actions/github-script@<sha>
   with:
     script: |
@@ -382,7 +382,7 @@ as workflow commands, which the runner turns into annotations on the diff and
 which need no permission at all:
 
 ```yaml
-- run: repo-sentinel scan . --format github
+- run: bluerayscan scan . --format github
 ```
 
 Same findings, worse home, far fewer prerequisites.
@@ -396,7 +396,7 @@ attached. No plugin, no permission:
 ```yaml
 # .gitlab-ci.yml
 scan:
-  script: repo-sentinel scan . --format junit --output report.xml
+  script: bluerayscan scan . --format junit --output report.xml
   artifacts:
     when: always
     reports:
@@ -413,10 +413,10 @@ suite -- an empty report renders as a broken job rather than a quiet one.
 turns into annotations on the pull request that introduced the line:
 
 ```yaml
-- run: repo-sentinel scan . --format sarif --output repo-sentinel.sarif --fail-on none
+- run: bluerayscan scan . --format sarif --output bluerayscan.sarif --fail-on none
 - uses: github/codeql-action/upload-sarif@<sha>
   with:
-    sarif_file: repo-sentinel.sarif
+    sarif_file: bluerayscan.sarif
 ```
 
 The job needs `security-events: write`, and `--fail-on none` on the scan step so
@@ -442,19 +442,19 @@ comment syntax is.
 One line:
 
 ```python
-sample_token = "Xk92mQp7Lz4TvB8nRw1Y"  # repo-sentinel: ignore
+sample_token = "Xk92mQp7Lz4TvB8nRw1Y"  # bluerayscan: ignore
 ```
 
 A block, for a generated section or a fixture full of invented keys. Both
 markers are themselves suppressed, along with everything between them:
 
 ```python
-# repo-sentinel: ignore-start
+# bluerayscan: ignore-start
 FAKE_KEYS = {"aws": "...", "stripe": "..."}
-# repo-sentinel: ignore-end
+# bluerayscan: ignore-end
 ```
 
-A whole file, with `repo-sentinel: ignore-file` — but **only in the first 20
+A whole file, with `bluerayscan: ignore-file` — but **only in the first 20
 lines**. Below that it is just a mention, which is why this README still gets
 scanned despite the line you are reading. Without that rule, any file that
 described the directive would silently stop being scanned, and a scanner a
@@ -462,10 +462,13 @@ sentence about it can switch off is worse than no scanner. Keeping the directive
 in the header also means you can see that a file is unscanned without reading to
 the bottom of it.
 
+The former `repo-sentinel: ignore` spelling remains supported indefinitely, so
+upgrading cannot silently reactivate findings a project already reviewed.
+
 All three can name the rules they mean, in brackets:
 
 ```yaml
-image: nginx:latest  # repo-sentinel: ignore[K8S008]
+image: nginx:latest  # bluerayscan: ignore[K8S008]
 ```
 
 Prefer this to the blunt form. A line exempted from everything stays exempt when

@@ -2,8 +2,8 @@
 
 import unittest
 
-from repo_sentinel.findings import Severity
-from repo_sentinel.scanners import terraform
+from bluerayscan.findings import Severity
+from bluerayscan.scanners import terraform
 
 
 def rule_ids(findings):
@@ -410,12 +410,12 @@ class TestSuppression(unittest.TestCase):
     def test_line_marker_silences_one_attribute(self):
         text = (
             'resource "aws_s3_bucket" "a" {\n'
-            '  acl = "public-read"  # repo-sentinel: ignore\n}\n'
+            '  acl = "public-read"  # bluerayscan: ignore\n}\n'
         )
         self.assertEqual(scan(text), [])
 
     def test_file_marker_silences_the_file(self):
-        text = '# repo-sentinel: ignore-file\nresource "aws_s3_bucket" "a" {\n  acl = "public-read"\n}\n'
+        text = '# bluerayscan: ignore-file\nresource "aws_s3_bucket" "a" {\n  acl = "public-read"\n}\n'
         self.assertEqual(scan(text), [])
 
 

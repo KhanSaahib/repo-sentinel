@@ -33,7 +33,7 @@ from collections.abc import Iterable, Sequence
 from .findings import Finding
 
 #: Where ``--baseline`` looks when given no path of its own.
-DEFAULT_PATH = ".repo-sentinel-baseline.json"
+DEFAULT_PATH = ".bluerayscan-baseline.json"
 
 #: Bumped only for a change that older readers could not interpret.
 SCHEMA_VERSION = 1
@@ -102,7 +102,7 @@ def load(path: str) -> Baseline:
         raise BaselineError(f"{path!r} is not valid JSON: {error}") from None
 
     if not isinstance(payload, dict) or "findings" not in payload:
-        raise BaselineError(f"{path!r} does not look like a repo-sentinel baseline")
+        raise BaselineError(f"{path!r} does not look like a bluerayscan baseline")
 
     version = payload.get("baseline_version")
     if version != SCHEMA_VERSION:
@@ -144,7 +144,7 @@ def dumps(findings: Iterable[Finding], *, version: str) -> str:
     """Serialise ``findings`` as a baseline document."""
     document = {
         "baseline_version": SCHEMA_VERSION,
-        "generated_by": f"repo-sentinel {version}",
+        "generated_by": f"bluerayscan {version}",
         "note": (
             "Findings accepted as pre-existing. Entries hold a hash of already "
             "redacted evidence, never a credential. Shrink this file; do not grow it."

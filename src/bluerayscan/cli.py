@@ -147,7 +147,7 @@ def build_parser() -> argparse.ArgumentParser:
     scan_parser.add_argument(
         "--no-suppression",
         action="store_true",
-        help="read the 'repo-sentinel: ignore' markers but do not obey them",
+        help="read the 'bluerayscan: ignore' markers but do not obey them",
     )
     scan_parser.add_argument(
         "--no-example-allowlist",
@@ -222,7 +222,7 @@ def _apply_config(parser: argparse.ArgumentParser, argv: "Sequence[str] | None")
     settings = config_module.load(path)
     # A path in the config file is relative to the config file, not to
     # whatever directory the command happened to be run from. Without this,
-    # `repo-sentinel scan some/repo` cannot find the baseline that repo's own
+    # `bluerayscan scan some/repo` cannot find the baseline that repo's own
     # config points at, which is exactly what `init` sets up.
     if "baseline" in settings and not os.path.isabs(settings["baseline"]):
         settings["baseline"] = os.path.join(os.path.dirname(path) or ".", settings["baseline"])
@@ -248,7 +248,7 @@ def main(argv: "Sequence[str] | None" = None) -> int:
     try:
         args = _apply_config(parser, argv)
     except config_module.ConfigError as error:
-        print(f"repo-sentinel: {error}", file=sys.stderr)
+        print(f"bluerayscan: {error}", file=sys.stderr)
         return EXIT_ERROR
 
     if args.command == "init":

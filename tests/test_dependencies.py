@@ -2,8 +2,8 @@
 
 import unittest
 
-from repo_sentinel.findings import Severity
-from repo_sentinel.scanners import dependencies
+from bluerayscan.findings import Severity
+from bluerayscan.scanners import dependencies
 
 
 def rule_ids(findings):
@@ -305,18 +305,18 @@ class TestTomlManifests(unittest.TestCase):
     def test_a_marker_still_silences_a_line(self):
         text = (
             "[source.mirror]\n"
-            'registry = "http://crates.internal/index"  # repo-sentinel: ignore\n'
+            'registry = "http://crates.internal/index"  # bluerayscan: ignore\n'
         )
         self.assertEqual(scan("Cargo.toml", text), [])
 
 
 class TestSuppression(unittest.TestCase):
     def test_line_marker(self):
-        text = "registry=http://registry.internal/  # repo-sentinel: ignore\n"
+        text = "registry=http://registry.internal/  # bluerayscan: ignore\n"
         self.assertEqual(scan(".npmrc", text), [])
 
     def test_file_marker(self):
-        text = "# repo-sentinel: ignore-file\nregistry=http://registry.internal/\n"
+        text = "# bluerayscan: ignore-file\nregistry=http://registry.internal/\n"
         self.assertEqual(scan(".npmrc", text), [])
 
 

@@ -97,8 +97,8 @@ have.
 
 ## Suppression and configuration
 
-Two places name rules -- a `disable` list in `.repo-sentinel.json` and a
-`# repo-sentinel: ignore[RULE]` marker in a file -- and they share
+Two places name rules -- a `disable` list in `.bluerayscan.json` and a
+`# bluerayscan: ignore[RULE]` marker in a file -- and they share
 `rules.matcher`, so the syntax is identical in both. Keep it that way: the
 answer to "what do I write here" should not depend on where here is.
 
@@ -179,7 +179,7 @@ on a function called `path` is worse than nothing.
 
 ## Releasing
 
-Bump the version in `pyproject.toml` and `src/repo_sentinel/__init__.py`, move
+Bump the version in `pyproject.toml` and `src/bluerayscan/__init__.py`, move
 the changelog's unreleased notes under a heading for it, then tag:
 
 ```bash

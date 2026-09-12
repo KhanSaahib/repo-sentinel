@@ -2,8 +2,8 @@
 
 import unittest
 
-from repo_sentinel.findings import Severity
-from repo_sentinel.scanners import circleci
+from bluerayscan.findings import Severity
+from bluerayscan.scanners import circleci
 
 
 def rule_ids(findings):
@@ -90,7 +90,7 @@ class TestImagesAndDownloads(unittest.TestCase):
 
 class TestSuppression(unittest.TestCase):
     def test_line_marker(self):
-        text = config('    steps:\n      - run: echo "$CIRCLE_BRANCH"  # repo-sentinel: ignore\n')
+        text = config('    steps:\n      - run: echo "$CIRCLE_BRANCH"  # bluerayscan: ignore\n')
         self.assertEqual(scan(text), [])
 
 

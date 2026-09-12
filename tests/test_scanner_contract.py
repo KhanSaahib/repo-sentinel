@@ -10,7 +10,7 @@ quietly breaks.
 import inspect
 import unittest
 
-from repo_sentinel import scanners, suppression
+from bluerayscan import scanners, suppression
 
 
 def content_scanners():

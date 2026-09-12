@@ -2,8 +2,8 @@
 
 import unittest
 
-from repo_sentinel.findings import Severity
-from repo_sentinel.scanners import gitlab
+from bluerayscan.findings import Severity
+from bluerayscan.scanners import gitlab
 
 
 def rule_ids(findings):
@@ -127,7 +127,7 @@ class TestDebugTrace(unittest.TestCase):
 
 class TestSuppression(unittest.TestCase):
     def test_line_marker(self):
-        text = job('  script:\n    - echo $CI_COMMIT_TITLE  # repo-sentinel: ignore\n')
+        text = job('  script:\n    - echo $CI_COMMIT_TITLE  # bluerayscan: ignore\n')
         self.assertEqual(scan(text), [])
 
 

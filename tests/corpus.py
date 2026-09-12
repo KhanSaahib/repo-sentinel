@@ -1,7 +1,7 @@
 """A tree that trips every rule in the catalogue, exactly once each.
 
 Two jobs. It is the fixture behind the catalogue drift test -- every rule
-described in :mod:`repo_sentinel.rules` has to fire here, and every rule that
+described in :mod:`bluerayscan.rules` has to fire here, and every rule that
 fires here has to be described there -- and it is a standing end-to-end check
 that the scanners still work when pointed at a file rather than a string.
 
@@ -107,7 +107,7 @@ ENV_FILE = "\n".join(
 RUNAWAY_SUPPRESSION_FILE = "\n".join(
     (
         "settings = {}",
-        "# repo-sentinel: ignore-start",
+        "# bluerayscan: ignore-start",
         "generated = 1",
     )
 )

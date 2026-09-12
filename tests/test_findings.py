@@ -2,7 +2,7 @@
 
 import unittest
 
-from repo_sentinel.findings import Confidence, Finding, Severity
+from bluerayscan.findings import Confidence, Finding, Severity
 
 
 class TestOrdering(unittest.TestCase):

@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 import fixtures
-from repo_sentinel import engine
+from bluerayscan import engine
 
 
 def repository(files):
@@ -23,7 +23,7 @@ class TestEveryScannerRuns(unittest.TestCase):
     def test_the_engine_calls_every_scanner_the_package_has(self):
         # A scanner missing from the engine runs in its own unit tests and
         # nowhere else, which nothing else would notice.
-        from repo_sentinel import scanners
+        from bluerayscan import scanners
 
         available = {
             getattr(scanners, name)
@@ -138,7 +138,7 @@ class TestCollapse(unittest.TestCase):
     """Scanners overlap on purpose; reports should not."""
 
     def finding(self, rule_id, severity, evidence="AKIA****LM3D", line=6, subject="AKIA****LM3D"):
-        from repo_sentinel.findings import Finding, Severity
+        from bluerayscan.findings import Finding, Severity
 
         return Finding(
             rule_id=rule_id,

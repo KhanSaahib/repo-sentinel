@@ -2,8 +2,8 @@ import base64
 import unittest
 
 import fixtures
-from repo_sentinel.findings import Confidence, Severity, redact
-from repo_sentinel.scanners import secrets
+from bluerayscan.findings import Confidence, Severity, redact
+from bluerayscan.scanners import secrets
 
 
 def rule_ids(findings):
@@ -148,7 +148,7 @@ class TestEntropyAssignments(unittest.TestCase):
 
 class TestIgnoreMarker(unittest.TestCase):
     def test_marker_suppresses_the_line(self):
-        line = f'key = "{fixtures.REALISTIC_AWS_KEY_ID}"  # repo-sentinel: ignore'
+        line = f'key = "{fixtures.REALISTIC_AWS_KEY_ID}"  # bluerayscan: ignore'
         self.assertEqual(secrets.scan_text("a.py", line), [])
 
 
@@ -299,7 +299,7 @@ class TestTemplateFiles(unittest.TestCase):
     def test_a_template_is_read_as_the_format_it_will_become(self):
         # "app.conf.dist" is a .conf file somebody is meant to copy, and the
         # value-position rules only apply to formats they know.
-        from repo_sentinel.scanners.secrets import has_value_positions
+        from bluerayscan.scanners.secrets import has_value_positions
 
         for path in ("app.conf.dist", "settings.ini.template", ".env.example"):
             with self.subTest(path=path):
