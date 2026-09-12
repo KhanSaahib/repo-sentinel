@@ -407,6 +407,11 @@ Each result carries a `partialFingerprint`, so code scanning follows a finding
 across the reformattings and line moves that would otherwise close it and
 immediately reopen it as new.
 
+The run also reports what it could not read, as SARIF `toolExecutionNotifications`.
+A Security tab showing no alerts because nothing was scanned looks exactly like
+one showing no alerts because everything is fine, and those notifications are
+the difference.
+
 ## Suppressing a false positive
 
 Three scopes, in increasing blast radius. All three work in any file the scanner

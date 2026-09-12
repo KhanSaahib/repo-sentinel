@@ -316,6 +316,9 @@ last of them is the first that reads code rather than configuration.
   the other characters something treats as a line break, leaving a corrupt
   command behind it. Found by a property test that now runs every format over
   findings built from the characters a real file can contain.
+- **SARIF reports what the run could not read**, as `toolExecutionNotifications`
+  on the invocation. A Security tab showing no alerts because nothing was
+  scanned looks exactly like one showing no alerts because everything is fine.
 - **`--format json` carries a `scan` object**: files read, duration, what was
   skipped as unreadable or oversized, and the suppression counts. The text
   report has always said this in a sentence; a pipeline cannot read a sentence,

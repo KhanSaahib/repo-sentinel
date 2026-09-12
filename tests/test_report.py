@@ -178,6 +178,37 @@ class TestSarif(unittest.TestCase):
         self.assertEqual(empty["runs"][0]["tool"]["driver"]["rules"], [])
 
 
+class TestSarifInvocation(unittest.TestCase):
+    """A Security tab with no alerts should not hide an unread tree."""
+
+    def invocation(self, scan=None):
+        payload = json.loads(report.format_sarif([CRITICAL], version="0", scan=scan))
+        return payload["runs"][0]["invocations"][0]
+
+    def test_a_run_that_read_everything_says_only_that_it_worked(self):
+        invocation = self.invocation({"unreadable": [], "oversized": []})
+        self.assertTrue(invocation["executionSuccessful"])
+        self.assertNotIn("toolExecutionNotifications", invocation)
+
+    def test_what_could_not_be_read_becomes_a_notification(self):
+        invocation = self.invocation({"unreadable": ["locked"], "oversized": ["dump.json"]})
+        texts = [
+            notification["message"]["text"]
+            for notification in invocation["toolExecutionNotifications"]
+        ]
+        self.assertIn("locked could not be opened and was not scanned.", texts)
+        self.assertIn("dump.json was larger than the size limit and was not scanned.", texts)
+
+    def test_a_long_list_is_summarised_rather_than_listed(self):
+        paths = [f"f{index}.py" for index in range(50)]
+        notifications = self.invocation({"unreadable": paths})["toolExecutionNotifications"]
+        self.assertEqual(len(notifications), report.SARIF_NOTIFICATION_LIMIT + 1)
+        self.assertIn("30 further path(s)", notifications[-1]["message"]["text"])
+
+    def test_the_document_is_still_valid_without_any_scan_facts(self):
+        self.assertEqual(self.invocation(), {"executionSuccessful": True})
+
+
 class TestMarkdown(unittest.TestCase):
     def setUp(self):
         self.text = report.format_markdown([CRITICAL, GUESS])

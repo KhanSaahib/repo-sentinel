@@ -188,7 +188,7 @@ def _render(
             findings, version=__version__, notes=notes, scan=scan
         )
     if args.format == "sarif":
-        return report.format_sarif(findings, version=__version__)
+        return report.format_sarif(findings, version=__version__, scan=scan)
     if args.format == "markdown":
         return report.format_markdown(findings, notes=notes)
     if args.format == "github":

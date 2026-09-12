@@ -317,7 +317,15 @@ def format_github(findings: Sequence[Finding], *, notes: Sequence[str] = ()) -> 
     return "\n".join(lines)
 
 
-def format_sarif(findings: Sequence[Finding], *, version: str) -> str:
+#: How many skipped paths to name in the SARIF invocation before saying "and
+#: N more". A tree with two thousand unreadable files has one problem, not two
+#: thousand, and a notification list that long is scrolled past.
+SARIF_NOTIFICATION_LIMIT = 20
+
+
+def format_sarif(
+    findings: Sequence[Finding], *, version: str, scan: "dict | None" = None
+) -> str:
     """SARIF 2.1.0, the format GitHub's Security tab ingests.
 
     Rules are emitted once and referenced by index, which is what the schema
@@ -328,6 +336,11 @@ def format_sarif(findings: Sequence[Finding], *, version: str) -> str:
     The fingerprint travels as a ``partialFingerprint``, so that code scanning
     tracks a finding across the reformattings and line moves that would
     otherwise close it and reopen it as new.
+
+    ``scan`` becomes an ``invocation``, where the schema keeps exactly this:
+    what the tool could not read. A Security tab showing no alerts because
+    nothing was scanned looks identical to one showing no alerts because
+    everything is fine, and the notifications are the difference.
     """
     ordered_rules: list[str] = []
     for finding in findings:
@@ -353,11 +366,46 @@ def format_sarif(findings: Sequence[Finding], *, version: str) -> str:
                     }
                 },
                 "results": results,
+                "invocations": [_sarif_invocation(scan)],
                 "columnKind": "utf16CodeUnits",
             }
         ],
     }
     return json.dumps(document, indent=2)
+
+
+def _sarif_invocation(scan: "dict | None") -> "dict":
+    """What the run did, and what it could not read while doing it."""
+    invocation: "dict" = {"executionSuccessful": True}
+    if not scan:
+        return invocation
+    notifications = [
+        *_sarif_notifications(scan.get("unreadable", ()), "could not be opened"),
+        *_sarif_notifications(scan.get("oversized", ()), "was larger than the size limit"),
+    ]
+    if notifications:
+        invocation["toolExecutionNotifications"] = notifications
+    return invocation
+
+
+def _sarif_notifications(paths: "Sequence[str]", reason: str) -> "list[dict]":
+    named = list(paths)[:SARIF_NOTIFICATION_LIMIT]
+    notifications = [
+        {
+            "level": "warning",
+            "message": {"text": f"{path} {reason} and was not scanned."},
+        }
+        for path in named
+    ]
+    remaining = len(paths) - len(named)
+    if remaining > 0:
+        notifications.append(
+            {
+                "level": "warning",
+                "message": {"text": f"{remaining} further path(s) {reason}."},
+            }
+        )
+    return notifications
 
 
 #: Where a reader of the Security tab can find out what a rule is for. The
