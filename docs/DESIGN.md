@@ -167,6 +167,33 @@ disables that rule silently. The corpus test is what makes them safe: every
 rule must fire on a line carrying its own shape, so a bad gate or a bad hint
 fails the build rather than quietly removing a rule.
 
+### What the gates did not turn out to be worth
+
+Four things were measured and are not here, recorded so nobody spends the
+afternoon again. A profile of a scan of n8n -- 28,546 files, five million
+calls to `scan_line` -- puts a fifth of the time in `re.search` itself and a
+seventh in the provider hint loop, and the rest spread thin.
+
+- **Folding the provider hints into one pattern with a lookahead**: slower than
+  seventy-two substring tests.
+- **Folding them into one plain alternation and reading which hints matched**:
+  eleven per cent faster and *wrong*, because `finditer` does not find
+  overlapping matches and one hint inside another goes missing. Ninety lines in
+  twenty thousand selected a different set of rules.
+- **Bucketing the hints by first character**, so that only the hints whose
+  first character appears in the line are tested: exactly the same speed. The
+  `set(line)` it needs costs what it saves.
+- **A whole-file gate in front of the per-line loop**, skipping a file when
+  neither the candidate pattern nor the credential word appears anywhere in it.
+  Correct, and it skips one file in seven -- and saves no measurable time,
+  because the files it skips are the short ones that cost nothing to read. The
+  time is in the large files, and a large file always contains a
+  fourteen-character run of credential characters.
+
+What is left is architectural -- a process pool, or a different tokenising
+strategy -- and neither is worth the complexity at five hundred files a second.
+Caching `yamlish.Node.walk()` was inside the noise too.
+
 ## The catalogue
 
 `rules.py` lists every rule, and the scanners hold the detection logic and the
