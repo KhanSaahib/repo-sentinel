@@ -4,6 +4,17 @@ All notable changes to BlueRayScan. This project follows [semantic
 versioning](https://semver.org/); until 1.0 the minor number carries breaking
 changes.
 
+## 0.3.1 - 2026-09-12
+
+### Changed
+
+- Completed the BlueRayScan rename across the Python import package, command
+  output, reports, GitHub Action, pre-commit hook, generated CI snippets,
+  documentation, and repository URLs.
+- Kept `repo-sentinel`, `repo_sentinel`, `.repo-sentinel.json`, and
+  `repo-sentinel: ignore` working as compatibility names. New projects use the
+  BlueRayScan names by default.
+
 ## 0.3.0
 
 0.2.0 was about the output people read. This one is about how much of a
