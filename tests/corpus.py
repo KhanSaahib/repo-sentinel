@@ -32,7 +32,7 @@ SECRETS_FILE = "\n".join(
         f'aws_key = "{fixtures.REALISTIC_AWS_KEY_ID}"',
         "github_pat = " + '"gh' + "p_" + _filler(36) + '"',
         "fine_grained = " + '"github' + "_pat_" + _filler(60) + '"',
-        "-----BEGIN OPENSSH PRIVATE KEY-----",
+        "-----BEGIN " + "OPENSSH PRIVATE KEY-----",
         'stripe = "sk' + "_live_" + _filler(24) + '"',
         'slack = "xox' + "b-" + _filler(24) + '"',
         'google = "AIz' + "a" + _filler(35) + '"',
@@ -48,7 +48,7 @@ SECRETS_FILE = "\n".join(
         'docker = "dck' + "r_pat_" + _filler(24) + '"',
         'slack_hook = "https://hooks.sl' + "ack.com/services/T" + _filler(32) + '"',
         'huggingface = "h' + "f_" + _filler(34) + '"',
-        'dsn = "postgres://svc:Xk92mQp7Lz4TvB8n@db.internal:5432/app"',
+        'dsn = "postgres://svc:' + "Xk92mQp7" + "Lz4TvB8n" + '@db.internal:5432/app"',
         'gitlab = "glp' + 'at-' + _filler(24) + '"',
         'runner = "glr' + 't-' + _filler(24) + '"',
         'ocean = "dop' + '_v1_' + _filler(64, "0a1b2c3d4e5f") + '"',
@@ -394,10 +394,17 @@ JENKINSFILE = """pipeline {
 }
 """
 
+#: The "user:password" half is assembled rather than written out, for the same
+#: reason the provider-shaped fixtures are: a contiguous literal is what a
+#: credential scanner reads, and a fixture that makes somebody else's tool
+#: report a leak has cost a person an afternoon for nothing. The scanned text
+#: is identical either way, which is the only part SH004 sees.
+_CURL_CREDENTIAL = "deploy:" + "Qq7Zx9Lm" + "2Pv4Rt8W"
+
 SHELL_SCRIPT = """#!/usr/bin/env bash
 set -euo pipefail
 
-curl -u deploy:Qq7Zx9Lm2Pv4Rt8W https://api.example.invalid/release
+curl -u """ + _CURL_CREDENTIAL + """ https://api.example.invalid/release
 curl -sSL https://get.example.invalid/install.sh | sudo bash
 wget --no-check-certificate https://example.invalid/pkg.tar.gz
 chmod -R 777 /opt/app

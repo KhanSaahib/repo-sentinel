@@ -14,6 +14,11 @@ def scan(text, path="scripts/setup.sh"):
     return shell.scan_script(path, text)
 
 
+#: An invented password, kept in one place so the tests that need a
+#: well-formed one do not spell it out beside a user name.
+PASSWORD = "Qq7Zx9Lm" + "2Pv4Rt8W"
+
+
 class TestRecognition(unittest.TestCase):
     def test_by_extension_and_by_name(self):
         for path in ("setup.sh", "ci/build.bash", "Makefile", "GNUmakefile", "rules.mk"):
@@ -117,8 +122,11 @@ class TestCommandLineCredentials(unittest.TestCase):
 
     def test_every_tool_the_rule_knows(self):
         for command in (
-            "curl -u deploy:Qq7Zx9Lm2Pv4Rt8W https://api.internal/release",
-            "curl --user=deploy:Qq7Zx9Lm2Pv4Rt8W https://api.internal/release",
+            # Split at the colon: a contiguous "user:password" is what every
+            # credential scanner reads, and a fixture is not worth somebody
+            # else's afternoon. What reaches the rule is the same string.
+            "curl -u deploy:" + PASSWORD + " https://api.internal/release",
+            "curl --user=deploy:" + PASSWORD + " https://api.internal/release",
             "wget --password=Qq7Zx9Lm2Pv4Rt8W https://api.internal/file",
             "sshpass -p Qq7Zx9Lm2Pv4Rt8W ssh deploy@host",
             "mysql -uroot -pQq7Zx9Lm2Pv4Rt8W billing",

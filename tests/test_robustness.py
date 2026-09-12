@@ -323,6 +323,44 @@ class TestEntropyProperties(unittest.TestCase):
             self.assertTrue(heuristics.looks_generated(token), token)
 
 
+class TestFixturesAreNotCredentials(unittest.TestCase):
+    """No fixture may be written as a credential somebody else's tool reads.
+
+    Every scanner in existence reads a contiguous well-formed token: this one
+    does, GitHub's push protection does -- it has already rejected a push from
+    this repository over a test literal -- and so does whoever is running one
+    across public commits. A fixture that makes a stranger report a leak costs
+    somebody an afternoon and teaches them to ignore the next report.
+
+    The convention is to assemble the shape instead: "gh" + "p_" + filler(36).
+    The string that reaches the rule is identical, which is the only part the
+    rule sees. This asserts the convention rather than trusting it, by running
+    the scanner over its own test sources.
+    """
+
+    def test_no_documented_token_shape_is_written_out_whole(self):
+        from repo_sentinel import engine
+
+        tests_root = Path(__file__).resolve().parent
+        report = engine.scan(str(tests_root))
+        written_out = [
+            f"{finding.path}:{finding.line} {finding.rule_id}"
+            for finding in report.findings
+            # The provider rules are the documented shapes; the entropy rules
+            # and the application-code rules report idioms, which are what
+            # these files are about and which no credential scanner reports.
+            if finding.rule_id.startswith("SEC") and finding.rule_id < "SEC100"
+        ]
+        self.assertEqual(written_out, [], "assemble the shape instead of writing it out")
+
+    def test_the_check_would_notice(self):
+        # A test that can only pass is not a test.
+        from repo_sentinel.scanners import secrets
+
+        whole = "AKIA" + "ZZ7Q4TWFN2XKLM3D"
+        self.assertTrue(secrets.scan_text("fixture.py", f'key = "{whole}"'))
+
+
 class TestNoDynamicEvaluation(unittest.TestCase):
     """SECURITY.md promises scanned content is never evaluated. Check it.
 

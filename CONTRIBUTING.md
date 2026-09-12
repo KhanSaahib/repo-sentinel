@@ -158,6 +158,14 @@ from pieces at import time, for the reason `tests/fixtures.py` explains: a
 well-formed token written as a single literal is rejected by GitHub's push
 protection, correctly, and no fixture is worth costing a person a judgement call.
 
+That convention is now asserted rather than trusted: `test_robustness.py` runs
+the scanner over its own test sources and fails if any documented token shape
+is written out whole. It was added after a stranger's credential scanner
+reported the `curl -u deploy:…` line in the corpus as a live leak. It was not
+one -- an invented password pointing at `api.example.invalid`, which cannot
+resolve -- but the person who read that report could not know it without doing
+the work, which is the cost this rule exists to avoid.
+
 ## Style
 
 Match the surrounding code. Comments explain *why*, especially where a
