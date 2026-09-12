@@ -672,6 +672,11 @@ not encryption but is enough to hide a credential from every rule that reads
 lines; when the decoded value is a shape the secret rules recognise, the
 finding says which and is critical.
 
+A `CustomResourceDefinition` is skipped whole. It carries an OpenAPI schema,
+and a schema names every field a resource may have -- `hostPath`,
+`privileged`, `capabilities` -- as keys, which is how a CRD comes to look like
+the worst workload ever written. Nothing in one runs.
+
 K8S012 reads the two places a manifest can switch confinement off by name: a
 `seccompProfile` of `Unconfined`, and the AppArmor annotation set to
 `unconfined`. Neither is a change of behaviour on a cluster with no Pod

@@ -189,6 +189,11 @@ last of them is the first that reads code rather than configuration.
   `git` dependency carries a `rev` or a `tag`; without one it installs whatever
   the default branch holds at build time. No TOML parser behind it -- `tomllib`
   arrived in 3.11 and this runs on 3.9.
+- **A CustomResourceDefinition is no longer read as a workload.** It carries
+  an OpenAPI schema, and a schema names every field these rules look for --
+  `hostPath`, `privileged`, `capabilities` -- as keys. The Grafana operator
+  produced three critical findings that way, each of them a schema saying the
+  field exists.
 - **K8S012**: seccomp or AppArmor switched off by name -- `seccompProfile:
   Unconfined`, or the AppArmor annotation set to `unconfined`. Neither changes
   behaviour on a cluster with no Pod Security Standard, which is the reason the

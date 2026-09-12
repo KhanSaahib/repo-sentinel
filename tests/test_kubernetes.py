@@ -36,6 +36,41 @@ class TestRecognition(unittest.TestCase):
         self.assertEqual(scan(text, "k8s/ci.yaml"), [])
 
 
+class TestSchemaDocuments(unittest.TestCase):
+    """A schema for a resource is not a resource."""
+
+    CRD = (
+        "apiVersion: apiextensions.k8s.io/v1\n"
+        "kind: CustomResourceDefinition\n"
+        "metadata:\n  name: grafanas.example.com\n"
+        "spec:\n"
+        "  versions:\n"
+        "    - schema:\n"
+        "        openAPIV3Schema:\n"
+        "          properties:\n"
+        "            containers:\n"
+        "              items:\n"
+        "                properties:\n"
+        "                  securityContext:\n"
+        "                    properties:\n"
+        "                      privileged:\n"
+        "                        type: boolean\n"
+        "            volumes:\n"
+        "              properties:\n"
+        "                hostPath:\n"
+        "                  type: object\n"
+    )
+
+    def test_a_crd_is_not_a_workload(self):
+        # Every field these rules look for appears in a schema by name, which
+        # is how a CRD comes to look like the worst workload ever written.
+        self.assertEqual(scan(self.CRD), [])
+
+    def test_a_resource_of_that_kind_is_still_read(self):
+        text = pod("      securityContext:\n        privileged: true\n")
+        self.assertIn("K8S001", rule_ids(scan(text)))
+
+
 class TestPrivilege(unittest.TestCase):
     def test_privileged_container(self):
         findings = scan(pod("      securityContext:\n        privileged: true\n"))

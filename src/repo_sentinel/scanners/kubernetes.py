@@ -61,9 +61,26 @@ def is_manifest_path(path: str) -> bool:
     return posixpath.basename(path.replace("\\", "/")).lower().endswith(_MANIFEST_SUFFIXES)
 
 
+#: Kinds that describe the *shape* of a resource rather than being one. A
+#: CustomResourceDefinition carries an OpenAPI schema, and a schema names every
+#: property a resource may have -- hostPath, privileged, capabilities -- as
+#: keys, which is how a CRD comes to look like the worst workload ever written.
+#: Measured on the Grafana operator: three critical findings, all of them a
+#: schema saying the field exists.
+_SCHEMA_KINDS = frozenset({"CustomResourceDefinition"})
+
+
 def is_manifest(document: "yamlish.Node") -> bool:
-    """True for a document that declares itself to the Kubernetes API."""
-    return document.get("apiVersion") is not None and document.get("kind") is not None
+    """True for a document that declares itself to the Kubernetes API.
+
+    A schema for a resource is not one. Nothing in a CustomResourceDefinition
+    runs: it tells the API server what fields a custom resource may carry, and
+    the fields it names are exactly the ones these rules look for.
+    """
+    if document.get("apiVersion") is None or document.get("kind") is None:
+        return False
+    kind = (document.get("kind") or yamlish.Node("", 0)).text.strip().strip("\"'")
+    return kind not in _SCHEMA_KINDS
 
 
 def _describe(document: "yamlish.Node") -> str:
