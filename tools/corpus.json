@@ -77,6 +77,18 @@
       "for": "a large Django codebase"
     },
     {
+      "name": "jellyfin",
+      "url": "https://github.com/jellyfin/jellyfin",
+      "commit": "1d7b6d97844c8cc848ed3fb5c4b48bb9cdd5b139",
+      "for": "C# and .NET, which no rule reads directly"
+    },
+    {
+      "name": "spring-boot",
+      "url": "https://github.com/spring-projects/spring-boot",
+      "commit": "26b0e813b0b82e5683524d1ad817ca9b66228b4d",
+      "for": "Java at scale: classpath references, and test keys by the hundred"
+    },
+    {
       "name": "spring-petclinic",
       "url": "https://github.com/spring-projects/spring-petclinic",
       "commit": "818c4136ea971c21674525f9053de0d9c7ad8cfe",

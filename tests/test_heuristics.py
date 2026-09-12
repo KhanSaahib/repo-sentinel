@@ -108,6 +108,10 @@ class TestLooksGenerated(unittest.TestCase):
             # and a constant whose name -- not value -- ends in "secret".
             "env:CARGO_REGISTRY_TOKEN",
             "vault:secret/data/ci",
+            # From Spring Boot, whose configuration says where a key file is
+            # rather than what is in it.
+            "classpath:org/springframework/boot/server.key",
+            "optional:classpath:application-test.properties",
             "Secret | None",
             "list[Secret] | None",
             "+fmt.Sprintf(",

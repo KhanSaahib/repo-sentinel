@@ -189,6 +189,9 @@ last of them is the first that reads code rather than configuration.
   `git` dependency carries a `rev` or a `tag`; without one it installs whatever
   the default branch holds at build time. No TOML parser behind it -- `tomllib`
   arrived in 3.11 and this runs on 3.9.
+- **A `classpath:` reference is not a private key.** Spring configuration says
+  where a key file is -- `private-key: classpath:server.key` -- and spring-boot
+  writes that a dozen times.
 - **Seven token shapes from the last two years** (SEC048–SEC054): HashiCorp
   Vault service tokens, Supabase service role keys, PlanetScale database
   tokens, Tailscale auth keys, Sentry auth tokens, Groq and Replicate keys.
