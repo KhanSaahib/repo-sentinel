@@ -346,6 +346,123 @@ def _missing_permissions(path: str, line: int, evidence: str) -> Finding:
     )
 
 
+#: ``contents: write``, in the two places a workflow grants it.
+_CONTENTS_WRITE = re.compile(r"^\s*contents:\s*write\s*(?:#.*)?$")
+
+#: What a job does when it genuinely needs to write to the repository. Actions
+#: are matched by owner and name rather than by version, and the commands by
+#: the words that do the writing. A job carrying none of these has been granted
+#: something it has not used -- which is worth saying, because the grant
+#: outlives whatever it was added for.
+_WRITES_TO_THE_REPOSITORY = re.compile(
+    r"""(?ix)
+    \bgit\s+(?:push|commit|tag|merge)\b
+    # A git identity being configured is a commit about to be made: nobody
+    # sets user.email to read. terraform-aws-eks does this, then publishes its
+    # documentation with "mkdocs gh-deploy", which pushes to gh-pages.
+  | \bgit\s+config\b[^\n]*\buser\.(?:name|email)\b
+  | \bgh-deploy\b | \bgh-pages\b
+  | \bgh\s+(?:release|pr\s+create|pr\s+merge|api\s+--method\s+(?:POST|PATCH|PUT))\b
+  | \bnpm\s+version\b
+  | \bsemantic-release\b
+  | \bchangesets?\b
+    # The token or a git identity handed to a step is the step being trusted
+    # to write with it, and what it does with it is inside a script this
+    # reader does not follow. GitHub's own CLI takes GH_TOKEN this way, and
+    # cli/cli's Go bump does exactly that before running a shell script that
+    # commits.
+  | \b(?:GH_TOKEN|GITHUB_TOKEN|GH_ENTERPRISE_TOKEN)\s*:
+  | \bGIT_(?:AUTHOR|COMMITTER)_\w+\s*:
+    # Something this reader cannot see inside: a local composite action, or a
+    # reusable workflow in another repository. ingress-nginx publishes its
+    # documentation through ./.github/actions/mkdocs, and refusing to guess is
+    # the same answer this tool gives everywhere else.
+  | uses:\s*(?:\./|\S+/\.github/workflows/)
+    # An action named after what it does. A word rather than a list, because
+    # the list was always one action short: ingress-nginx releases its chart
+    # with helm/chart-releaser-action, which no enumeration had in it.
+  | uses:\s*\S*(?:
+        release | publish | deploy | commit | push | pages | tag | bump
+      | version | changelog | pull-request | merge | label | stale
+      | dependabot | github-script | token
+    )
+    """
+)
+
+
+def _check_unused_write(path: str, lines: list[str], jobs: list[Job]) -> Iterator[Finding]:
+    """WF013: contents: write granted to a job that never writes anything.
+
+    The token is minted per run with whatever the workflow asks for, so a
+    grant is only as dangerous as the code it is handed to -- and a job that
+    builds and tests, with write access it does not use, is an injection away
+    from pushing a commit. The grant almost always outlives its reason: it was
+    added for a release step that has since moved to its own workflow.
+
+    Judged per job, and the whole file counts as one job's worth of evidence
+    when the grant is at the top level, because that is what it covers. Medium
+    confidence throughout: the writing may be inside a reusable workflow or a
+    composite action, neither of which this reader follows.
+    """
+    top_level = any(
+        _CONTENTS_WRITE.match(line)
+        for index, line in enumerate(lines)
+        if _top_level_permission(lines, index)
+    )
+    if top_level:
+        if not _WRITES_TO_THE_REPOSITORY.search("\n".join(lines)):
+            yield _unused_write(path, _first_line(lines, _CONTENTS_WRITE), "This workflow")
+        return
+
+    for job in jobs:
+        granted = [number for number, text in job.body if _CONTENTS_WRITE.match(text)]
+        if not granted:
+            continue
+        body = "\n".join(text for _, text in job.body)
+        if _WRITES_TO_THE_REPOSITORY.search(body):
+            continue
+        yield _unused_write(path, granted[0], f"Job {job.name!r}")
+
+
+def _top_level_permission(lines: "list[str]", index: int) -> bool:
+    """True when the line at ``index`` sits under the file's own permissions."""
+    for previous in range(index - 1, -1, -1):
+        text = lines[previous]
+        if not text.strip() or text.lstrip().startswith("#"):
+            continue
+        if _indent_of(text) == 0:
+            return bool(_TOP_LEVEL_PERMISSIONS.match(text))
+        if _indent_of(text) >= _indent_of(lines[index]):
+            continue
+        return False
+    return False
+
+
+def _first_line(lines: "list[str]", pattern: "re.Pattern[str]") -> int:
+    for number, text in enumerate(lines, start=1):
+        if pattern.match(text):
+            return number
+    return 1
+
+
+def _unused_write(path: str, line: int, subject: str) -> Finding:
+    return Finding(
+        rule_id="WF013",
+        severity=Severity.MEDIUM,
+        title=f"{subject} can write to the repository without doing so",
+        path=path,
+        line=line,
+        evidence="contents: write",
+        remediation=(
+            "Nothing here pushes, tags, or releases, so the token is carrying "
+            "an ability nobody is using -- and an injection in a build step "
+            "would find it. Drop it to contents: read, and grant write in the "
+            "job that publishes."
+        ),
+        confidence=Confidence.MEDIUM,
+    )
+
+
 def _check_script_injection(path: str, lines: list[str]) -> Iterator[Finding]:
     """WF003: attacker-controlled text substituted into a shell command."""
     for number, line in _iter_run_lines(lines):
@@ -715,6 +832,7 @@ def scan_workflow(
         *_check_script_injection(path, lines),
         *_check_privileged_checkout(path, lines),
         *_check_permissions(path, lines, jobs),
+        *_check_unused_write(path, lines, jobs),
         *_check_runners(path, lines),
         *_check_secret_handoff(path, jobs),
         *_check_persisted_credentials(path, lines, jobs),

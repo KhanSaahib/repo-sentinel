@@ -452,6 +452,67 @@ class TestExportedSecrets(unittest.TestCase):
         self.assertEqual(rule_ids(workflows.scan_workflow(".github/workflows/a.yml", text)), set())
 
 
+class TestUnusedWritePermission(unittest.TestCase):
+    """WF013: a grant nothing in the job uses."""
+
+    def scan(self, body):
+        return workflows.scan_workflow(".github/workflows/a.yml", workflow(body))
+
+    def test_a_job_that_writes_nothing(self):
+        findings = self.scan(
+            "jobs:\n  build:\n    permissions:\n      contents: write\n"
+            "    steps:\n      - run: make test\n"
+        )
+        finding = next(f for f in findings if f.rule_id == "WF013")
+        self.assertEqual(finding.severity, Severity.MEDIUM)
+        self.assertIn("'build'", finding.title)
+
+    def test_a_job_that_does_write_is_not_reported(self):
+        for step in (
+            "      - run: git push origin main\n",
+            "      - run: gh release create v1.0.0\n",
+            "      - uses: peter-evans/create-pull-request@v6\n",
+            "      - run: npx semantic-release\n",
+        ):
+            with self.subTest(step=step.strip()):
+                body = (
+                    "jobs:\n  publish:\n    permissions:\n      contents: write\n"
+                    "    steps:\n" + step
+                )
+                self.assertNotIn("WF013", rule_ids(self.scan(body)))
+
+    def test_a_top_level_grant_is_judged_against_the_whole_file(self):
+        unused = self.scan(
+            "permissions:\n  contents: write\njobs:\n  build:\n    steps:\n"
+            "      - run: make test\n"
+        )
+        used = self.scan(
+            "permissions:\n  contents: write\njobs:\n  build:\n    steps:\n"
+            "      - run: git push origin main\n"
+        )
+        self.assertIn("WF013", rule_ids(unused))
+        self.assertNotIn("WF013", rule_ids(used))
+
+    def test_read_access_is_not_the_rule_s_business(self):
+        body = (
+            "jobs:\n  build:\n    permissions:\n      contents: read\n"
+            "    steps:\n      - run: make test\n"
+        )
+        self.assertNotIn("WF013", rule_ids(self.scan(body)))
+
+    def test_one_job_writing_does_not_excuse_another(self):
+        body = (
+            "jobs:\n"
+            "  publish:\n    permissions:\n      contents: write\n"
+            "    steps:\n      - run: gh release create v1\n"
+            "  build:\n    permissions:\n      contents: write\n"
+            "    steps:\n      - run: make test\n"
+        )
+        findings = [f for f in self.scan(body) if f.rule_id == "WF013"]
+        self.assertEqual(len(findings), 1)
+        self.assertIn("'build'", findings[0].title)
+
+
 class TestInheritedSecrets(unittest.TestCase):
     """WF011: secrets: inherit on a call to somebody else's workflow."""
 

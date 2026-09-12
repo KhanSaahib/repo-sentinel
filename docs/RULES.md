@@ -311,6 +311,7 @@ in the text.
 | WF010 | Secret written to a job output or environment | high |
 | WF011 | Every secret passed to a workflow in another repository | high |
 | WF012 | Composite action interpolates an input into a shell command | medium |
+| WF013 | Write access granted to a job that never writes | medium |
 
 WF001 grades itself by who can move the reference. A tag on somebody else's
 action is code you do not control changing under you, which is the rule; a tag
@@ -373,6 +374,23 @@ title. Hence medium and medium -- most inputs are a version number, the mistake
 is the caller's to make, and the prevention is still the action's to write. Only
 composite actions are read; a JavaScript or container action keeps its risk in
 code this scanner is not looking at.
+
+WF013 asks what a grant is *for*. The token is minted per run with whatever
+the workflow asked for, so `contents: write` is only as dangerous as the code it
+is handed to -- and a job that builds and tests, holding write access it never
+uses, is one injection away from pushing a commit. The grant almost always
+outlives its reason: it was added for a release step that has since moved to its
+own workflow. A job that pushes, tags, releases, configures a git identity, runs
+`mkdocs gh-deploy`, is handed the token, or uses an action named after any of
+those is not reported -- nor is one that calls a local composite action or a
+reusable workflow, because the reader cannot see inside either and refusing to
+guess is the answer this tool gives everywhere else.
+
+What is left is narrow on purpose. Across the nineteen pinned repositories the
+rule fires once: a template workflow in ingress-nginx that builds and pushes
+container images, granting `contents: write` at the top level where the push
+needs `packages: write`. Medium confidence even so, because a grant nobody uses
+is still a grant somebody meant.
 
 Workflow checks are pattern-based rather than YAML-aware, a deliberate
 consequence of the zero-dependency rule. What the scanner does parse is

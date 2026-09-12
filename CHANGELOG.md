@@ -176,6 +176,14 @@ last of them is the first that reads code rather than configuration.
   per input, because the fix is one `env:` entry however many times the script
   mentions it.
 
+- **WF013**: `contents: write` granted to a job that never writes. The token is
+  minted per run with whatever the workflow asked for, so the grant is only as
+  dangerous as the code it is handed to -- and a job that builds and tests,
+  holding write access it does not use, is one injection away from pushing a
+  commit. Everything that could be writing counts as writing, including a local
+  composite action and a reusable workflow, because the reader cannot see
+  inside either. Across nineteen repositories it fires once, and that one is
+  real.
 - **WF011**: a reusable workflow in another repository called with
   `secrets: inherit`. There is no way to inherit *some* secrets -- the callee
   receives the whole store -- so the cross-repository form is a standing grant

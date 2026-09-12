@@ -179,7 +179,7 @@ repo-sentinel scan . --no-gitignore
 
 ## What it checks
 
-One hundred and forty-three rules across sixteen families. [docs/RULES.md](docs/RULES.md) is the
+One hundred and forty-four rules across sixteen families. [docs/RULES.md](docs/RULES.md) is the
 full list, with a paragraph on each family explaining what it is looking for
 and why; `repo-sentinel rules` prints the same catalogue from the tool.
 
@@ -190,7 +190,7 @@ and why; `repo-sentinel rules` prints the same catalogue from the tool.
 | [Shell scripts](docs/RULES.md#shell-scripts-and-makefiles) | SH001–SH004 | Where `curl \| sh` actually lives |
 | [Application code](docs/RULES.md#application-code) | AP001–AP006 | Verification off, debug on, predictable tokens, unsafe loads |
 | [Dependencies](docs/RULES.md#dependencies) | SC001–SC004 | Where the rest of the build comes from, in nine manifests |
-| [GitHub Actions](docs/RULES.md#github-actions-workflows) | WF001–WF012 | Script injection, token scope, privileged triggers |
+| [GitHub Actions](docs/RULES.md#github-actions-workflows) | WF001–WF013 | Script injection, token scope, privileged triggers |
 | [GitLab CI](docs/RULES.md#gitlab-ci) | GL001–GL004 | The same injection class, and debug tracing |
 | [Azure Pipelines](docs/RULES.md#azure-pipelines) | AZ001–AZ004 | The same injection, a third time |
 | [Jenkins](docs/RULES.md#jenkins) | JK001–JK003 | Groovy's quoting, which decides if it is a bug |

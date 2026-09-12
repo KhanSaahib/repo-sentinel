@@ -129,6 +129,12 @@ jobs:
         with:
           token: ${{ secrets.DEPLOY_TOKEN }}
       - run: echo "reviewing ${{ github.event.issue.title }}"
+  package:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - run: make build
   audit:
     permissions: write-all
     runs-on: [self-hosted, linux]
