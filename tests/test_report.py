@@ -342,6 +342,45 @@ class TestJunit(unittest.TestCase):
         self.assertIn("<interpolation>", case.find("failure").text)
 
 
+class TestAwkwardContent(unittest.TestCase):
+    """Evidence comes out of files, and files contain anything at all."""
+
+    def finding(self, **kwargs):
+        fields = dict(
+            rule_id="SEC100",
+            severity=Severity.HIGH,
+            title="High-entropy value",
+            path="a.py",
+            line=3,
+            evidence="e",
+        )
+        fields.update(kwargs)
+        return Finding(**fields)
+
+    def test_a_control_character_does_not_break_the_junit_document(self):
+        import xml.etree.ElementTree as ElementTree
+
+        # XML 1.0 cannot carry these at all -- not escaped, not in CDATA -- and
+        # a report that fails to load says nothing about the repository.
+        awkward = self.finding(title="title \x01 here", path="a\x0bb.py", evidence="xx\x00yy")
+        ElementTree.fromstring(report.format_junit([awkward]))
+
+    def test_every_kind_of_line_break_stays_inside_the_markdown_cell(self):
+        for break_ in ("\n", "\r", "\r\n", "\u2028"):
+            with self.subTest(break_=repr(break_)):
+                awkward = self.finding(title=f"two{break_}lines")
+                rows = report.format_markdown([awkward]).splitlines()
+                self.assertEqual(len([row for row in rows if row.startswith("| ")]), 3)
+
+    def test_a_pipe_in_a_value_does_not_add_a_column(self):
+        row = [
+            line
+            for line in report.format_markdown([self.finding(title="a | b")]).splitlines()
+            if "SEC100" in line
+        ][0]
+        self.assertEqual(row.count("|") - row.count("\\|"), 5)
+
+
 class TestCatalogueOutput(unittest.TestCase):
     def test_text_lists_every_rule_under_its_category(self):
         text = report.format_rule_catalogue()

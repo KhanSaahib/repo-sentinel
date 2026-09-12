@@ -22,6 +22,7 @@ function.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
 from xml.sax.saxutils import escape, quoteattr
 
@@ -183,9 +184,15 @@ _MARKERS = {
 MARKDOWN_ROW_LIMIT = 50
 
 
+#: Anything that would end a table row early. A cell is a line, so every kind
+#: of line break has to go -- a lone carriage return is one on its own, and
+#: evidence comes out of files written on every platform there is.
+_CELL_BREAKS = re.compile(r"[\r\n\u2028\u2029]+")
+
+
 def _escape(text: str) -> str:
     """Make a value safe to put inside a Markdown table cell."""
-    return text.replace("|", "\\|").replace("\n", " ")
+    return _CELL_BREAKS.sub(" ", text).replace("|", "\\|")
 
 
 def format_markdown(
@@ -450,12 +457,24 @@ def format_junit(
     )
 
 
+#: Characters XML 1.0 cannot carry at all -- not escaped, not in a CDATA
+#: section. Evidence comes out of files, and a file with a stray control byte
+#: in it is not binary enough to be skipped, so one can reach here and make the
+#: whole document unparseable: a report that fails to load says nothing about
+#: the repository, which is the worst way for this to go wrong.
+_XML_FORBIDDEN = re.compile(r"[^\t\n\r\x20-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]")
+
+
+def _xml_safe(value: str) -> str:
+    return _XML_FORBIDDEN.sub("\ufffd", value)
+
+
 def _attribute(value: str) -> str:
-    return quoteattr(value)
+    return quoteattr(_xml_safe(value))
 
 
 def _text(value: str) -> str:
-    return escape(value)
+    return escape(_xml_safe(value))
 
 
 def _matching_rules(pattern: "str | None") -> "list[rules.Rule]":
