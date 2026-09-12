@@ -4,7 +4,7 @@ All notable changes to BlueRayScan. This project follows [semantic
 versioning](https://semver.org/); until 1.0 the minor number carries breaking
 changes.
 
-## 0.3.1 - 2026-09-12
+## Unreleased
 
 ### Added
 
@@ -36,6 +36,17 @@ changes.
   read, 4,513 value paths named. The same 23 findings as before; three moved
   from medium to high and none was lost, because every setting those charts
   ship is a setting they use.
+
+### Changed
+
+- **The SARIF fingerprint key is now `bluerayscan/v1`**, where it was
+  `repoSentinel/v1` -- the one place the rename's search-and-replace could not
+  see, because it was spelled in camel case. GitHub's code scanning tracks an
+  alert across runs by this key, so an existing alert appears once as a new
+  one. It changes here and not again, which is why it is a named constant with
+  the reason beside it.
+
+## 0.3.1 - 2026-09-12
 
 ### Changed
 

@@ -254,6 +254,18 @@ class TestTheCommand(unittest.TestCase):
         self.assertEqual(payload["findings"][0]["origin"], "abc1234 on 2026-03-04")
         self.assertEqual(payload["scan"], {"commits": 1, "file_revisions": 1})
 
+    def test_sarif_carries_the_commit_too(self):
+        import json
+
+        from bluerayscan import report as report_module
+
+        code, output, _ = run(
+            ["history", "--fail-on", "none", "--format", "sarif"], stdin=self.stream()
+        )
+        result = json.loads(output)["runs"][0]["results"][0]
+        self.assertEqual(result["properties"]["origin"], "abc1234 on 2026-03-04")
+        self.assertIn(report_module.SARIF_FINGERPRINT_KEY, result["partialFingerprints"])
+
     def test_the_other_formats_all_render(self):
         for shape in ("sarif", "markdown", "github", "junit"):
             with self.subTest(format=shape):
