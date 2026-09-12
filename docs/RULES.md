@@ -126,6 +126,26 @@ quoting to key on, and where the file's own syntax has to stand in for it. A
 unit wraps its assignment in one of its own (`Environment=DB_PASSWORD=…`), and
 the name that matters is the inner one.
 
+SEC101 also reads a value written on the lines *beneath* its name, which is
+how YAML carries anything long:
+
+```yaml
+api_key: |
+  Xk92mQp7Lz4TvB8n
+  Rw1YQq7Zx9Lm2Pv4
+```
+
+Neither line says anything alone -- the name is on one and the value is on the
+next -- and the pieces are rejoined with nothing between them, because that is
+how a wrapped value was meant to be read. The shape is narrow on purpose: every
+line of the block has to be a piece of one value, with no spaces, no colon and
+no `=` except base64's padding. Without that, the rule reports every CRD
+property under a name like `automountServiceAccountToken`, every translated
+sentence under `api_key`, and the `NAME=vault/path` pairs a release workflow
+hands to an action -- all three measured, all three from real repositories. The
+finding sits on the key's line, because inside a block scalar a `#` is part of
+the value and the key's line is the only place a suppression marker can live.
+
 One consequence worth knowing: a real `.env` is usually git-ignored, so SEC101
 will not see it unless you pass `--no-gitignore`. Where it earns its keep by
 default is the committed cousins — `.env.example` with a real value left in it,

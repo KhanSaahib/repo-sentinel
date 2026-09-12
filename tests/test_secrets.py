@@ -311,6 +311,88 @@ class TestTemplateFiles(unittest.TestCase):
         self.assertIn("SEC101", rule_ids(secrets.scan_text(".env.example", self.LINE)))
 
 
+class TestValuesWrittenBeneathTheirName(unittest.TestCase):
+    """YAML puts a long value on the lines under its key. Both halves matter."""
+
+    def scan(self, text, path="config.yaml"):
+        return secrets.scan_text(path, text)
+
+    def test_a_block_scalar_holds_its_value(self):
+        for marker in ("|", ">", ""):
+            with self.subTest(marker=marker):
+                text = f"data:\n  api_key: {marker}\n    Xk92mQp7Lz4TvB8nRw1Y\n"
+                findings = [f for f in self.scan(text) if f.rule_id == "SEC101"]
+                self.assertEqual(len(findings), 1)
+                self.assertIn("api_key", findings[0].title)
+
+    def test_a_value_wrapped_over_several_lines_is_rejoined(self):
+        text = (
+            "client_secret: |\n"
+            "  Xk92mQp7Lz4TvB8n\n"
+            "  Rw1YQq7Zx9Lm2Pv4\n"
+            "  Rt8WcY6hTv8nRw1Y\n"
+        )
+        findings = [f for f in self.scan(text) if f.rule_id == "SEC101"]
+        self.assertEqual(len(findings), 1)
+
+    def test_the_finding_sits_where_a_marker_can_go(self):
+        # Inside a block scalar a "#" is part of the value, so the key's line
+        # is the only line a suppression marker can live on.
+        text = "api_key: |\n  Xk92mQp7Lz4TvB8nRw1Y\n"
+        finding = next(f for f in self.scan(text) if f.rule_id == "SEC101")
+        self.assertEqual(finding.line, 1)
+
+    def test_a_name_that_promises_nothing_is_not_read(self):
+        text = "description: |\n  Xk92mQp7Lz4TvB8nRw1Y\n"
+        self.assertEqual(self.scan(text), [])
+
+    def test_a_nested_mapping_is_not_a_value(self):
+        # A CRD property: "automountServiceAccountToken:" with "type: boolean"
+        # under it. The Grafana operator has hundreds.
+        text = (
+            "properties:\n"
+            "  automountServiceAccountToken:\n"
+            "    type: boolean\n"
+            "    description: whether to mount it\n"
+        )
+        self.assertEqual(self.scan(text), [])
+
+    def test_a_paragraph_under_a_credential_name_is_not_one(self):
+        # Discourse's locale files: api_key followed by a translated sentence.
+        text = "api_key: |\n  Revoke the key and issue another one from settings\n"
+        self.assertEqual(self.scan(text), [])
+
+    def test_a_list_of_names_and_paths_is_not_a_value(self):
+        # The Grafana operator's release workflow hands vault paths this way.
+        text = (
+            "with:\n  repo_secrets: |\n"
+            "    QUAY_USERNAME=quay-io:username\n"
+            "    QUAY_PASSWORD=quay-io:token\n"
+        )
+        self.assertEqual(self.scan(text), [])
+
+    def test_a_private_key_body_is_left_to_the_rule_that_has_the_header(self):
+        text = (
+            "private_key: |\n"
+            "  -----BEGIN " + "PRIVATE KEY-----\n"
+            "  MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj\n"
+            "  -----END " + "PRIVATE KEY-----\n"
+        )
+        self.assertEqual({f.rule_id for f in self.scan(text)}, {"SEC004"})
+
+    def test_a_block_too_long_to_be_one_value(self):
+        body = "".join(f"  Xk92mQp7Lz4TvB8nRw1Y{index}\n" for index in range(20))
+        self.assertEqual(self.scan("api_key: |\n" + body), [])
+
+    def test_a_format_that_does_not_write_values_this_way(self):
+        text = "api_key: |\n  Xk92mQp7Lz4TvB8nRw1Y\n"
+        self.assertEqual(secrets.scan_text("notes.md", text), [])
+
+    def test_a_marker_on_the_key_silences_it(self):
+        text = "api_key: |  # repo-sentinel: ignore\n  Xk92mQp7Lz4TvB8nRw1Y\n"
+        self.assertEqual(self.scan(text), [])
+
+
 class TestFixtureTrees(unittest.TestCase):
     """Invented credentials live in fixture directories. So do real ones."""
 

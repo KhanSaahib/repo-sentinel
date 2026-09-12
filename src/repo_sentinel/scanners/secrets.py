@@ -367,6 +367,128 @@ def _scan_encoded(
             )
 
 
+#: YAML is the one format that routinely writes a value on the lines *below*
+#: its name -- a block scalar for something long, or a plain scalar that
+#: happens to be indented under its key. Neither line says anything on its own:
+#: the name is on one and the value is on the next, and a scanner that reads
+#: one line at a time sees a key with no value and then a word with no name.
+_BLOCK_KEY = re.compile(
+    r"""^(?P<indent>\s*)(?:-\s+)?
+    (?P<name>[A-Za-z0-9_.\[\]/-]{1,120})\s*:\s*
+    (?P<style>[|>][+-]?\d*)?\s*(?:\#.*)?$""",
+    re.VERBOSE,
+)
+
+#: How much of a block to read. A credential written this way is one value; a
+#: block longer than this is a script, a certificate chain or a paragraph, and
+#: joining it would measure the entropy of prose.
+_BLOCK_LINE_LIMIT = 12
+_BLOCK_CHARACTER_LIMIT = 4096
+
+#: A private key block arrives this way constantly, and SEC004 already reports
+#: it from the header line. Reporting the body as well is the same key twice,
+#: under a rule that is guessing.
+_PEM_HEADER = "-----BEGIN"
+
+
+#: A line inside a block that is really a mapping entry: "type: boolean" under
+#: a CRD's property name. The block is then a nested object rather than a
+#: value, and joining it measures the entropy of a schema.
+_MAPPING_ENTRY = re.compile(r"^[\w.\[\]/-]{1,120}\s*:(?:\s|$)")
+
+
+def _is_fragment(part: str) -> bool:
+    """True when a line of a block could be a piece of one wrapped value.
+
+    A wrapped credential is base64, hex or token characters: no spaces, no
+    colon, and no ``=`` except the padding base64 ends with. A line that
+    breaks any of those is something else being carried under the key -- a
+    mapping entry, a list of ``NAME=vault/path`` pairs, a sentence -- and the
+    Grafana operator's release workflow has exactly the middle one.
+    """
+    if not part or " " in part or ":" in part:
+        return False
+    if "=" in part.rstrip("="):
+        return False
+    return not _MAPPING_ENTRY.match(part)
+
+
+def block_values(text: str) -> "Iterator[tuple[int, str, str]]":
+    """Yield ``(line, name, value)`` for a value wrapped beneath its name.
+
+    Narrow on purpose. The shape this exists for is a long value that did not
+    fit on one line -- a token, a base64 blob, a key id -- so every line of the
+    block has to be one piece of it: no spaces, no mapping entries, nothing
+    that makes the block an object or a paragraph. Measured on Discourse and
+    the Grafana operator, that restriction is the difference between finding
+    wrapped credentials and reporting every CRD property and every translated
+    sentence that happens to sit under a key called api_key.
+
+    Every key is looked at, including the ones nested inside another key's
+    block: skipping a block once its parent has been read would mean a
+    credential under ``data:`` is never seen, which is where they live.
+    """
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        opening = _BLOCK_KEY.match(line)
+        if opening is None:
+            continue
+        indent = len(opening.group("indent"))
+        body: "list[str]" = []
+        # One line past the limit is enough to know the block is too long,
+        # which also keeps this from re-reading a deep file once per key.
+        for following in lines[index + 1 : index + _BLOCK_LINE_LIMIT + 2]:
+            if following.strip() and len(following) - len(following.lstrip()) <= indent:
+                break
+            if following.strip():
+                body.append(following.strip())
+        if not body or len(body) > _BLOCK_LINE_LIMIT:
+            continue
+        if any(not _is_fragment(part) for part in body):
+            continue
+        joined = "".join(body)
+        if joined and len(joined) <= _BLOCK_CHARACTER_LIMIT:
+            # The key's line, not the value's. Inside a block scalar a "#" is
+            # text rather than a comment, so the key's line is the only place
+            # a suppression marker can live -- and a finding somebody cannot
+            # suppress is a finding they switch the rule off for.
+            yield index + 1, opening.group("name"), joined
+
+
+def _scan_blocks(path: str, text: str, allow_examples: bool) -> "Iterator[Finding]":
+    """SEC101 for a value written on the lines below its name.
+
+    Only where the name promises a credential, which is the same bar the
+    unquoted rule applies on a single line. The value is reported at the line
+    it starts on, because that is the line somebody has to change.
+    """
+    if not has_value_positions(path):
+        return
+    for line_number, name, value in block_values(text):
+        if _PEM_HEADER in value or not is_secret_name(name):
+            continue
+        if allow_examples and allowlist.is_known_example(value):
+            continue
+        if not looks_generated(value):
+            continue
+        yield Finding(
+            rule_id="SEC101",
+            severity=Severity.HIGH,
+            title=f"High-entropy value written beneath {name!r}",
+            path=path,
+            line=line_number,
+            evidence=redact(value),
+            remediation=(
+                "A value carried on the lines under its name is still the "
+                "value. Move it to an environment variable or a secret store. "
+                f"Add a trailing '# {IGNORE_MARKER}' comment if this is a "
+                "false positive."
+            ),
+            confidence=Confidence.MEDIUM,
+            subject=redact(value),
+        )
+
+
 def scan_document(path: str, text: str) -> Iterator[Finding]:
     """Findings that only exist when the whole file is read at once.
 
@@ -431,6 +553,7 @@ def scan_text(
     )
 
     findings.extend(marks.filter_findings(scan_document(path, text)))
+    findings.extend(marks.filter_findings(_scan_blocks(path, text, allow_examples)))
 
     # Appended after the filter on purpose: the warning sits on a suppressed
     # line by definition, and suppressing the report of a runaway suppression
