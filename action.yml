@@ -74,11 +74,13 @@ runs:
           args+=(--baseline "$RS_BASELINE")
         fi
         if [ -n "$RS_SARIF" ]; then
-          # The reporting passes must not be skipped by the gate below, so
-          # they run first and their exit codes are deliberately ignored.
-          repo-sentinel "${args[@]}" --format sarif --output "$RS_SARIF" || true
+          # The reporting passes run first and must not be stopped by a
+          # finding -- that is the gate's job, below. "|| true" would hide a
+          # real failure too, so they say --fail-on none and keep their
+          # exit codes.
+          repo-sentinel "${args[@]}" --fail-on none --format sarif --output "$RS_SARIF"
         fi
         if [ "$RS_ANNOTATIONS" = "true" ]; then
-          repo-sentinel "${args[@]}" --format github || true
+          repo-sentinel "${args[@]}" --fail-on none --format github
         fi
         repo-sentinel "${args[@]}"
