@@ -458,7 +458,7 @@ _GITLAB_SNIPPET = """\
 bluerayscan:
   image: python:3.13
   script:
-    - python -m pip install bluerayscan==0.3.1
+    - python -m pip install bluerayscan==0.4.0
     - bluerayscan scan . --format junit --output bluerayscan.xml
   artifacts:
     when: always
@@ -466,7 +466,7 @@ bluerayscan:
       junit: bluerayscan.xml
 """
 
-_INSTALL = "python -m pip install bluerayscan==0.3.1"
+_INSTALL = "python -m pip install bluerayscan==0.4.0"
 
 _AZURE_SNIPPET = f"""\
 # azure-pipelines.yml
