@@ -1,0 +1,51 @@
+name: New security rule
+description: Propose a precise, testable detection rule.
+title: "[Rule]: "
+labels:
+  - enhancement
+  - help wanted
+body:
+  - type: input
+    id: ecosystem
+    attributes:
+      label: Ecosystem or file type
+      placeholder: GitHub Actions, Terraform, Kubernetes, Python...
+    validations:
+      required: true
+  - type: textarea
+    id: risk
+    attributes:
+      label: Risk
+      description: What can an attacker do when this pattern is present?
+    validations:
+      required: true
+  - type: textarea
+    id: unsafe
+    attributes:
+      label: Minimal unsafe example
+      description: Use invented values only; never paste a real credential.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: safe
+    attributes:
+      label: Minimal safe example
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: false_positives
+    attributes:
+      label: Likely false positives
+      description: Where would the same text be harmless?
+    validations:
+      required: true
+  - type: input
+    id: reference
+    attributes:
+      label: Authoritative reference
+      description: Link to vendor documentation, a standard, or a CWE.
+    validations:
+      required: true
+

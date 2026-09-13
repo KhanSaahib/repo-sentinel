@@ -1,0 +1,59 @@
+name: Bug report
+description: Report behavior that is incorrect or unexpected.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping improve BlueRayScan. Redact real secrets before posting output.
+  - type: input
+    id: version
+    attributes:
+      label: BlueRayScan version
+      description: Run `bluerayscan --version`.
+      placeholder: bluerayscan 0.3.2
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and configuration
+      description: Include the command and relevant `.bluerayscan.json` settings.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened?
+      description: Include redacted output and the smallest reproduction you can provide.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed real credentials, tokens, and private repository data from this report.
+          required: true
+        - label: I searched existing issues for the same problem.
+          required: true
+

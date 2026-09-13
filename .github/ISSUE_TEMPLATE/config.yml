@@ -1,5 +1,5 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
-  - name: Security vulnerability in bluerayscan itself
-    url: https://github.com/KhanSaahib/bluerayscan/security/advisories/new
-    about: Report privately through a security advisory, not as a public issue.
+  - name: Report a security vulnerability
+    url: https://github.com/KhanSaahib/bluerayscan/security/policy
+    about: Please use the private reporting path in the security policy instead of a public issue.
