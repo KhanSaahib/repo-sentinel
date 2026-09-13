@@ -294,7 +294,7 @@ def _render(
         return report.format_github(findings, notes=notes)
     if args.format == "junit":
         return report.format_junit(findings, notes=notes, duration=duration)
-    colour = not args.no_color and args.output is None and sys.stdout.isatty()
+    colour = not args.no_color and not os.environ.get("NO_COLOR") and args.output is None and sys.stdout.isatty()
     if args.quiet:
         return report.format_summary(findings, notes=notes)
     return report.format_text(

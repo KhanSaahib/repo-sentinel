@@ -774,5 +774,58 @@ class TestQuietAndSort(unittest.TestCase):
         self.assertEqual(ranks, sorted(ranks, reverse=True))
 
 
+class TtyStringIO(io.StringIO):
+    def isatty(self):
+        return True
+
+
+def run_tty(argv):
+    stdout, stderr = TtyStringIO(), io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        code = cli.main(argv)
+    return code, stdout.getvalue()
+
+
+@contextlib.contextmanager
+def temporary_env(**kwargs):
+    old = {}
+    for key, value in kwargs.items():
+        old[key] = os.environ.get(key)
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
+    try:
+        yield
+    finally:
+        for key, value in old.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+class TestNoColor(unittest.TestCase):
+    def test_explicit_no_color_flag_disables_colour(self):
+        with sample_repo() as root, temporary_env(NO_COLOR=None):
+            _, output = run_tty(["scan", root, "--no-color"])
+        self.assertNotIn("\033", output)
+
+    def test_no_color_unset_keeps_colour(self):
+        with sample_repo() as root, temporary_env(NO_COLOR=None):
+            _, output = run_tty(["scan", root])
+        self.assertIn("\033", output)
+
+    def test_no_color_empty_string_keeps_colour(self):
+        with sample_repo() as root, temporary_env(NO_COLOR=""):
+            _, output = run_tty(["scan", root])
+        self.assertIn("\033", output)
+
+    def test_no_color_non_empty_disables_colour(self):
+        with sample_repo() as root, temporary_env(NO_COLOR="1"):
+            _, output = run_tty(["scan", root])
+        self.assertNotIn("\033", output)
+
+
 if __name__ == "__main__":
     unittest.main()

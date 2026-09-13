@@ -167,7 +167,8 @@ Scanned 412 file(s) in 0.31s.
 
 That last line is not decoration. A run that scanned nothing looks exactly like
 a clean repository, and "no findings" from a mistyped path is the most
-dangerous answer this tool can give.
+dangerous answer this tool can give. Coloured terminal output can be disabled
+with `--no-color` or by setting the standard `NO_COLOR` environment variable.
 
 ## What history committed
 
