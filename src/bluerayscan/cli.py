@@ -20,6 +20,7 @@ from .commands import (
     EXIT_ERROR,
     EXIT_FINDINGS,
     EXIT_OK,
+    explain_command,
     history_command,
     init_command,
     rules_command,
@@ -237,6 +238,28 @@ def build_parser() -> argparse.ArgumentParser:
     # baseline.
     history_parser.set_defaults(sort="severity")
 
+    explain_parser = subparsers.add_parser(
+        "explain",
+        help="say what this tool makes of one value, and whether it would report it",
+        description=(
+            "Silence is the one answer a scanner cannot distinguish from "
+            "'there was nothing there'. Given a value, this prints the "
+            "measurements the heuristic rules take and says what would happen "
+            "to it -- so 'did you miss my secret?' has an answer."
+        ),
+    )
+    explain_parser.add_argument("value", help="the value to measure, or - to read one from stdin")
+    explain_parser.add_argument(
+        "--name",
+        default="",
+        metavar="NAME",
+        help=(
+            "the identifier it was assigned to. It matters as much as the "
+            "value: the entropy rules ask about a value only where the name "
+            "beside it promises a credential"
+        ),
+    )
+
     rules_parser = subparsers.add_parser("rules", help="list every rule the scanner knows")
     rules_parser.add_argument(
         "pattern",
@@ -320,6 +343,8 @@ def main(argv: "Sequence[str] | None" = None) -> int:
         return rules_command(args)
     if args.command == "history":
         return history_command(args)
+    if args.command == "explain":
+        return explain_command(args)
     return scan_command(args, parser)
 
 

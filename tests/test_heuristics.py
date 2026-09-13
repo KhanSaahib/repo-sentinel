@@ -243,5 +243,26 @@ class TestSecretNames(unittest.TestCase):
                 self.assertFalse(heuristics.is_secret_name(name))
 
 
+class TestAlphabetName(unittest.TestCase):
+    """The name and the size have to come from one decision."""
+
+    def test_every_class_is_named_by_the_size_it_counts(self):
+        for value in ("1234", "deadbeef", "DEADBEEF", "a-z_1", "A-Z_1",
+                      "aZ1", "aZ1+/=", "aZ1 !"):
+            with self.subTest(value=value):
+                size = heuristics.alphabet_size(value)
+                name = heuristics.alphabet_name(value)
+                # Every named class maps to exactly one size, so a value
+                # landing in a class whose size is not its own means the two
+                # lists have drifted apart.
+                sizes = {
+                    entry[1] for entry in heuristics._ALPHABET_NAMES if entry[2] == name
+                }
+                self.assertEqual(sizes or {90}, {size}, f"{value!r}: {size} called {name}")
+
+    def test_anything_wider_is_described_rather_than_named(self):
+        self.assertEqual(heuristics.alphabet_name("aZ1 !"), "mixed, including punctuation")
+
+
 if __name__ == "__main__":
     unittest.main()

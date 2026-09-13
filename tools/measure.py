@@ -18,6 +18,10 @@ that a change to a rule can be measured rather than argued about::
     # ...change a heuristic...
     python3 tools/measure.py --corpus ~/corpora --compare before.json
 
+Counts are kept per rule *and per confidence*, because a change that moves a
+finding from medium to high moves no total at all and would otherwise read as
+"nothing moved".
+
 The comparison is the point. A filter that removes 1,400 findings and costs
 nothing is a different thing from one that removes 1,400 findings and takes a
 real one with it, and the difference is invisible in a total.
@@ -76,14 +80,41 @@ def run(command: "list[str]") -> None:
     subprocess.run(command, check=True)
 
 
+def is_dated(saved: "dict[str, dict[str, int]]") -> bool:
+    """True for a file written before the counts carried a confidence.
+
+    The old shape counted by rule id alone; this one counts by rule id and
+    confidence, because a change that moves a finding from medium to high
+    moves no count at all under the old shape and reads as "nothing moved".
+    That happened -- twice -- which is why the key changed.
+    """
+    return any(" " not in rule for counts in saved.values() for rule in counts)
+
+
+def by_rule(counts: "dict[str, int]") -> "dict[str, int]":
+    """Counts keyed by rule id alone, for comparing against an older file."""
+    folded: "collections.Counter" = collections.Counter()
+    for rule, count in counts.items():
+        folded[rule.split(" ")[0]] += count
+    return dict(folded)
+
+
 def compare(before: "dict[str, dict[str, int]]", after: "dict[str, dict[str, int]]") -> None:
     """Print what changed, per repository and per rule.
 
     Both directions matter and they mean opposite things. Fewer findings from
     a heuristic change is the point of the change; fewer findings from the two
-    deliberately vulnerable repositories is the change going wrong.
+    deliberately vulnerable repositories is the change going wrong. A finding
+    that only changed confidence is a third thing, and it shows here as one
+    row falling and another rising.
     """
     print("\nchanges against the saved run")
+    if is_dated(before):
+        print(
+            "  (the saved file predates confidence tracking, so this compares "
+            "rule counts only -- re-save to see confidence move)"
+        )
+        after = {name: by_rule(counts) for name, counts in after.items()}
     names = sorted(set(before) | set(after))
     quiet = True
     for name in names:
@@ -160,7 +191,9 @@ def main(argv=None) -> int:
     for path in paths:
         result = engine.scan(path)
         findings = [finding for finding in result.findings if finding.confidence >= floor]
-        counts = collections.Counter(finding.rule_id for finding in findings)
+        counts = collections.Counter(
+            f"{finding.rule_id} {finding.confidence.value}" for finding in findings
+        )
         totals.update(counts)
 
         name = os.path.basename(os.path.normpath(path))
@@ -170,15 +203,19 @@ def main(argv=None) -> int:
             f"\n{name}: {len(findings)} finding(s) in {result.file_count} file(s), "
             f"{result.duration:.1f}s ({rate:,.0f} files/s)"
         )
-        for rule_id, count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
-            print(f"  {rule_id}  {count:>4}")
-            for finding in [f for f in findings if f.rule_id == rule_id][: args.sample]:
+        for key, count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
+            rule_id = key.split(" ")[0]
+            print(f"  {key:<16} {count:>4}")
+            shown = [
+                f for f in findings if f"{f.rule_id} {f.confidence.value}" == key
+            ][: args.sample]
+            for finding in shown:
                 print(f"        {finding.path}:{finding.line}  {finding.title[:70]}")
 
     if len(paths) > 1:
         print(f"\nacross {len(paths)} repositories: {sum(totals.values())} finding(s)")
-        for rule_id, count in sorted(totals.items(), key=lambda item: (-item[1], item[0])):
-            print(f"  {rule_id}  {count:>4}")
+        for key, count in sorted(totals.items(), key=lambda item: (-item[1], item[0])):
+            print(f"  {key:<16} {count:>4}")
 
     if args.compare:
         with open(args.compare, encoding="utf-8") as handle:

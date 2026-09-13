@@ -30,14 +30,25 @@ better outcome than a feature nobody wanted.
       findings: a value written on the lines beneath its name, which is how
       YAML carries anything long. A PEM body is still read from its header
       line, which is the line that identifies it
-- [ ] Report the *shape* of a near miss: a value that failed the entropy floor
-      by a hair next to a credential-shaped name is worth a low-confidence
-      finding, and today it is silent
-- [ ] Verify a candidate is not already public (git history vs. working tree),
-      and report the first-seen commit
-- [ ] ~~Optional live validation (`--verify`)~~ — off by default and probably
-      always: it turns a static scan into an outbound request carrying the
-      credential it is unsure about
+- [x] ~~Report the *shape* of a near miss: a value that failed the entropy
+      floor by a hair next to a credential-shaped name~~ -- measured and
+      refused. At a margin of a tenth of a bit it is 172 findings across the
+      twenty-one pinned repositories and one of them is worth reading; the
+      rest are one variable assigned to another, a class name, a Vault
+      reference. The floor's margin is what holds those back. Numbers in
+      `docs/RULES.md`
+- [x] The question that idea was asking -- *did you miss my secret?* -- gets
+      an answer that costs nothing instead: `bluerayscan explain VALUE
+      --name NAME` prints the measurements and says what would happen to it
+- [x] Report the first-seen commit: `bluerayscan history` reads a `git log -p`
+      stream and names the commit that introduced each credential, earliest
+      first. This tool still does not run git; the caller does
+- [ ] ~~Say whether a found credential is *live*, rather than merely public
+      (`--verify`)~~ — off by default and probably always. Nothing local can
+      answer it, and the only thing that can is an outbound request carrying
+      the credential this tool is unsure about, to somebody else's service.
+      "Public since March" is the part that is knowable here, and it is the
+      part that decides the rotation
 
 ## Workflow and CI analysis
 
@@ -82,13 +93,25 @@ better outcome than a feature nobody wanted.
       meaning, which is what keeps this family seven rules rather than thirty.
       Fires no times across the twenty-one pinned repositories, which is the
       expected result
-- [ ] An eighth, on the same terms. Candidates that have not cleared the bar:
-      hardcoded JWT signing secrets, DEBUG in frameworks other than Django and
-      Flask, weak TLS versions, permissive CORS (`*` is only a problem with
-      credentials, which the line does not say), and PyJWT's unverified decode
-      with no second decode after it -- measured at twenty-one findings across
-      the pinned repositories, every sampled one of them the honest two-step,
-      so telling them apart needs to see the decode that follows
+- [ ] An eighth, on the same terms. Candidates that have not cleared the bar,
+      and why:
+      - **PyJWT's unverified decode** with no second decode after it --
+        measured at twenty-one findings across the pinned repositories, every
+        sampled one of them the honest two-step, so telling them apart needs
+        to see the decode that follows
+      - **A weak TLS version** named as the floor (`ssl.PROTOCOL_TLSv1`,
+        `MinVersion: tls.VersionTLS10`, `minVersion: 'TLSv1.1'`) -- measured
+        at **one** finding across the twenty-one, and that one a test asserting
+        a target's TLS policy is *not* propagated to a proxy handshake. The
+        idiom does have a single meaning; there is simply almost nothing to
+        find, and the first draft of its pattern already read `TLSv1_2_method`
+        as weak. Worth revisiting only alongside a corpus where it appears
+      - **Hardcoded JWT signing secrets** -- a credential, so the secret rules
+        are the right family for it, not this one
+      - **DEBUG in frameworks other than Django and Flask** -- the word means
+        something different in each, which is the bar failing
+      - **Permissive CORS** -- `*` is only a problem with credentials, and the
+        line does not say whether there are any
 
 ## Output and integration
 
@@ -124,4 +147,6 @@ better outcome than a feature nobody wanted.
 - [x] A fixed corpus of real repositories pinned by commit, so a heuristic
       change can be measured rather than argued about (`tools/corpus.json`,
       `measure.py --fetch/--save/--compare`)
-- [ ] Enable CodeQL default setup and branch protection on `main`
+- [x] CodeQL default setup, over Python and Actions both, and branch
+      protection on `main`: ten required checks, linear history, no force
+      pushes

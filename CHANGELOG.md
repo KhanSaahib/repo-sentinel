@@ -8,6 +8,22 @@ changes.
 
 ### Added
 
+- **`bluerayscan explain VALUE`**, which says what the heuristic rules make of
+  one value and whether they would report it: length, alphabet, entropy, the
+  floor it is measured against, any documented shape it matches, and -- with
+  `--name` -- whether the identifier beside it promises a credential at all.
+  The exit code answers the question on its own, `-` reads the value from
+  standard input, and the value is redacted on the way out.
+
+  This is the half of "report near misses" that survived being measured. The
+  other half -- reporting a value that failed the entropy floor narrowly, as a
+  low-confidence finding -- produced **172 findings across the twenty-one
+  pinned repositories at the tightest useful band**, of which one was worth a
+  reviewer's time; the rest were one variable assigned to another, a class
+  name, a Vault reference. Silence is the one answer a scanner cannot
+  distinguish from "nothing was there", and this answers it where somebody
+  asks rather than four hundred times where nobody did.
+
 - **AP007: a JWT accepted with the `none` algorithm.** A token is a claim plus
   a signature, and the signature is the only reason to believe the claim.
   `none` is an algorithm in the specification meaning there is no signature,

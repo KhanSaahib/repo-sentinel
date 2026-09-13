@@ -237,6 +237,31 @@ def alphabet_size(value: str) -> int:
     return 90
 
 
+#: What each class in :func:`alphabet_size` is called, in its order. The name
+#: and the number have to come from one decision: a caller that rebuilt these
+#: sets to name them got "aA1" as 16 symbols described as "letters and digits",
+#: because its hex set was lowercase only.
+_ALPHABET_NAMES = (
+    (set(string.digits), 10, "digits"),
+    (_HEX, 16, "hex"),
+    (set(string.ascii_lowercase + string.digits + "_-"), 38,
+     "lowercase, digits, dash and underscore"),
+    (set(string.ascii_uppercase + string.digits + "_-"), 38,
+     "uppercase, digits, dash and underscore"),
+    (_ALNUM, 62, "letters and digits"),
+    (_BASE64ISH, 68, "base64"),
+)
+
+
+def alphabet_name(value: str) -> str:
+    """What to call the alphabet :func:`alphabet_size` counted."""
+    chars = set(value)
+    for alphabet, _, name in _ALPHABET_NAMES:
+        if chars <= alphabet:
+            return name
+    return "mixed, including punctuation"
+
+
 def entropy_floor(value: str) -> float:
     """The entropy ``value`` must reach for its length and alphabet to look generated.
 
@@ -304,17 +329,32 @@ def looks_generated(value: str) -> bool:
     The single question every heuristic rule asks. Whether the *name* on the
     other side of the assignment justifies asking it is the caller's problem.
     """
+    return entropy_shortfall(value) == 0.0
+
+
+def entropy_shortfall(value: str) -> "float | None":
+    """How many bits ``value`` is short of looking generated, or None.
+
+    ``0.0`` means it reached the floor; a positive number means it failed on
+    entropy alone and by how much; ``None`` means it failed for one of the
+    reasons that are not a matter of degree, and for which "nearly" means
+    nothing:
+
+    * too short -- a six-character value is not a near miss for a credential;
+    * not ASCII -- credentials travel through headers, URLs and environment
+      variables that are. Text in another script is not, and its entropy is
+      high for a reason that has nothing to do with randomness: a larger
+      alphabet raises the per-character measure. Measured on Discourse, whose
+      translated interface strings produced 1,600 findings -- "password" in
+      Arabic, forty times per locale;
+    * a placeholder -- ``<YOUR_TOKEN_HERE>`` fails on purpose and no amount of
+      entropy would make it a credential.
+    """
     stripped = value.strip()
     if len(stripped) < MIN_SECRET_LENGTH:
-        return False
+        return None
     if not stripped.isascii():
-        # Credentials are ASCII, because they travel through headers, URLs and
-        # environment variables that are. Text in another script is not, and
-        # its entropy is high for a reason that has nothing to do with
-        # randomness: a larger alphabet raises the per-character measure.
-        # Measured on Discourse, whose translated interface strings produced
-        # 1,600 findings -- "password" in Arabic, forty times per locale.
-        return False
+        return None
     if looks_like_placeholder(stripped):
-        return False
-    return shannon_entropy(stripped) >= entropy_floor(stripped)
+        return None
+    return max(0.0, entropy_floor(stripped) - shannon_entropy(stripped))

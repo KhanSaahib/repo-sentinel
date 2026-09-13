@@ -334,6 +334,26 @@ class TestInit(unittest.TestCase):
             code, _ = run(["scan", root])
         self.assertEqual(code, cli.EXIT_OK)
 
+    def test_a_recorded_credential_points_at_history(self):
+        # A baseline hides what is already committed, which is what it is for
+        # and also its one danger: a credential in the working tree is usually
+        # in history too, and history is public whatever the tree says later.
+        with tempfile.TemporaryDirectory() as root:
+            with open(os.path.join(root, "settings.py"), "w", encoding="utf-8") as handle:
+                handle.write(f'AWS_KEY = "{fixtures.REALISTIC_AWS_KEY_ID}"\n')
+            _, output = run(["init", root])
+        self.assertIn("bluerayscan history", output)
+        self.assertIn("does not take them back", output)
+
+    def test_configuration_findings_alone_do_not(self):
+        # Nothing about a floating image tag is public or private, so the
+        # sentence would be noise.
+        with tempfile.TemporaryDirectory() as root:
+            with open(os.path.join(root, "Dockerfile"), "w", encoding="utf-8") as handle:
+                handle.write("FROM debian:latest\nUSER root\n")
+            _, output = run(["init", root])
+        self.assertNotIn("bluerayscan history", output)
+
     def test_a_clean_repository_gets_a_config_and_no_baseline(self):
         with tempfile.TemporaryDirectory() as root:
             with open(os.path.join(root, "README.md"), "w", encoding="utf-8") as handle:
