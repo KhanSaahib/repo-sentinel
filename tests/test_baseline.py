@@ -116,7 +116,7 @@ class TestTheOldName(unittest.TestCase):
     def _write(self, root, name):
         path = os.path.join(root, name)
         with open(path, "w", encoding="utf-8") as handle:
-            handle.write(baseline.dumps([finding()], version="0.3.1"))
+            handle.write(baseline.dumps([finding()], version="0.0.0-test"))
         return path
 
     def test_the_old_file_is_read_when_the_current_one_is_absent(self):

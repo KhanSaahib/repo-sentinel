@@ -4,7 +4,7 @@ All notable changes to BlueRayScan. This project follows [semantic
 versioning](https://semver.org/); until 1.0 the minor number carries breaking
 changes.
 
-## Unreleased
+## 0.4.0 - 2026-09-12
 
 ### Added
 
@@ -50,6 +50,15 @@ changes.
   that was ever committed is committed until somebody rotates it. Findings
   carry an `origin` in the JSON output and an "added in" line everywhere else.
 
+- **A value written on the lines beneath its name is read** (SEC101). YAML
+  carries anything long that way, and neither line said anything alone: the
+  name was on one and the value on the next. The pieces are rejoined with
+  nothing between them, and the shape is narrow -- every line has to be a piece
+  of one value, no spaces, no colon, no `=` except base64's padding -- because
+  the loose version reported every CRD property, every translated sentence
+  under `api_key`, and the `NAME=vault/path` pairs a release workflow hands to
+  an action.
+
 - **A chart's values are read against its own templates.** The Kubernetes
   family has always read `values.yaml` beside a `Chart.yaml` for the six
   settings that mean the same thing wherever they are written, and always at
@@ -69,8 +78,25 @@ changes.
   from medium to high and none was lost, because every setting those charts
   ship is a setting they use.
 
+- **`init` points a new repository at its own history.** A baseline records
+  what is already committed so the first pipeline run is green -- that is what
+  it is for, and it is also its one danger: a credential in the working tree
+  is almost always in history too, and one that is in history has been on
+  every clone, fork and CI cache made since. When the baseline it just wrote
+  accepted a *credential* -- not a floating image tag, which is neither public
+  nor private -- `init` now says so and names the command that answers it.
+
 ### Changed
 
+- **The baseline file falls back to `.repo-sentinel-baseline.json`** when the
+  current name is absent, the way the config file already did. Only the
+  default name falls back: a file somebody named with `--baseline` is read or
+  reported missing, never quietly swapped for another.
+- **`tools/measure.py` counts findings by rule *and confidence*.** A change
+  that moves a finding from medium to high moved no count at all before, and
+  read as "nothing moved" -- which happened twice in one afternoon. A file
+  saved by the older version still compares, and the output says when it is
+  comparing rule counts only.
 - **The SARIF fingerprint key is now `bluerayscan/v1`**, where it was
   `repoSentinel/v1` -- the one place the rename's search-and-replace could not
   see, because it was spelled in camel case. GitHub's code scanning tracks an
@@ -322,14 +348,6 @@ import package remains `bluerayscan`.
   in one line: the credential is in the file, and it is in the process table of
   whichever machine runs the script, where every other user can read it. A value
   that arrives at run time is not a leak, so anything interpolated is skipped.
-- **A value written on the lines beneath its name is read** (SEC101). YAML
-  carries anything long that way, and neither line said anything alone: the
-  name was on one and the value on the next. The pieces are rejoined with
-  nothing between them, and the shape is narrow -- every line has to be a piece
-  of one value, no spaces, no colon, no `=` except base64's padding -- because
-  the loose version reported every CRD property, every translated sentence
-  under `api_key`, and the `NAME=vault/path` pairs a release workflow hands to
-  an action.
 - **A systemd unit and a crontab are value-position formats.** A unit is an
   INI file that runs as root, and the place a credential lands in one is
   `Environment=DB_PASSWORD=…` -- an assignment wrapped in an assignment, where
