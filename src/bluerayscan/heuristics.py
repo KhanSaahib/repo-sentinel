@@ -323,6 +323,34 @@ def is_secret_name(name: str) -> bool:
     return not trimmed.endswith(_LABEL_SUFFIXES)
 
 
+#: How long a run of consecutive characters has to be before it can only be
+#: somebody counting. Eight is already one chance in billions for a generated
+#: value, and "abcdefgh" or "12345678" is most of what a test fixture, or a
+#: character set to generate passwords from, is made of.
+SEQUENCE_LENGTH = 8
+
+
+def is_counted_out(value: str) -> bool:
+    """True when part of ``value`` is somebody counting: abcdefgh, 12345678.
+
+    Asked by the provider rules of a value that already has a documented
+    shape, and by the entropy rules of one that does not. It is the same
+    question both times: a string of consecutive characters measures as
+    high-entropy -- every character distinct is the maximum a length can carry
+    -- and is the one thing a credential never is.
+
+    Nextcloud generates share passwords from
+    ``'abcdefgijkmnopqrstwxyzABCDEFGHJKLMNPQRSTWXYZ23456789'``, assigned to a
+    name with "password" in it, and that is what this is for.
+    """
+    run = 1
+    for previous, current in zip(value, value[1:]):
+        run = run + 1 if ord(current) - ord(previous) == 1 else 1
+        if run >= SEQUENCE_LENGTH:
+            return True
+    return False
+
+
 def looks_generated(value: str) -> bool:
     """True when ``value`` is long enough, random enough and not a placeholder.
 
@@ -348,7 +376,9 @@ def entropy_shortfall(value: str) -> "float | None":
       translated interface strings produced 1,600 findings -- "password" in
       Arabic, forty times per locale;
     * a placeholder -- ``<YOUR_TOKEN_HERE>`` fails on purpose and no amount of
-      entropy would make it a credential.
+      entropy would make it a credential;
+    * counted out -- ``abcdefgh`` measures as maximally random for its length
+      and is the one thing a credential never is.
     """
     stripped = value.strip()
     if len(stripped) < MIN_SECRET_LENGTH:
@@ -356,5 +386,7 @@ def entropy_shortfall(value: str) -> "float | None":
     if not stripped.isascii():
         return None
     if looks_like_placeholder(stripped):
+        return None
+    if is_counted_out(stripped):
         return None
     return max(0.0, entropy_floor(stripped) - shannon_entropy(stripped))

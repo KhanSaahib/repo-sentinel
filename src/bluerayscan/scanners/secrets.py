@@ -75,12 +75,21 @@ _QUOTED_ASSIGNMENT = re.compile(
 #: Bare assignment: ``API_KEY=....`` with no quoting to key on. Only trusted in
 #: files whose format puts a value on the right of ``=`` or ``:``; see
 #: :func:`has_value_positions`.
+#:
+#: The value may not begin with ``>`` or ``=``, which is how ``=>`` and ``==``
+#: are kept out. A fat arrow is not an assignment this rule should read, and
+#: reading it as one does not merely add a finding: the ``>`` becomes the first
+#: character of the value, so every filter anchored at the start of a value
+#: stops working. Ansible documents its password_hash filter with
+#: ``# pwdhash => "$2b$12$..."``, and that is a bcrypt hash -- a thing this
+#: scanner has filtered since the beginning, reported anyway because the
+#: modular-crypt pattern begins ``^\$``.
 _BARE_ASSIGNMENT = re.compile(
     r"""(?x)
     ^[\s#-]* (?:export\s+)?
     (?P<name>[A-Za-z0-9_.\[\]/:@-]{1,120}?)
     \s* [:=] \s*
-    (?P<value>[^\s"'\#][^\#\n]{10,255}?)
+    (?P<value>[^\s"'\#>=][^\#\n]{10,255}?)
     \s* (?:\#.*)? $
     """
 )

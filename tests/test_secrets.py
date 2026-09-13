@@ -499,6 +499,29 @@ class TestValuePositions(unittest.TestCase):
         text = "APP_NAME=billing\nLOG_LEVEL=debug\nPORT=8080\nAPI_URL=https://api.internal/v1"
         self.assertEqual(secrets.scan_text(".env", text), [])
 
+    def test_a_fat_arrow_is_not_an_assignment_this_rule_reads(self):
+        # From ansible/ansible: lib/ansible/plugins/filter/password_hash.yml
+        # documents its own filter with "# pwdhash => \"$2b$12$...\"", and that
+        # is a bcrypt hash -- filtered since the beginning. Reading "=>" as an
+        # assignment did not merely add a finding: the ">" became the first
+        # character of the value, so the modular-crypt pattern, which begins
+        # "^\$", stopped matching. Every filter anchored at the start of a
+        # value had the same hole.
+        hash_line = '    # pwdhash => "$2b$12$' + "ujYVRD9v9z87lpvLqeWNuOFDI4QzSSYHoRyYydW6XK4.kgqfwOXzO" + '"'
+        self.assertEqual(secrets.scan_text("filter.yml", hash_line), [])
+
+    def test_a_credential_behind_a_fat_arrow_is_still_found(self):
+        # Ruby and PHP write a hash literal this way, and a credential does
+        # land there. It is the provider rules' to find, which read a shape
+        # wherever it appears rather than an assignment.
+        line = "  'api_key' => '" + fixtures.REALISTIC_AWS_KEY_ID + "',"
+        self.assertIn("SEC001", rule_ids(secrets.scan_text("config.rb", line)))
+
+    def test_a_value_may_not_begin_with_an_operator(self):
+        for line in ("token == Tv8nRw1YXk92mQp7Lz4T", "token => Tv8nRw1YXk92mQp7Lz4T"):
+            with self.subTest(line=line):
+                self.assertEqual(secrets.scan_text(".env", line), [])
+
     def test_ignores_an_interpolated_reference(self):
         self.assertEqual(secrets.scan_text(".env", "API_TOKEN=${API_TOKEN}"), [])
 

@@ -243,6 +243,33 @@ class TestSecretNames(unittest.TestCase):
                 self.assertFalse(heuristics.is_secret_name(name))
 
 
+class TestCountedOut(unittest.TestCase):
+    """A run of consecutive characters is the one thing a credential never is."""
+
+    def test_a_character_set_is_not_a_credential(self):
+        # From nextcloud/server: apps/files_sharing/src/utils/GeneratePassword.ts
+        # holds the alphabet it generates share passwords from, assigned to a
+        # name with "password" in it. Every character distinct is the most
+        # entropy a length can carry, which is why it read as generated.
+        value = "abcdefgijkmnopqrstwxyzABCDEFGHJKLMNPQRSTWXYZ23456789"
+        self.assertTrue(heuristics.is_counted_out(value))
+        self.assertFalse(heuristics.looks_generated(value))
+
+    def test_the_obvious_runs(self):
+        for value in ("abcdefghij", "0123456789abc", "xyzABCDEFGHI"):
+            with self.subTest(value=value):
+                self.assertTrue(heuristics.is_counted_out(value))
+
+    def test_a_short_run_is_a_coincidence(self):
+        # Seven is still a coincidence a generated value can have. Eight is
+        # the line, and it is one chance in billions.
+        self.assertFalse(heuristics.is_counted_out("Xkabcdefg92Lz4T"))
+        self.assertTrue(heuristics.is_counted_out("Xkabcdefgh92Lz4T"))
+
+    def test_a_generated_value_still_looks_generated(self):
+        self.assertTrue(heuristics.looks_generated("Xk92mQp7Lz4TvB8nRw1Y"))
+
+
 class TestAlphabetName(unittest.TestCase):
     """The name and the size have to come from one decision."""
 

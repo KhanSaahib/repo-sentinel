@@ -20,7 +20,7 @@ from collections.abc import Callable, Iterator
 from typing import Optional, Union
 
 from ..findings import Confidence, Severity, redact
-from ..heuristics import looks_like_placeholder
+from ..heuristics import is_counted_out, looks_like_placeholder
 
 
 @dataclasses.dataclass(frozen=True)
@@ -108,23 +108,6 @@ _INVENTED_WORDS = (
     "yourkey", "your_key", "your-key", "youraccount", "fakekey", "dummykey",
     "redacted", "notarealkey", "xxxxxxxx",
 )
-#: How long a run of consecutive characters has to be before it can only be
-#: somebody counting. Eight is already one chance in billions for a generated
-#: value, and "abcdefgh" or "12345678" is most of what a test fixture is made
-#: of.
-_SEQUENCE_LENGTH = 8
-
-
-def _is_counted_out(secret: str) -> bool:
-    """True when part of the value is somebody counting: abcdefgh, 12345678."""
-    run = 1
-    for previous, current in zip(secret, secret[1:]):
-        run = run + 1 if ord(current) - ord(previous) == 1 else 1
-        if run >= _SEQUENCE_LENGTH:
-            return True
-    return False
-
-
 def looks_invented(secret: str) -> bool:
     """True when a value has the documented shape and obviously made-up bytes.
 
@@ -141,7 +124,7 @@ def looks_invented(secret: str) -> bool:
     body = re.sub(r"^[A-Za-z]{1,12}[-_]", "", secret)
     if len(body) >= 12 and len(set(body)) <= 3:
         return True
-    return _is_counted_out(secret)
+    return is_counted_out(secret)
 
 
 RULES: tuple[ProviderRule, ...] = (
