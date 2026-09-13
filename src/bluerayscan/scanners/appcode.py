@@ -113,7 +113,26 @@ _WEAK_RANDOM = (
 #: remote code execution wherever the document came from a request. Versions
 #: since 6.0 default to SafeLoader; a call with an explicit Loader is either
 #: safe or deliberate, and either way not this.
-_UNSAFE_YAML = re.compile(r"\byaml\.load\s*\((?![^)]*\bLoader\s*=)")
+#:
+#: The lookahead steps over parenthesised arguments rather than stopping at the
+#: first ``)``, because the first argument is very often a call itself.
+#: ``yaml.load(trust_as_template(f), Loader=AnsibleLoader)`` is safe and was
+#: reported: the ``)`` of the inner call ended the lookahead before it reached
+#: the loader. Five of Ansible's own call sites, every one of them passing a
+#: loader, and one of those -- ``_tags.Origin(path=str(filename)).tag(x)`` --
+#: two calls deep.
+#:
+#: Two deep is where it stops, because ``re`` does not recurse. A third level
+#: reports a call that is safe, which is the direction to fail in: the
+#: alternative is scanning to the end of the line for a loader, and then a
+#: genuinely unguarded ``yaml.load`` goes quiet because something else on the
+#: line mentioned one. A missed finding here is a missed remote execution.
+#: The lookahead cannot run past the closing parenthesis of the ``load`` call
+#: itself, because every way forward needs an opening parenthesis first.
+_NO_PARENS = r"[^()\n]{0,400}"
+_ONE_DEEP = rf"{_NO_PARENS}(?:\({_NO_PARENS}\){_NO_PARENS})*"
+_TWO_DEEP = rf"{_NO_PARENS}(?:\({_ONE_DEEP}\){_NO_PARENS})*"
+_UNSAFE_YAML = re.compile(rf"\byaml\.load\s*\((?!{_TWO_DEEP}\bLoader\s*=)")
 #: PHP's unserialize() on a superglobal: the request decides which objects get
 #: built and which of their destructors run.
 _UNSAFE_UNSERIALIZE = re.compile(r"\bunserialize\s*\(\s*\$_(?:GET|POST|COOKIE|REQUEST)\b")
@@ -369,6 +388,31 @@ def _line_of(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 
 
+#: How a line of a comment begins, in the five languages this family reads.
+#: ``*`` is a docblock continuation, which is where PHP and JavaScript put the
+#: usage example that made this necessary.
+_COMMENT_OPENS = ("#", "//", "*", "/*")
+
+
+def _is_comment_line(text: str, offset: int) -> bool:
+    """True when the match at ``offset`` sits on a line that is only a comment.
+
+    A comment does not run. A commented-out ``yaml.load(body)`` is somebody
+    deciding against it, and a docblock showing how to call a query builder is
+    documentation -- Nextcloud's has ``-> set('u.password', md5('password'))``
+    in it five times, which is not a password being hashed with a fast digest,
+    it is a sentence about one.
+
+    Whole-line comments only. A comment after code on the same line would mean
+    deciding whether a ``//`` is a comment or the middle of a URL, which needs
+    to track quoting, and the shell family makes the same trade for the same
+    reason. A line in the middle of a ``/* */`` block that begins with neither
+    ``*`` nor ``/*`` is still read.
+    """
+    start = text.rfind("\n", 0, offset) + 1
+    return text[start:offset + 1].lstrip().startswith(_COMMENT_OPENS)
+
+
 def scan_source(
     path: str, text: str, marks: "suppression.Suppressions | None" = None
 ) -> "list[Finding]":
@@ -393,6 +437,8 @@ def scan_source(
         if rule.hints and not any(hint in lowered for hint in rule.hints):
             continue
         for match in rule.pattern.finditer(text):
+            if _is_comment_line(text, match.start()):
+                continue
             line = _line_of(text, match.start())
             evidence = match.group(0).strip()
             if len(evidence) > _LONG_LINE:

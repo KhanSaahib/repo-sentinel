@@ -158,6 +158,40 @@ class TestUnsafeDeserialisation(unittest.TestCase):
     def test_safe_load_is_the_fix(self):
         self.assertEqual(scan("app.py", "data = yaml.safe_load(body)\n"), [])
 
+    def test_a_call_in_the_first_argument_does_not_hide_the_loader(self):
+        # From ansible/ansible. Five call sites, every one of them passing a
+        # loader, and every one reported: the lookahead stopped at the inner
+        # call's ")" before it reached the Loader. The last of these is two
+        # calls deep, which is where the lookahead now stops as well.
+        for text in (
+            "data = yaml.load(trust_as_template(f), Loader=AnsibleLoader)\n",
+            "return yaml.load(pkgutil.get_data('a', 'b.yml'), Loader=AnsibleInstrumentedLoader)\n",
+            "data = yaml.load(_tags.Origin(path=str(filename)).tag(short), Loader=AnsibleLoader)\n",
+            "yaml.load(a(b), c(d), Loader=L)\n",
+        ):
+            with self.subTest(text=text.strip()):
+                self.assertNotIn("AP004", rule_ids(scan("app.py", text)))
+
+    def test_a_call_in_the_first_argument_does_not_hide_a_missing_loader(self):
+        for text in (
+            "data = yaml.load(open(path).read())\n",
+            "data = yaml.load(a(b(c(d(e)))))\n",
+            # A loader mentioned elsewhere on the line is not this call's.
+            "x = yaml.load(body) + f(y, Loader=Z)\n",
+        ):
+            with self.subTest(text=text.strip()):
+                self.assertIn("AP004", rule_ids(scan("app.py", text)))
+
+    def test_deeply_nested_arguments_do_not_take_exponential_time(self):
+        # The lookahead has a quantifier inside a quantifier, which is the
+        # shape that blows up. Bounded, and held to it here.
+        import time
+
+        line = "yaml.load(" + "f(" * 200 + "x" + ")" * 200 + ")\n"
+        start = time.perf_counter()
+        scan("app.py", line)
+        self.assertLess(time.perf_counter() - start, 1.0)
+
     def test_php_unserialising_a_superglobal(self):
         text = '$o = unserialize($_POST["data"]);\n'
         self.assertIn("AP004", rule_ids(scan("index.php", text)))
@@ -262,6 +296,35 @@ class TestSuppressionAndScope(unittest.TestCase):
         # characters, and an idiom nobody in this repository typed.
         text = "const token = " + "x" * 500 + "Math.random()\n"
         self.assertEqual(scan("app.js", text), [])
+
+    def test_a_whole_line_comment_is_not_code(self):
+        # From nextcloud/server: lib/private/DB/QueryBuilder/QueryBuilder.php
+        # documents its own usage with "-> set('u.password', md5('password'))"
+        # inside a docblock, five times across two files. That is a sentence
+        # about hashing a password, not a password being hashed.
+        for path, text in (
+            ("QueryBuilder.php", "\t * ->set('u.password', md5('password'))\n"),
+            ("app.py", "# data = yaml.load(body)\n"),
+            ("app.js", "// https.get(url, { rejectUnauthorized: false })\n"),
+            ("app.go", "/* InsecureSkipVerify: true */\n"),
+            ("app.py", "    # requests.get(url, verify=False)\n"),
+        ):
+            with self.subTest(text=text.strip()):
+                self.assertEqual(scan(path, text), [])
+
+    def test_code_beside_a_comment_is_still_code(self):
+        # The same file, in the part that runs: Nextcloud pre-hashes with sha1
+        # before handing the result to a real hasher, and that is a finding a
+        # reviewer should see.
+        text = "$matches = $this->hasher->verify(sha1($password) . $password, $hash);\n"
+        self.assertIn("AP005", rule_ids(scan("PublicKeyTokenProvider.php", text)))
+
+    def test_a_line_inside_a_block_comment_is_still_read(self):
+        # Stated rather than hidden: a line in the middle of a /* */ block that
+        # begins with neither * nor /* has nothing on it to recognise, and
+        # deciding otherwise needs to track where the block started.
+        text = "/*\ndata = yaml.load(body)\n*/\n"
+        self.assertIn("AP004", rule_ids(scan("app.py", text)))
 
     def test_a_file_with_none_of_the_hints_costs_nothing(self):
         # The cheap substring gate in front of the patterns: a file that
