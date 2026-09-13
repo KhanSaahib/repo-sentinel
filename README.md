@@ -1,19 +1,41 @@
 # BlueRayScan
 
-[![CI](https://github.com/KhanSaahib/bluerayscan/actions/workflows/ci.yml/badge.svg)](https://github.com/KhanSaahib/bluerayscan/actions/workflows/ci.yml)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/downloads/)
-[![No dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)](pyproject.toml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+<p align="center">
+  <img src="docs/assets/bluerayscan-social.png" alt="BlueRayScan — zero-dependency repository security scanner" width="100%">
+</p>
 
-A small command line auditor that reads a repository the way a security
-reviewer skims it: looking for credentials that should never have been
-committed, and for the configuration that quietly hands out more access than
-anyone intended -- a workflow an outside contributor can hijack, a container
-that runs as root, a security group open to the internet, a Compose service
-that publishes your database on every interface.
+<p align="center">
+  <a href="https://github.com/KhanSaahib/bluerayscan/actions/workflows/ci.yml"><img src="https://github.com/KhanSaahib/bluerayscan/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://pypi.org/project/bluerayscan/"><img src="https://img.shields.io/pypi/v/bluerayscan" alt="PyPI"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.9%2B-blue" alt="Python 3.9+"></a>
+  <a href="pyproject.toml"><img src="https://img.shields.io/badge/dependencies-none-brightgreen" alt="No dependencies"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License"></a>
+</p>
 
-**No runtime dependencies.** Standard library only, on Python 3.9 and up. A tool
-you run against your supply chain should not enlarge it.
+**Catch leaked secrets, dangerous CI workflows, and insecure infrastructure
+before they ship -- with one command and zero runtime dependencies.**
+
+BlueRayScan reads a repository the way a security reviewer skims it. It covers
+credentials, application code, dependencies, GitHub Actions, GitLab CI, Azure
+Pipelines, Jenkins, CircleCI, Docker, Terraform, Kubernetes, CloudFormation,
+Ansible and more without enlarging the supply chain it audits.
+
+- **Fast to try:** scan any checkout without configuration.
+- **Built for CI:** text, JSON, SARIF, Markdown, GitHub annotations and JUnit.
+- **Honest by design:** reports skipped files, confidence and suppressions.
+
+<p align="center">
+  <img src="docs/assets/bluerayscan-demo.gif" alt="BlueRayScan finding a leaked key and a risky GitHub Actions workflow" width="100%">
+</p>
+
+## Quick start
+
+```bash
+pipx run bluerayscan scan . --fail-on high
+```
+
+That is a complete scan. Add configuration and a baseline only when the project
+needs them.
 
 ## Install
 
