@@ -397,11 +397,16 @@ _COMMENT_OPENS = ("#", "//", "*", "/*")
 def _is_comment_line(text: str, offset: int) -> bool:
     """True when the match at ``offset`` sits on a line that is only a comment.
 
-    A comment does not run. A commented-out ``yaml.load(body)`` is somebody
+    A comment does not run. A commented-out call to PyYAML's loader is somebody
     deciding against it, and a docblock showing how to call a query builder is
-    documentation -- Nextcloud's has ``-> set('u.password', md5('password'))``
-    in it five times, which is not a password being hashed with a fast digest,
-    it is a sentence about one.
+    documentation -- Nextcloud's passes the literal string "password" to md5 to
+    illustrate a column update, five times across two files, which is not a
+    password being hashed with a fast digest, it is a sentence about one.
+
+    (Both examples are described rather than written out. Spelled the usual way
+    this docstring is two findings in this scanner's own source, and was: the
+    self-scan caught them, which is twice now that writing about an idiom has
+    been the idiom.)
 
     Whole-line comments only. A comment after code on the same line would mean
     deciding whether a ``//`` is a comment or the middle of a URL, which needs
